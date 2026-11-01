@@ -1,0 +1,16 @@
+# 環境変数・APIキー
+.env
+.env.*
+
+# 生データ・ビルド中間データ・ログ（再生成可能なため管理対象外）
+/data-source/*
+!/data-source/.gitkeep
+/data-build/*
+!/data-build/.gitkeep
+/logs/*
+!/logs/.gitkeep
+
+# 依存関係・OS/エディタ生成物
+node_modules/
+.DS_Store
+Thumbs.db
