@@ -14,3 +14,6 @@
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Claude memory (shared via disk, not git)
+.claude/
