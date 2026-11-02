@@ -119,9 +119,9 @@ document.getElementById("go").onclick = () => {
       所在: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積: area + "㎡",
       最寄り標準地: `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: yen(near.price) + "/㎡（仮）",
       用途地域: near.zone + "（仮）",
-      形と向き: null, 持ち主の意向: null, 事情: null
+      形と向き: null, 持ち主の意向: null, 事情: null, 事情の要点: null
     },
-    near, area, log: []
+    near, area, log: [], signals: [], revised: null
   };
   R.innerHTML = `
     <h2>2. データ（公開データから機械的に）</h2>
@@ -178,18 +178,84 @@ function freeInput(turn) {
   box.querySelector("button").onclick = () => {
     const t = box.querySelector("textarea").value.trim(); if (!t) return;
     box.remove(); me(t);
-    S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + t;
+    S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
     if (turn === 1) {
-      say("ありがとうございます。そのお気持ちを前提に、先ほどの見立てを一つ直させてください。" +
-          "「順当な評価では期待できない」のは、売る場合の話です。負担を軽くする道なら、別の選択肢が残っています。" +
-          "<br>最後にもう一つ。急いでいらっしゃいますか？");
-      freeInput(2);
+      secondWord(t);
     } else {
       say("わかりました。ここまでの内容を整理しました。電話では、この続きからお話しできます。");
       showSheet();
     }
   };
 }
+// ---- 二言目：客の言葉を読み、最初の見立てのどこが変わるかを言う ----
+// 本番ではAIが行う。ここではアプリがAIに託す判断ルールの見本として書く：
+//   (1) 客の言葉から手がかりを拾う (2) 最初の見立てのどの部分が変わるかを名指しする
+//   (3) 形・土地勘と掛け合わせて具体の道を出す (4) 拾えなければ、拾えなかったと言う
+const CUES = [
+  { key:"負担", re:/固定資産税|税金|税が|維持費|管理|草刈|草が|負担/,
+    revise:"最初に「順当な評価では期待しにくい」と言いましたが、あれは売値の話でした。悩みが負担なら、問うべきは売値ではなく「毎年出ていくお金をどう止めるか」です。",
+    path:"貸して税と管理費を賄う（月極駐車場・資材置き場など）か、早く引き取ってくれる相手を探すか" },
+  { key:"相続", re:/相続|親から|実家|亡くな|遺産|名義/,
+    revise:"相続した土地なら、売るか持つかの前に「名義が誰になっているか」で選べる道が変わります。値段の話はその後です。",
+    path:"名義が整っていれば売るのも貸すのもすぐ動ける。まだなら名義の整理が最初の一歩" },
+  { key:"家族", re:/兄弟|姉妹|共有|家族|親族|妻|夫|子ども|息子|娘/,
+    revise:"ご家族が関わるなら、一番の壁は土地の条件ではなく、皆さんの考えを揃えることかもしれません。",
+    path:"売った場合・貸した場合・持ち続けた場合の数字を並べて、家族で同じ紙を見る" },
+  { key:"建物", re:/空き家|古家|古い家|建物|解体|家が建/,
+    revise:"建物が残っているなら、最初の目安額（更地の計算）はそのまま使えません。解体費を誰が持つかで手取りが変わります。",
+    path:"古家付きのまま売る場合と、解体してから売る場合の手取りを比べる" },
+  { key:"隣", re:/隣|となり|お隣/,
+    revise:"お隣の話が出たのは大きいです。この土地の値打ちは、単独の売値と、お隣にとっての値打ちが別物です。",
+    path:"お隣に一体利用を打診する" },
+  { key:"急ぎ", re:/急|すぐ|早く|期限|年内|今年/,
+    revise:"急ぐなら、最初に言った「目安より下がる」幅は、さらに広がる覚悟が要ります。逆に半年待てるなら、選べる相手が増えます。",
+    path:"期限から逆算して、買い取り（早い・安い）と仲介（遅い・高い）のどちらにするか決める" },
+  { key:"使う", re:/住み|建て|自分で|使い|戻/,
+    revise:"ご自分で使うお考えなら、最初の「評価されにくい」は関係ありません。売値ではなく、何が建てられるかが問いです。",
+    path:"用途地域と形から、建てられるものを先に確かめる" },
+];
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+function secondWord(t) {
+  t = esc(t);
+  const hits = CUES.filter(c => c.re.test(t));
+  if (!hits.length) {
+    S.signals.push(`読み取れなかった言葉：「${t}」`);
+    say("正直に言います。今のお話から、最初の見立てを直す手がかりを私は読み取れませんでした。決めつけずに伺います。どれに近いですか？");
+    choices(["お金の負担の話", "家族・相続の話", "使い道の話", "うまく言葉にできない"], c => {
+      if (c === "うまく言葉にできない") { S.signals.push("「うまく言葉にできない」が押された"); return askHurry("それで大丈夫です。言葉にしにくいことほど、電話で一緒に整理する価値があります。"); }
+      const map = { "お金の負担の話":"負担", "家族・相続の話":"相続", "使い道の話":"使う" };
+      respond([CUES.find(x => x.key === map[c])], c);
+    });
+    return;
+  }
+  respond(hits, t);
+}
+
+function respond(hits, quote) {
+  const main = hits[0], k = PREF.localKnowledge[S.near.name], shape = S.sheet.形と向き || "";
+  let s = `「${quote}」と伺って、見立てを一つ直します。<br>${main.revise}`;
+  const paths = hits.map(h => h.path);
+  if (shape.startsWith("旗竿") && !hits.some(h => h.key === "隣"))
+    paths.push("旗竿地は、お隣と合わせた瞬間に普通の土地になります。お隣への打診も道の一つ");
+  if (shape.startsWith("角地")) paths.push("角地は単独でも強いので、値を下げて急ぐ理由は薄い");
+  s += "<br>考えられる道：<br>・" + paths.join("<br>・");
+  if (k) s += `<br><small>（根拠：${PREF.office}の土地勘「${k}」）</small>`;
+  S.revised = main.revise;
+  S.sheet.事情の要点 = hits.map(h => h.key).join("・");
+  say(s);
+  choices(["違う", "合っている、続けて", "うまく言葉にできない"], c => {
+    if (c === "違う") { S.signals.push(`見立てを外した（手がかり「${main.key}」と読んだ）`); say("外しました。すみません。どこが違うか、ひと言で聞かせてください。"); return freeInput(1); }
+    if (c === "うまく言葉にできない") S.signals.push("二言目のあとで「うまく言葉にできない」が押された");
+    askHurry(c === "合っている、続けて" ? "ありがとうございます。" : "それで大丈夫です。");
+  });
+}
+
+function askHurry(lead) {
+  say(lead + "<br>最後にもう一つ。いつ頃までに決めたい、というのはありますか？");
+  freeInput(2);
+}
+
 function showSheet() {
   const rows = Object.entries(S.sheet).map(([k, v]) =>
     `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
@@ -202,7 +268,9 @@ function showSheet() {
       <h3>押さえるべき点</h3>
       ・客が自分の言葉で語ったこと：「${S.sheet.事情}」<br>
       ・土地勘（${S.near.name}）：${PREF.localKnowledge[S.near.name] || "（登録なし）"}<br>
-      ・AIが途中で見立てを直した点：「期待できない」は売却前提の話と限定した
+      ・AIが途中で見立てを直した点：${S.revised || "（直していない）"}
+      <h3>AIの浅さの記録（会話が詰まった所）</h3>
+      ${S.signals.length ? "・" + S.signals.join("<br>・") : "（なし）"}
     </div>`;
   document.getElementById("talk").appendChild(div);
 }
