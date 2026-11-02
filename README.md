@@ -2,13 +2,13 @@
 
 不動産ロケーション評価Webアプリ（プロトタイプ）。
 
-設計の背景・方針は [`_works/不動産ロケーション評価Webアプリ_設計企画書_2026-11-01.md`](_works/不動産ロケーション評価Webアプリ_設計企画書_2026-11-01.md) を参照。
+設計の背景・方針は [`_works/2026-11-01_ClaudeAI_不動産ロケーション評価Webアプリ設計企画書.md`](_works/2026-11-01_ClaudeAI_不動産ロケーション評価Webアプリ設計企画書.md) を参照。
 
 ## ディレクトリ構成
 
 ```text
 RealEstate_app/
-├─ _works/        企画書・相談記録・報告書
+├─ _works/        企画書・相談記録・報告書（ファイル名は「日付_筆者_テーマ.md」。筆者は ClaudeAI / ClaudeCode / ユーザー）
 ├─ docs/          Webアプリ本体（GitHub Pages配信用）
 │  ├─ index.html
 │  ├─ css/
