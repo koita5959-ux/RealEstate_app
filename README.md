@@ -11,6 +11,7 @@ RealEstate_app/
 ├─ _works/        企画書・相談記録・報告書（ファイル名は「日付_筆者_テーマ.md」。筆者は ClaudeAI / ClaudeCode / ユーザー）
 ├─ docs/          Webアプリ本体（GitHub Pages配信用）
 │  ├─ index.html
+│  ├─ proto/      入口3の試作（筆者・画面ごとに1ファイル：index.html＝ClaudeCode、claudeai.html＝ClaudeAI、admin.html＝店の管理画面（ClaudeCode）。版は Git 履歴で追う）
 │  ├─ css/
 │  ├─ js/
 │  └─ data/       manifest.json・市区町村別データ（ビルド生成物）

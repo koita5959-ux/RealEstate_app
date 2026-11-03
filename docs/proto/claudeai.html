@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>土地の見立て（試作・Claude.AI案）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  /* 見立て書のデザイン：AIの言葉を、店の名前で出す「見立て」として見せる。会話が主役、地図は脇役。 */
+  :root {
+    --paper:#f4f0e6; --sheet:#fbf9f3; --ink:#2b2a26; --sub:#6d685c; --rule:#d8d0bd;
+    --ai:#2e4a6b;        /* 藍：AIの見立て */
+    --seal:#b5452a;      /* 朱：人の出番 */
+    --will:#6b4fa0;      /* 設計メモ */
+    --serif:"Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif;
+    --sans:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:var(--sans); color:var(--ink); background:var(--paper); }
+
+  /* 見本の操作（客の画面とは別の帯） */
+  .devbar { background:#2b2a26; color:#d9d3c4; font-size:12px; padding:6px 20px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .devbar b { color:#f4f0e6; font-weight:500; letter-spacing:.08em; }
+  .devbar label { display:flex; gap:6px; align-items:center; margin:0; font-size:12px; }
+  .devbar select { width:auto; font-size:12px; padding:2px 6px; border-radius:3px; border:none; }
+  .devbar .note { color:#e6a48f; margin-left:auto; }
+
+  /* 店の見立て書のヘッダー */
+  header { padding:22px 28px 14px; border-bottom:2px solid var(--ink); background:var(--sheet); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  header .shop { font-family:var(--serif); font-size:24px; font-weight:700; letter-spacing:.06em; margin:0; }
+  header .what { font-family:var(--serif); font-size:15px; color:var(--sub); letter-spacing:.3em; }
+
+  .wrap { display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:0; max-width:1280px; margin:0 auto; }
+  main { padding:8px 32px 60px; background:var(--sheet); min-height:calc(100vh - 110px); border-right:1px solid var(--rule); }
+  .side { padding:20px; position:sticky; top:0; align-self:start; }
+  #map { height:340px; border:1px solid var(--ink); }
+  @media (max-width:900px){ .wrap{ grid-template-columns:1fr; } .side{ position:static; order:-1; } main{ padding:8px 18px 40px; border-right:none; } }
+
+  h2 { font-family:var(--serif); font-size:16px; font-weight:700; margin:28px 0 10px; padding-bottom:4px; border-bottom:1px solid var(--rule); letter-spacing:.05em; }
+  .side h2 { margin-top:16px; font-size:15px; }
+  label { font-size:13px; display:block; margin:8px 0 3px; color:var(--sub); }
+  input[type=number], textarea, select { width:100%; padding:9px 10px; border:1px solid var(--rule); border-radius:2px; font-size:15px; background:#fff; font-family:var(--sans); color:var(--ink); }
+  textarea:focus, input:focus, select:focus { outline:2px solid var(--ai); outline-offset:1px; }
+
+  /* ボタン：反応を返すための札 */
+  button { font-family:var(--sans); font-size:14px; padding:8px 16px; border-radius:999px; border:1px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer; margin:6px 6px 0 0; transition:background .15s,color .15s; }
+  button:hover { background:var(--ink); color:var(--sheet); }
+  button.primary { background:var(--ai); border-color:var(--ai); color:#fff; width:100%; border-radius:2px; margin-top:12px; padding:11px; letter-spacing:.1em; }
+  button.primary:hover { background:#203650; }
+  button.small { font-size:12px; padding:5px 11px; }
+  button:disabled { opacity:.35; cursor:default; }
+  button:disabled:hover { background:var(--ai); }
+
+  .data { width:100%; border-collapse:collapse; font-size:13px; }
+  .data td { border-bottom:1px dotted var(--rule); padding:6px 4px; }
+  .data td:first-child { color:var(--sub); width:42%; }
+
+  /* AIの見立て：吹き出しではなく、店の見立て書の一節 */
+  .ai { font-family:var(--serif); font-size:17px; line-height:1.95; margin:22px 0 6px; padding:2px 0 2px 18px; border-left:3px solid var(--ai); }
+  .ai .tag { display:block; font-family:var(--sans); font-size:11px; color:var(--ai); letter-spacing:.15em; margin-bottom:4px; }
+  .ai.pre { border-left:1px solid var(--rule); font-size:15px; color:var(--sub); margin:14px 0 4px; }
+  .ai.pre .tag { color:var(--sub); }
+  /* 人の出番：朱の印 */
+  .ai.human { border-left-color:var(--seal); position:relative; padding-right:56px; }
+  .ai.human .tag { color:var(--seal); }
+  .ai.human::after { content:"人"; position:absolute; right:4px; top:4px; width:40px; height:40px; border:2px solid var(--seal); border-radius:50%; color:var(--seal); font-family:var(--serif); font-weight:700; font-size:20px; display:flex; align-items:center; justify-content:center; transform:rotate(-8deg); }
+
+  .will { display:none; font-family:var(--sans); font-size:12px; color:var(--will); border-left:2px dotted var(--will); padding:2px 10px; margin:2px 0 10px 18px; }
+  body.design .will { display:block; }
+  .stance { display:none; font-size:12px; color:var(--will); background:#efe9f7; padding:8px 10px; margin-top:14px; }
+  body.design .stance { display:block; }
+
+  /* 客の返事：控えめに右へ */
+  .me { text-align:right; margin:10px 0; font-size:14px; }
+  .me span { display:inline-block; padding:2px 2px 2px 14px; border-bottom:1px solid var(--ink); }
+  .me span::before { content:"― "; color:var(--sub); }
+
+  .hint { font-size:12px; color:var(--sub); line-height:1.7; }
+  .fields { border:1px solid var(--rule); background:#fff; padding:10px 14px 14px; margin:10px 0 6px 18px; }
+  .case { font-size:14px; border-bottom:1px dotted var(--rule); padding:7px 2px; }
+  #presets { margin:6px 0 4px; }
+
+  /* 業者向けの面：紙を裏返した色 */
+  .sheet { background:#2b2a26; color:#ece6d6; padding:14px 18px; font-size:13px; line-height:1.8; }
+  .sheet h3 { font-family:var(--serif); font-size:13px; color:#f4f0e6; margin:12px 0 2px; border-bottom:1px solid #4a473f; padding-bottom:2px; }
+  .empty { color:var(--seal); }
+  .hidden { display:none; }
+  details { font-size:12px; color:var(--sub); margin-top:24px; }
+  pre { white-space:pre-wrap; font-size:11px; }
+</style>
+</head>
+<body>
+<div class="devbar">
+  <b>見本の操作</b>
+  <label>事業所
+    <select id="prefSel"><option value="A">A店：仲介・隣地活用が得意</option><option value="B">B店：買い取りが得意</option></select></label>
+  <label><input type="checkbox" id="designToggle"> 設計メモを表示</label>
+  <span class="note">試作（Claude.AI案）／仮データ・AI未接続。数値・事例は実在しません</span>
+</div>
+<header>
+  <h1 class="shop" id="shopName"></h1>
+  <span class="what">土地の見立て</span>
+</header>
+<div class="wrap">
+  <main>
+    <div class="stance" id="stanceView"></div>
+    <div id="entry"></div>
+    <div id="result"></div>
+    <details>
+      <summary>事業所設定（プレファレンス・仮）</summary>
+      <pre id="prefView"></pre>
+    </details>
+  </main>
+  <div class="side">
+    <div id="map"></div>
+    <div id="step1" class="hidden">
+      <h2>気になる土地を指してください</h2>
+      <div class="hint">ご自分の土地でなくても大丈夫です。近所の空き地でも試せます。</div>
+      <div id="presets"></div>
+      <div id="picked" class="hint">まだ指定されていません（岐阜市内）</div>
+      <label for="area">面積（㎡）</label>
+      <input id="area" type="number" value="120" min="10">
+      <button id="go" class="primary" disabled>AIの見立てを聞く</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/*
+  Claude.AI案 v2。Claude Code の docs/proto/index.html を土台にしています。
+
+  [立ち位置] 事業所設定の外に置く、動かせない一行。禁止ではなく「誰の側に立つか」として書く。
+  [入口]     自分の土地を明かす前に見て回れる三択。三択の中身は事業所設定で変わる。どれを見たかが最初の反応データ。
+  [応答1]    質問ではなく言い切りから。ボタンはその意見への反応（そう思う／いや、違う／なぜそう見るのか）。
+  [応答]     AIの応答は6回まで。1回ごとに「この客に何を受け取ってほしいか（意志）」を持つ。設計メモで見える。
+  [引用]     過去の発言を引くときは、実際に言った文だけ（S.said）。
+  [人の出番] 読み切れなかった所は、客の画面でも担当者へ渡す。
+  [記録]     「何を答えたか」だけでなく「何に反応したか」と「どこで手が止まったか（秒数）」を残す。
+*/
+
+// ---- 立ち位置（事業所設定では変えられない） ----
+const STANCE = "このAIは、土地を持つ人の側に立って見立てを言う。店の得になることでも、持ち主の損になるなら、そう言う。";
+
+// ---- 仮データ（実在しない数値） ----
+const POINTS = [
+  { name:"岐阜駅前",  lat:35.4095, lng:136.7564, price:300000, zone:"商業地域" },
+  { name:"柳ケ瀬",    lat:35.4237, lng:136.7608, price:180000, zone:"商業地域" },
+  { name:"長良",      lat:35.4430, lng:136.7700, price:120000, zone:"第一種住居地域" },
+  { name:"鷺山",      lat:35.4480, lng:136.7350, price:80000,  zone:"第一種低層住居専用地域" },
+  { name:"茜部",      lat:35.3900, lng:136.7500, price:90000,  zone:"第一種住居地域" },
+];
+
+// ---- 事業所設定（見本として2店） ----
+const PREFS = {
+  A: {
+    office:"（仮）〇〇不動産", staff:"担当の山田", style:"neighbor",
+    strengths:["売買仲介", "隣地との一体活用の提案"],
+    entries:[
+      { id:"price", label:"この辺りの土地の値段を見る",
+        say:"この表の数字は、形の良い土地の話です。実際の土地は、たいていこれより下で見られます。私はまず、そこを疑って見ます。" },
+      { id:"cases", label:"土地の活かし方の事例を見る",
+        cases:["鷺山：旗竿地を、お隣と合わせて普通の土地として売った例（仮）", "長良：古家を解体せずに貸し、税と管理費を賄った例（仮）"],
+        say:"私は事例の値段より、誰に売ったか・誰に貸したかを見ます。この二つは、どちらも相手が普通の買い手ではありませんでした。" },
+      { id:"stance", label:"この店の考え方を見る",
+        say:"この店は、売る前に、お隣と合わせられないかを考える店です。売らないほうがいい土地には、そう言います。" }
+    ],
+    localKnowledge:{
+      "長良":"川沿いは景観で指名買いがある。北側の駐車場は所有者が売却に前向き。",
+      "鷺山":"旗竿地が多く相場より厳しく見られがち。隣地取得で化ける例を複数扱った。",
+      "茜部":"幹線沿いは店舗需要あり。奥は住宅地として落ち着いている。",
+      "柳ケ瀬":"空き店舗の転用相談が増えている。",
+      "岐阜駅前":"狭小地でも収益物件の引き合いがある。"
+    },
+    directions:["売る", "貸す", "隣と合わせる", "まだ決めない"]
+  },
+  B: {
+    office:"（仮）△△ホーム", staff:"担当の佐藤", style:"buyout",
+    strengths:["買い取り", "早い現金化"],
+    entries:[
+      { id:"price", label:"すぐ手放す場合の目安を見る",
+        say:"すぐ手放すなら、この表の7〜8割が目安です（仮）。ただ、急がない方にまでこの数字を勧めるつもりはありません。" },
+      { id:"cases", label:"買い取りの事例を見る",
+        cases:["茜部：空き家を解体せずに2週間で買い取った例（仮）", "岐阜駅前：狭小地を収益物件の業者へまとめて引き継いだ例（仮）"],
+        say:"早さは本物です。ただ、早い分だけ手元に残る額は減ります。そこを承知の方のための道です。" },
+      { id:"stance", label:"この店の考え方を見る",
+        say:"この店は、早く現金にすることが得意な店です。急がない方には、買い取りではなく仲介を勧めることもあります。" }
+    ],
+    localKnowledge:{
+      "長良":"古家付きでも、川沿いなら建て替え目的の買い手がつく。",
+      "鷺山":"古家付きの買い取りが多い。解体はこちらで持てる。",
+      "茜部":"幹線沿いは事業者の買い取り需要がある。",
+      "柳ケ瀬":"空き店舗はまとめて買い取る業者がいる。",
+      "岐阜駅前":"狭小地は収益物件の業者へまとめて引き継げる。"
+    },
+    directions:["すぐ手放す", "相場で売る", "貸す", "まだ決めない"]
+  }
+};
+let PREF = PREFS.A;
+
+// ---- 3地点の見本（Claude Code 11-02 の誘い：性格の違う地点で一言を考え抜く） ----
+const PRESETS = [
+  { label:"例：鷺山の旗竿地 120㎡", lat:35.4482, lng:136.7352, area:120, 形:"旗竿地・奥まっている", 建物:"何もない（更地）" },
+  { label:"例：駅前の狭小地 60㎡",  lat:35.4097, lng:136.7566, area:60,  形:"四角く道に面している", 建物:"今も使っている建物がある" },
+  { label:"例：茜部の広い土地 400㎡", lat:35.3902, lng:136.7502, area:400, 形:"四角く道に面している", 建物:"古い家が残っている" },
+];
+
+const BUDGET = 6;
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const yen = n => Math.round(n).toLocaleString() + "円";
+function distM(a, b) {
+  const R = 6371000, toR = x => x * Math.PI / 180;
+  const dLat = toR(b.lat - a.lat), dLng = toR(b.lng - a.lng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// ---- 記録（何に反応したか・どこで手が止まったか） ----
+const LOG = { entries:[], reactions:[] };
+let shownAt = Date.now();
+function react(where, what) {
+  const sec = Math.round((Date.now() - shownAt) / 100) / 10;
+  LOG.reactions.push({ where, what, sec });
+}
+
+// ---- 地図 ----
+const map = L.map("map").setView([35.423, 136.760], 13);
+L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png", {
+  attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>', maxZoom: 18
+}).addTo(map);
+POINTS.forEach(p => L.circleMarker([p.lat, p.lng], { radius:6, color:"#888" }).addTo(map).bindTooltip("標準地(仮) " + p.name));
+let pin = null, here = null, preset = null;
+map.on("click", e => { preset = null; setPlace(e.latlng.lat, e.latlng.lng); });
+function setPlace(lat, lng) {
+  here = { lat, lng };
+  if (pin) pin.setLatLng([lat, lng]); else pin = L.marker([lat, lng]).addTo(map);
+  document.getElementById("picked").textContent = `指定: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  document.getElementById("go").disabled = false;
+}
+
+// ---- 画面の初期化（事業所を切り替えると最初から） ----
+document.getElementById("designToggle").onchange = e => document.body.classList.toggle("design", e.target.checked);
+document.getElementById("prefSel").onchange = e => { PREF = PREFS[e.target.value]; reset(); };
+document.getElementById("stanceView").textContent = "立ち位置（事業所設定では変えられない）：" + STANCE;
+function reset() {
+  LOG.entries = []; LOG.reactions = []; S = null; preset = null;
+  document.getElementById("prefView").textContent = JSON.stringify(PREF, null, 2);
+  document.getElementById("shopName").textContent = PREF.office;
+  document.getElementById("result").innerHTML = "";
+  document.getElementById("step1").classList.add("hidden");
+  renderEntry();
+  const p = document.getElementById("presets"); p.innerHTML = "";
+  PRESETS.forEach(x => { const b = document.createElement("button"); b.className = "small"; b.textContent = x.label;
+    b.onclick = () => { preset = x; document.getElementById("area").value = x.area; map.setView([x.lat, x.lng], 15); setPlace(x.lat, x.lng); };
+    p.appendChild(b); });
+}
+
+// ---- 入口：見て回る三択（どれを見たかが最初の反応データ） ----
+function renderEntry() {
+  const box = document.getElementById("entry");
+  box.innerHTML = `<h2>まず、見てみる</h2><div id="entryBtns"></div><div id="entryView"></div>`;
+  const btns = box.querySelector("#entryBtns");
+  PREF.entries.forEach(en => { const b = document.createElement("button"); b.textContent = en.label;
+    b.onclick = () => showEntry(en); btns.appendChild(b); });
+  const go = document.createElement("button"); go.textContent = "気になる土地で試す"; go.className = "primary";
+  go.onclick = () => { LOG.entries.push("（地図へ進んだ）"); document.getElementById("step1").classList.remove("hidden"); go.remove(); };
+  btns.appendChild(go);
+  shownAt = Date.now();
+}
+function showEntry(en) {
+  LOG.entries.push(en.label);
+  const v = document.getElementById("entryView");
+  let body = "";
+  if (en.id === "price") body = `<table class="data">${POINTS.map(p => `<tr><td>${p.name}（${p.zone}）</td><td>${yen(p.price)}/㎡（仮）</td></tr>`).join("")}</table>`;
+  if (en.id === "cases") body = en.cases.map(c => `<div class="case">${c}</div>`).join("");
+  if (en.id === "stance") body = `<div class="case">得意なこと：${PREF.strengths.join("・")}</div>`;
+  v.innerHTML = body + `<div class="ai pre"><span class="tag">AIのひと言（入口・応答数に数えない）</span>${en.say}</div>
+    <div class="will">この一言の意志：見るだけで終わらせず、AIの言い切り方を先に見せる。入口の文は事業所ごとに事前生成でき、APIを呼ばない</div>`;
+}
+
+// ---- 会話 ----
+let S = null;
+document.getElementById("go").onclick = () => {
+  const area = Number(document.getElementById("area").value) || 0;
+  const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
+  S = { near, area, turn:0, said:{}, revised:null, humanTurns:[], heard:null, notSelling:false,
+        sheet:{ 所在:`${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積:area+"㎡", 最寄り標準地:`${near.name}（約${Math.round(near.d)}m）`,
+                用途地域:near.zone+"（仮）", 建物:null, 形:null, 方向:null, 客の言葉:null } };
+  document.getElementById("result").innerHTML = `
+    <h2>公開データ（機械的に）</h2>
+    <table class="data">
+      <tr><td>最寄りの標準地</td><td>${near.name}（約${Math.round(near.d)}m）</td></tr>
+      <tr><td>標準地価格</td><td>${yen(near.price)}/㎡（仮）</td></tr>
+      <tr><td>用途地域</td><td>${near.zone}（仮）</td></tr>
+      <tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×${area}㎡）</td></tr>
+    </table>
+    <h2>AIの見立て</h2><div id="talk"></div>`;
+  r1();
+};
+
+// 応答1：言い切る。質問で始めない
+function r1() {
+  const { near, area } = S, k = PREF.localKnowledge[near.name];
+  let view;
+  if (area < 100)       view = "この広さは、普通の家を建てたい人には狭すぎます。私は、普通の買い手を探すより、狭くても欲しがる相手を探す土地だと見ます。";
+  else if (area > 300)  view = "この広さは一般の住宅には大きすぎて、相場どおりには見られにくい土地です。私は、分けて売るか、まとめて使う人を探すかの二択だと見ます。";
+  else if (near.zone.includes("低層")) view = "この辺りの住宅地は、形と道で値段が大きく割れます。私は、上の目安額より下に見ています。";
+  else                  view = "上の目安額は出発点にすぎません。私は、この土地は「誰に売るか」で値段が変わる土地だと見ます。";
+  S.said.view = view;
+  say(`${view}${k ? `<br>この辺りでは「${k}」という事情もあります。` : ""}<br>どうでしょう、当たっていますか？`,
+      "質問ではなく、データと土地勘から言い切る。客がすぐ反応できる一言にする");
+  choices("応答1への反応", ["そう思う", "いや、違う", "なぜそう見るのか"], r2);
+}
+
+// 応答2：反応に応じて入り方を変え、材料を二つだけ聞く
+function r2(c) {
+  if (c === "いや、違う") {
+    // 応答数に数えない短い聞き返し（定型文とボタンだけ。APIを呼ばない）
+    sayPre("どこが外れていますか？");
+    choices("どこが違うか", ["土地の形や状態", "この辺りの事情", "そもそも売る気はない"], d => {
+      if (d === "この辺りの事情") S.humanTurns.push("客は、AIの土地勘の見立てに異を唱えた（地元の事情は担当のほうが詳しい所）");
+      if (d === "そもそも売る気はない") S.notSelling = true;
+      const lead = { "土地の形や状態":"外しました。では、形と状態を教えてください。見立てを直します。",
+                     "この辺りの事情":"地元の事情は、私より担当のほうが詳しい所です。そこは後で人に渡します。まず形と状態だけ教えてください。",
+                     "そもそも売る気はない":"売る前提で話していました。外しました。ここからは値段ではなく、持ち方の話にします。形と状態だけ教えてください。" }[d];
+      askFields(lead, "外したことを認め、どこを直すかを言ってから聞く");
+    });
+    return;
+  }
+  if (c === "なぜそう見るのか") {
+    askFields(`根拠は上のデータです。標準地（${S.near.name}）から約${Math.round(S.near.d)}m、面積${S.area}㎡、用途は${S.near.zone}（仮）。ここに形と状態が加わると、見立てがはっきりします。`,
+              "言い切りの根拠を、上に見えている数字だけで示す。嘘をつかないことの証明");
+    return;
+  }
+  askFields("では、見立てを詰めるために二つだけ教えてください。", "同意をもらったので、すぐ材料に進む");
+}
+function askFields(lead, will) {
+  say(`${lead}<br>わからなければ「わからない」で大丈夫です。`, will);
+  fields([
+    { key:"建物", label:"土地の上には", opts:["何もない（更地）", "古い家が残っている", "今も使っている建物がある", "わからない"] },
+    { key:"形",   label:"土地の形は",   opts:["四角く道に面している", "旗竿地・奥まっている", "角地", "わからない"] },
+  ], r3);
+}
+
+// 応答3：見立てを動かす。店の色を出しつつ、立ち位置が店の得に勝つ場面を作る
+function r3(v) {
+  S.sheet.建物 = v.建物; S.sheet.形 = v.形;
+  const k = PREF.localKnowledge[S.near.name] || "", B = PREF.style === "buyout";
+  let s = "";
+  if (S.notSelling) {
+    s = "売らないなら、目安額は関係ありません。問いは、毎年いくら出ていっているかと、それを何で賄うかです。";
+    S.revised = "売る気はない：値段ではなく持ち方の話へ";
+  } else if (v.建物.startsWith("古い家")) {
+    s = `古い家が残っているなら、上の目安額は更地の計算なので、そのままは使えません。解体費を誰が持つかで手元に残る額が変わります。`;
+    if (B) s += `当店なら解体せずにそのまま買い取れます。早さはそこにあります。ただ、時間があるなら、解体して仲介で売る場合と必ず比べてください。`;
+    S.revised = "古家あり：目安額は更地の計算。解体費の負担で手取りが変わる";
+  } else if (v.形.startsWith("旗竿")) {
+    s = "旗竿地なら、単独で売ると目安額よりかなり厳しく見られます。";
+    if (!B && k.includes("隣地")) s += "ただ、最初にお伝えしたこの辺りの事情がここで効きます。お隣にとっての値打ちは、単独の売値とは別物です。";
+    if (B) s += "当店の買い取りなら早く手放せますが、価格はさらに下がります。お隣に声をかける道が残っているなら、そちらが先です。";
+    S.revised = "旗竿地：単独の売値は厳しい。隣地との一体化が先";
+  } else if (v.形 === "角地") {
+    s = "角地なら、目安額より上を狙える条件があります。";
+    if (B) s += "当店は買い取りが得意ですが、角地なら仲介で売ったほうが手元に残ります。急がないなら、買い取りはお勧めしません。";
+    else s += "値を下げて急ぐ理由は薄い土地です。";
+    S.revised = "角地：目安額より上を狙える。急ぐ理由は薄い";
+  } else if (v.形 === "わからない" && v.建物 === "わからない") {
+    s = `形も建物もわからない、というのは珍しくありません。ここは机の上で決めるより、${PREF.staff}が現地を一度見るほうが早い所です。`;
+    S.humanTurns.push("土地の形・建物の有無が不明（現地確認）");
+  } else {
+    s = `最初に「${S.said.view.replace(/。$/, "")}」と言いました。いただいた条件なら、その見立てのままで大きく外れません。`;
+  }
+  S.said.r3 = s;
+  const dirs = S.notSelling ? ["貸す", "持ったまま負担を減らす", "まだ決めない"] : PREF.directions;
+  say(`${s}<br>そのうえで、今いちばん近い方向はどれですか。`,
+      B ? "店の得意を出す。ただし持ち主の損になる所では、店の得より立ち位置を優先して言う"
+        : "材料を聞いた甲斐があったと感じてもらう。見立てを一つ動かし、ここで初めて方向を聞く");
+  choices("方向", dirs, r4);
+}
+
+// 応答4：道は一つだけ。言っていない気がかりをひと言もらう
+function r4(dir) {
+  S.sheet.方向 = dir;
+  const shape = S.sheet.形 || "";
+  const P = {
+    "売る": shape.startsWith("旗竿") ? "売るなら、相場で買う人を探すより、まずお隣に声をかけるのが一番高く売れる道です。" : "売るなら、急ぐかどうかで相手が変わります。急がなければ、選べる買い手が増えます。",
+    "相場で売る": "相場で売るなら、当店では買い取りではなく仲介でお手伝いします。少し時間はかかりますが、手元に残る額はそちらが上です。",
+    "すぐ手放す": "すぐ手放すなら、買い取りが一番早い道です。仲介との差額は、早さの代金だと考えてください。",
+    "貸す": "貸すなら、建物を建てずに貸す（駐車場・資材置き場）道が、持ち出しが一番少ない道です。",
+    "隣と合わせる": "お隣と合わせる話は、こちらから切り出すより、間に人が入ったほうがまとまります。",
+    "持ったまま負担を減らす": "持ったままなら、まず毎年出ていく額を数えることからです。それが分かれば、賄う道は選べます。",
+    "まだ決めない": "決めなくて大丈夫です。決めるための数字を並べることは、今からでもできます。"
+  };
+  S.said.r4 = P[dir];
+  say(`${P[dir]}<br>最後に、まだ言っていない気がかりがあれば、ひと言だけ聞かせてください。`,
+      "道は一つだけ渡す。ボタンでは拾えない悩みを、ここで初めて自由入力で聞く");
+  freeInput(r5);
+}
+
+// 応答5：客の言葉を一つだけ拾う。読めなければ人の出番として見せる
+const CUES = [
+  { key:"負担", re:/固定資産税|税金|維持費|草刈|草が|負担/, say:"負担の話だったのですね。それなら、売るか貸すかより先に「いくら出ていっているか」を一緒に数えるのが先です。" },
+  { key:"相続", re:/相続|親から|遺産|名義/, say:"相続の話が出たので、一つ順番を変えます。売る・貸すの前に、名義が誰になっているかで選べる道が変わります。" },
+  { key:"家族", re:/兄弟|姉妹|共有|家族|親族|夫婦|主人|旦那|妻|息子|娘/, say:"ご家族が関わるなら、一番の壁は土地の条件ではなく、皆さんの考えを揃えることかもしれません。" },
+  { key:"隣", re:/隣|となり/, say:"お隣の話が出たのは大きいです。この土地の値打ちは、単独の売値とお隣にとっての値打ちが別物です。" },
+  { key:"急ぎ", re:/急|すぐ|早く|期限|年内|今年/, say:"期限があるなら、その期限から逆算して売り方を選ぶ話になります。早さを優先するほど、手元に残る額は減ります。どこまで急ぐかを、先に決めましょう。" },
+];
+function r5(t) {
+  S.sheet.客の言葉 = esc(t);
+  const hit = CUES.find(c => c.re.test(t));
+  if (hit) {
+    S.heard = hit.key;
+    say(`「${esc(t)}」と伺って、${hit.say}`, "客の言葉を一つ拾い、一つだけ応える。並べない");
+    choices("応答5への反応", ["そう、それが言いたかった", "少し違う"], c => {
+      if (c === "少し違う") S.humanTurns.push(`AIは「${hit.key}」と読んだが、客は「少し違う」と答えた：「${esc(t)}」`);
+      r6();
+    });
+  } else {
+    S.humanTurns.push(`AIが読み取れなかった言葉：「${esc(t)}」`);
+    sayHuman(`正直に言うと、今のお話は私には読み切れませんでした。<br>ここは${PREF.office}の${PREF.staff}が、電話で直接伺うのが得意なところです。言葉にしにくいことほど、人と話すほうが早いです。`,
+             "読めなかったことを隠さない。読めなかった所を、電話する理由に変える");
+    r6();
+  }
+}
+
+// 応答6：締め
+function r6() {
+  say(`ここまでの内容を一枚にまとめました。<br>これを記録して、${PREF.staff}の意見も聞いてみますか？`,
+      "締めは、相談の続きを人へ渡すこと。押しつけず、選んでもらう");
+  choices("締め", ["記録して、担当者の意見を聞く", "今日はここまで"], c => showSheet(c.startsWith("記録")));
+}
+
+function showSheet(handoff) {
+  const rows = Object.entries(S.sheet).map(([k, v]) => `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
+  const heardLine = { "負担":"毎年出ていっているお金を一緒に数えるところから始めたくて", "相続":"名義のことから順番に整理したくて",
+    "家族":"ご家族で同じ紙を見られるように数字を並べてお持ちしたくて", "隣":"お隣にとっての値打ちを具体的にお話ししたくて",
+    "急ぎ":"期限から逆算した選び方をお話ししたくて" }[S.heard];
+  const opener = S.humanTurns.length ? "AIでは読み切れなかったところを、直接伺いたくてお電話しました。"
+    : heardLine ? heardLine + "お電話しました。" : `${S.sheet.方向}方向の具体的な数字をお持ちしました。`;
+  const slow = LOG.reactions.filter(r => r.sec >= 10);
+  const div = document.createElement("div");
+  div.innerHTML = `<h2>データシート（対話の結果として）</h2><table class="data">${rows}</table>
+    <h2>要所レポート（業者向け）${handoff ? "" : "　※客は記録を希望しなかった"}</h2>
+    <div class="sheet">
+      <h3>電話の入口になる一言</h3>「先日の見立ての続きです。${opener}」
+      <h3>入口で見たもの（順に）</h3>${LOG.entries.length ? LOG.entries.join(" → ") : "（入口を見ずに地図へ）"}
+      <h3>何に反応したか</h3>${LOG.reactions.map(r => `・${r.where}：${r.what}（${r.sec}秒）`).join("<br>")}
+      <h3>手が止まった所（10秒以上）</h3>${slow.length ? slow.map(r => `・${r.where}（${r.sec}秒）`).join("<br>") : "（なし）"}
+      <h3>人の出番（AIが読み切れなかった所）</h3>${S.humanTurns.length ? "・" + S.humanTurns.join("<br>・") : "（なし）"}
+      <h3>AIが見立てを動かした点</h3>${S.revised || "（動かしていない）"}
+      <h3>応答数</h3>${S.turn} / ${BUDGET}
+    </div>`;
+  document.getElementById("talk").appendChild(div);
+}
+
+// ---- 表示部品 ----
+function bubble(html, will, cls) {
+  S.turn++;
+  const d = document.createElement("div"); d.className = "ai" + (cls ? " " + cls : "");
+  d.innerHTML = `<span class="tag">${cls === "human" ? "人の出番" : "AIの見立て"}（${S.turn}/${BUDGET}）</span>${html}`;
+  const w = document.createElement("div"); w.className = "will"; w.textContent = "この応答の意志：" + will;
+  const talk = document.getElementById("talk"); talk.appendChild(d); talk.appendChild(w);
+  shownAt = Date.now();
+}
+function say(html, will) { bubble(html, will); }
+function sayHuman(html, will) { bubble(html, will, "human"); }
+function sayPre(html) { const d = document.createElement("div"); d.className = "ai pre"; d.innerHTML = `<span class="tag">聞き返し（定型・応答数に数えない）</span>${html}`; document.getElementById("talk").appendChild(d); shownAt = Date.now(); }
+function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
+function choices(where, list, cb) {
+  const d = document.createElement("div");
+  list.forEach(c => { const b = document.createElement("button"); b.textContent = c;
+    b.onclick = () => { react(where, c); d.remove(); me(c); shownAt = Date.now(); cb(c); }; d.appendChild(b); });
+  document.getElementById("talk").appendChild(d);
+}
+function fields(list, cb) {
+  const d = document.createElement("div"); d.className = "fields";
+  d.innerHTML = list.map(f => `<label>${f.label}</label><select data-key="${f.key}">${f.opts.map(o => `<option${preset && preset[f.key] === o ? " selected" : ""}>${o}</option>`).join("")}</select>`).join("")
+    + `<button>これで送る</button>`;
+  d.querySelector("button").onclick = () => {
+    const v = {}; d.querySelectorAll("select").forEach(s => v[s.dataset.key] = s.value);
+    react("材料の入力", list.map(f => v[f.key]).join("／"));
+    d.remove(); me(list.map(f => v[f.key]).join("／")); cb(v);
+  };
+  document.getElementById("talk").appendChild(d);
+}
+function freeInput(cb) {
+  const box = document.createElement("div");
+  box.innerHTML = `<textarea rows="2" placeholder="例：兄と共有で、話がまとまらない"></textarea>
+    <button>送る</button><div class="hint">（本番ではAIがその場で読みます）</div>`;
+  document.getElementById("talk").appendChild(box);
+  box.querySelector("button").onclick = () => {
+    const t = box.querySelector("textarea").value.trim(); if (!t) return;
+    react("自由入力", "（書いた）"); box.remove(); me(t); cb(t);
+  };
+}
+
+reset();
+</script>
+</body>
+</html>

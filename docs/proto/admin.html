@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>店の管理画面（試作・Claude Code案）</title>
+<style>
+  /* 客の画面（claudeai.html）と同じ紙と墨。管理画面は「店の帳面」として見せる */
+  :root {
+    --paper:#f4f0e6; --sheet:#fbf9f3; --ink:#2b2a26; --sub:#6d685c; --rule:#d8d0bd;
+    --shop:#2e6b4a;   /* 緑：店が書く */
+    --app:#2e4a6b;    /* 藍：アプリ（AI）が持つ */
+    --fixed:#6b4fa0;  /* 紫：誰も変えられない */
+    --seal:#b5452a;   /* 朱：人の出番 */
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif; color:var(--ink); background:var(--paper); }
+  .devbar { background:#2b2a26; color:#d9d3c4; font-size:12px; padding:6px 20px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .devbar b { color:#f4f0e6; font-weight:500; }
+  .devbar select { font-size:12px; }
+  .devbar a { color:#e6a48f; }
+  header { padding:18px 28px 12px; border-bottom:2px solid var(--ink); background:var(--sheet); }
+  header h1 { font-family:"Noto Serif JP","Yu Mincho",serif; font-size:22px; margin:0; }
+  header p { margin:6px 0 0; font-size:13px; color:var(--sub); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; margin-top:8px; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px; }
+  .lg-shop::before { background:var(--shop); } .lg-app::before { background:var(--app); } .lg-fixed::before { background:var(--fixed); }
+
+  nav { display:flex; gap:0; background:var(--sheet); border-bottom:1px solid var(--rule); padding:0 20px; overflow-x:auto; }
+  nav button { border:none; background:none; padding:12px 16px; font-size:14px; cursor:pointer; border-bottom:3px solid transparent; color:var(--sub); white-space:nowrap; }
+  nav button.on { color:var(--ink); border-bottom-color:var(--ink); font-weight:700; }
+  main { max-width:1100px; margin:0 auto; padding:16px 20px 60px; }
+  section { display:none; } section.on { display:block; }
+
+  .zone { background:var(--sheet); border:1px solid var(--rule); border-left:5px solid var(--shop); padding:14px 18px; margin:14px 0; }
+  .zone.app { border-left-color:var(--app); } .zone.fixed { border-left-color:var(--fixed); }
+  .zone h2 { font-size:15px; margin:0 0 4px; }
+  .zone .who { font-size:11px; letter-spacing:.1em; color:var(--shop); }
+  .zone.app .who { color:var(--app); } .zone.fixed .who { color:var(--fixed); }
+  .zone .why { font-size:12px; color:var(--sub); margin:2px 0 10px; line-height:1.7; }
+  label { display:block; font-size:12px; color:var(--sub); margin:8px 0 2px; }
+  input, textarea, select { width:100%; font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--rule); background:#fff; color:var(--ink); }
+  textarea { min-height:52px; resize:vertical; }
+  input[readonly], textarea[readonly] { background:#f0ede4; color:var(--sub); }
+  .row { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border-bottom:1px dotted var(--rule); padding:6px; text-align:left; vertical-align:top; }
+  th { font-weight:500; font-size:12px; }
+  th.shop { color:var(--shop); } th.app { color:var(--app); }
+  td textarea { min-height:40px; font-size:13px; }
+  td.ro { color:var(--sub); font-size:12px; }
+
+  .card { background:#2b2a26; color:#ece6d6; padding:12px 16px; margin:10px 0; font-size:13px; line-height:1.8; }
+  .card h3 { font-size:14px; margin:0 0 4px; color:#f4f0e6; }
+  .card .seal { color:#e6a48f; }
+  .card .dim { color:#a9a291; font-size:12px; }
+  .note { font-size:12px; color:var(--sub); line-height:1.8; }
+  button.act { font:inherit; font-size:13px; padding:6px 14px; border:1px solid var(--ink); background:transparent; cursor:pointer; margin:8px 6px 0 0; border-radius:999px; }
+  button.act:hover { background:var(--ink); color:var(--sheet); }
+  pre { white-space:pre-wrap; font-size:11px; background:#fff; border:1px solid var(--rule); padding:10px; }
+</style>
+</head>
+<body>
+<div class="devbar">
+  <b>見本の操作</b>
+  <label>店 <select id="shopSel"><option value="A">A店：仲介・隣地活用</option><option value="B">B店：買い取り</option></select></label>
+  <a href="claudeai.html" target="_blank">客の画面（Claude.AI案）を開く</a>
+  <span>試作（Claude Code案）／仮データ・保存はこのブラウザだけ</span>
+</div>
+<header>
+  <h1 id="shopTitle"></h1>
+  <p>店の管理画面。客の画面のどこが店で変わり、どこが変わらないかを、色で分けて見せる。</p>
+  <div class="legend"><span class="lg-shop">店が書く</span><span class="lg-app">アプリ（AI）が持つ・店は読むだけ</span><span class="lg-fixed">誰も変えられない</span></div>
+</header>
+<nav>
+  <button data-tab="write" class="on">店が書く</button>
+  <button data-tab="words">言葉への応え方</button>
+  <button data-tab="inbox">届いた相談</button>
+  <button data-tab="json">設定の中身</button>
+</nav>
+<main>
+
+<!-- 1. 店が書く -->
+<section id="write" class="on">
+  <div class="zone fixed">
+    <span class="who">誰も変えられない</span>
+    <h2>立ち位置</h2>
+    <div class="why">店の設定より上に置く一行。B店が買い取りを勧めたい土地でも、持ち主の損になるならAIはそう言う。ここが店で書き換えられたら、この商品は「店の得を代弁する道具」になる。</div>
+    <textarea id="stance" readonly></textarea>
+  </div>
+
+  <div class="zone">
+    <span class="who">店が書く</span>
+    <h2>店の名前と担当</h2>
+    <div class="row">
+      <div><label>店の名前</label><input data-k="office"></div>
+      <div><label>担当（客の画面と電話の入口に出る）</label><input data-k="staff"></div>
+    </div>
+    <label>得意なこと（読点区切り）</label><input data-k="strengths" data-list="1">
+  </div>
+
+  <div class="zone">
+    <span class="who">店が書く</span>
+    <h2>入口の三択</h2>
+    <div class="why">自分の土地を明かす前の客が見るもの。どれを見たかが最初の反応データになる。AIのひと言は事前に作っておけるので、ここは店が書いて店が直せる。</div>
+    <div id="entries"></div>
+  </div>
+
+  <div class="zone">
+    <span class="who">店が書く</span>
+    <h2>土地勘（地点ごと）</h2>
+    <div class="why">応答1の言い切りの裏付けになる。公開データでは取れない、店だけが知っていること。ここが薄い店ほど、AIの見立ても薄くなる。</div>
+    <div id="local"></div>
+  </div>
+
+  <div class="zone">
+    <span class="who">店が書く</span>
+    <h2>方向の選択肢</h2>
+    <div class="why">応答3で客に選んでもらう道。並べ方に店の色が出る（A店は「隣と合わせる」、B店は「すぐ手放す」）。</div>
+    <input data-k="directions" data-list="1">
+  </div>
+</section>
+
+<!-- 2. 言葉への応え方 -->
+<section id="words">
+  <div class="zone app">
+    <span class="who">アプリ（AI）が持つ ／ 店が書く</span>
+    <h2>客の言葉への応え方</h2>
+    <div class="why">
+      客が自由に書いた言葉を、AIが読んで応える所。一行を二つに割った。<br>
+      <b style="color:var(--app)">直し方</b>は一般的な不動産の知識なので、アプリが持つ（店は読むだけ）。<br>
+      <b style="color:var(--shop)">店の道</b>は、その話が出たとき店が最後に差し出す一手。同じ「負担」でも、A店とB店では出す道が違う。<br>
+      Claude.AI の「この表の道の欄を業者が書けば、そのままオーダーシートになる」をそのまま形にした。
+    </div>
+    <table>
+      <thead><tr><th class="app" style="width:14%">話の種類</th><th class="app" style="width:40%">直し方（アプリ）</th><th class="shop">店の道（店が書く）</th></tr></thead>
+      <tbody id="cues"></tbody>
+    </table>
+  </div>
+
+  <div class="zone app">
+    <span class="who">アプリ（AI）が持つ</span>
+    <h2>応答ごとの意志</h2>
+    <div class="why">
+      Claude.AI 案の「この応答の意志」。ここは店に書かせない側に置いた。<br>
+      意志は「この客に何を受け取ってほしいか」で、立ち位置から降りてくるもの。店が書けると、意志が「店の得」に寄せられる。店の色は、上の「店の道」と土地勘で十分に出る。<br>
+      ただし B店の応答3のように、店の得意と立ち位置がぶつかる所だけは、意志がその判断を言葉にしている。
+    </div>
+    <table>
+      <thead><tr><th class="app" style="width:14%">応答</th><th class="app">意志</th></tr></thead>
+      <tbody id="wills"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3. 届いた相談 -->
+<section id="inbox">
+  <p class="note">客が「記録して、担当者の意見を聞く」を選ぶと、ここに届く。電話をかける前に担当が読むもの。見本の3件（実在しません）。</p>
+  <div id="cards"></div>
+  <div class="zone" style="margin-top:20px">
+    <span class="who">店が受け取る</span>
+    <h2>途中で閉じた客</h2>
+    <div class="why">Claude.AI が前回指摘した計器の死角。ボタンを押してくれた人の不満しか届かず、黙って閉じた人の詰まりは届かない。最後まで進まなかった客も、どこで閉じたかだけは数えて見せる（連絡先がないので電話はできない。直すのは店の設定のほう）。</div>
+    <table>
+      <thead><tr><th>閉じた所</th><th>件数（見本）</th><th>店が見直せる所</th></tr></thead>
+      <tbody id="drops"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4. 設定の中身 -->
+<section id="json">
+  <p class="note">客の画面に渡る設定の中身。店が書いた所と、アプリが持つ所が一つにまとまって、AIへのプロンプトになる。上から順に、立ち位置 → 店の設定 → 応え方 → 意志。</p>
+  <button class="act" id="resetBtn">見本の内容に戻す</button>
+  <pre id="dump"></pre>
+</section>
+
+</main>
+<script>
+/*
+  Claude Code案。ユーザーの提言「管理者機能を並行させないと、アプリの形が見えづらい」への試作。
+  客の画面（claudeai.html）の設定を、誰が書くかで三色に分けた。
+  [誰も変えられない] 立ち位置
+  [店が書く]         名前・担当・得意・入口の三択・土地勘・方向・言葉への「店の道」
+  [アプリが持つ]     言葉への「直し方」・応答ごとの意志
+  [店が受け取る]     届いた相談（要所レポート）・途中で閉じた客
+*/
+const STANCE = "このAIは、土地を持つ人の側に立って見立てを言う。店の得になることでも、持ち主の損になるなら、そう言う。";
+
+// 見本の店（claudeai.html の PREFS と同じ中身に、言葉への「店の道」を足した）
+const SAMPLE = {
+  A: {
+    office:"（仮）〇〇不動産", staff:"担当の山田", strengths:["売買仲介", "隣地との一体活用の提案"],
+    entries:[
+      { label:"この辺りの土地の値段を見る", say:"この表の数字は、形の良い土地の話です。実際の土地は、たいていこれより下で見られます。私はまず、そこを疑って見ます。" },
+      { label:"土地の活かし方の事例を見る", say:"私は事例の値段より、誰に売ったか・誰に貸したかを見ます。この二つは、どちらも相手が普通の買い手ではありませんでした。" },
+      { label:"この店の考え方を見る", say:"この店は、売る前に、お隣と合わせられないかを考える店です。売らないほうがいい土地には、そう言います。" }
+    ],
+    localKnowledge:{ "長良":"川沿いは景観で指名買いがある。北側の駐車場は所有者が売却に前向き。", "鷺山":"旗竿地が多く相場より厳しく見られがち。隣地取得で化ける例を複数扱った。", "茜部":"幹線沿いは店舗需要あり。奥は住宅地として落ち着いている。", "柳ケ瀬":"空き店舗の転用相談が増えている。", "岐阜駅前":"狭小地でも収益物件の引き合いがある。" },
+    directions:["売る", "貸す", "隣と合わせる", "まだ決めない"],
+    cuePaths:{ 負担:"お隣に、持っていただけないか声をかける", 相続:"名義を揃えるところから、司法書士と一緒に伺う", 家族:"ご家族そろって見られる比較表をお持ちする", 隣:"間に入って、お隣への話の切り出し方を考える", 急ぎ:"期限から逆算して、仲介で間に合うかを先に確かめる" }
+  },
+  B: {
+    office:"（仮）△△ホーム", staff:"担当の佐藤", strengths:["買い取り", "早い現金化"],
+    entries:[
+      { label:"すぐ手放す場合の目安を見る", say:"すぐ手放すなら、この表の7〜8割が目安です（仮）。ただ、急がない方にまでこの数字を勧めるつもりはありません。" },
+      { label:"買い取りの事例を見る", say:"早さは本物です。ただ、早い分だけ手元に残る額は減ります。そこを承知の方のための道です。" },
+      { label:"この店の考え方を見る", say:"この店は、早く現金にすることが得意な店です。急がない方には、買い取りではなく仲介を勧めることもあります。" }
+    ],
+    localKnowledge:{ "長良":"古家付きでも、川沿いなら建て替え目的の買い手がつく。", "鷺山":"古家付きの買い取りが多い。解体はこちらで持てる。", "茜部":"幹線沿いは事業者の買い取り需要がある。", "柳ケ瀬":"空き店舗はまとめて買い取る業者がいる。", "岐阜駅前":"狭小地は収益物件の業者へまとめて引き継げる。" },
+    directions:["すぐ手放す", "相場で売る", "貸す", "まだ決めない"],
+    cuePaths:{ 負担:"買い取りで、毎年の負担をすぐ終わらせる（仲介との差額も並べる）", 相続:"相続した土地の買い取りの流れと、かかる日数をお持ちする", 家族:"買い取り額を一つ出して、ご家族の話の土台にしてもらう", 隣:"お隣が買う話があるなら、そちらが先。当店は待つ", 急ぎ:"期限までに確実に現金にする買い取りの段取りを組む" }
+  }
+};
+
+// アプリが持つ（店は読むだけ）。直し方は claudeai.html の CUES、意志は各応答の will と同じ
+const CUE_FIX = {
+  負担:"売るか貸すかより先に「いくら出ていっているか」を一緒に数える。",
+  相続:"売る・貸すの前に、名義が誰になっているかで選べる道が変わる。",
+  家族:"一番の壁は土地の条件ではなく、皆さんの考えを揃えること。",
+  隣:"この土地の値打ちは、単独の売値とお隣にとっての値打ちが別物。",
+  急ぎ:"期限から逆算して売り方を選ぶ。早さを優先するほど手元に残る額は減る。"
+};
+const WILLS = [
+  ["応答1", "質問ではなく、データと土地勘から言い切る。客がすぐ反応できる一言にする"],
+  ["応答2", "同意なら材料へ。違うなら外したことを認めて直す所を言う。なぜなら見えている数字だけで根拠を示す"],
+  ["応答3", "見立てを一つ動かす。店の得意と持ち主の得がぶつかる所では、立ち位置を優先して言う"],
+  ["応答4", "道は一つだけ渡す。ボタンでは拾えない悩みを、ここで初めて自由入力で聞く"],
+  ["応答5", "客の言葉を一つ拾い、一つだけ応える。読めなければ隠さず、電話する理由に変える"],
+  ["応答6", "締めは、相談の続きを人へ渡すこと。押しつけず、選んでもらう"]
+];
+
+// 届いた相談（見本）
+const INBOX = [
+  { place:"鷺山・旗竿地 120㎡", saw:"この辺りの土地の値段を見る → （地図へ進んだ）", r1:"そう思う（4.2秒）", dir:"売る", words:"親から相続したが、固定資産税が負担で", heard:"負担", slow:"方向（14.8秒）", human:null },
+  { place:"茜部・古家あり 400㎡", saw:"（入口を見ずに地図へ）", r1:"いや、違う → そもそも売る気はない（11.3秒）", dir:"持ったまま負担を減らす", words:"兄と共有で、話がまとまらない", heard:"家族", slow:"応答1への反応（11.3秒）", human:null },
+  { place:"岐阜駅前・狭小地 60㎡", saw:"この店の考え方を見る → 土地の活かし方の事例を見る → （地図へ進んだ）", r1:"なぜそう見るのか（6.0秒）", dir:"まだ決めない", words:"父がまだ使っているので、どう切り出せばいいか", heard:null, slow:"自由入力（38.5秒）", human:"AIが読み取れなかった言葉：「父がまだ使っているので、どう切り出せばいいか」" }
+];
+const DROPS = [
+  ["入口（三択を見て閉じた）", 23, "入口のAIのひと言。言い切りが強すぎないか"],
+  ["応答1（言い切りを見て閉じた）", 11, "土地勘の書き込み。その地点の欄が空だと、言い切りが一般論になる"],
+  ["材料の入力（形と建物）", 6, "選択肢の言葉。「旗竿地」が通じていない可能性"],
+  ["自由入力（何も書かずに閉じた）", 9, "応答4の店の道。道が客に合っていないと、言うことがなくなる"]
+];
+
+const KEY = "proto-admin-v1";
+let ALL, shop = "A";
+function load() { try { ALL = JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { ALL = null; } if (!ALL) ALL = JSON.parse(JSON.stringify(SAMPLE)); }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(ALL)); } catch (e) {} dump(); }
+const P = () => ALL[shop];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+function render() {
+  const p = P();
+  document.getElementById("shopTitle").textContent = p.office + "　管理画面";
+  document.getElementById("stance").value = STANCE;
+  document.querySelectorAll("[data-k]").forEach(el => {
+    const k = el.dataset.k; el.value = el.dataset.list ? p[k].join("、") : p[k];
+    el.oninput = () => { p[k] = el.dataset.list ? el.value.split(/[、,]/).map(s => s.trim()).filter(Boolean) : el.value;
+      if (k === "office") document.getElementById("shopTitle").textContent = p.office + "　管理画面"; save(); };
+  });
+  document.getElementById("entries").innerHTML = p.entries.map((e, i) => `
+    <div class="row" style="margin-bottom:8px"><div><label>${i + 1}つ目の見出し</label><input data-e="${i}" data-f="label" value="${esc(e.label)}"></div>
+    <div style="grid-column:span 2"><label>AIのひと言（事前に作る）</label><textarea data-e="${i}" data-f="say">${esc(e.say)}</textarea></div></div>`).join("");
+  document.querySelectorAll("[data-e]").forEach(el => el.oninput = () => { p.entries[el.dataset.e][el.dataset.f] = el.value; save(); });
+  document.getElementById("local").innerHTML = Object.entries(p.localKnowledge).map(([n, t]) =>
+    `<label>${n}</label><textarea data-l="${n}">${esc(t)}</textarea>`).join("");
+  document.querySelectorAll("[data-l]").forEach(el => el.oninput = () => { p.localKnowledge[el.dataset.l] = el.value; save(); });
+  document.getElementById("cues").innerHTML = Object.keys(CUE_FIX).map(k =>
+    `<tr><td>${k}</td><td class="ro">${CUE_FIX[k]}</td><td><textarea data-c="${k}">${esc(p.cuePaths[k])}</textarea></td></tr>`).join("");
+  document.querySelectorAll("[data-c]").forEach(el => el.oninput = () => { p.cuePaths[el.dataset.c] = el.value; save(); });
+  document.getElementById("wills").innerHTML = WILLS.map(([a, b]) => `<tr><td>${a}</td><td class="ro">${b}</td></tr>`).join("");
+  renderInbox(); dump();
+}
+
+function renderInbox() {
+  const p = P();
+  document.getElementById("cards").innerHTML = INBOX.map(c => {
+    const opener = c.human ? "AIでは読み切れなかったところを、直接伺いたくてお電話しました。"
+      : c.heard ? `「${c.words}」と書いてくださったので、${p.cuePaths[c.heard]}つもりでお電話しました。` : `${c.dir}方向の数字をお持ちしました。`;
+    return `<div class="card"><h3>${c.place}　<span class="dim">方向：${c.dir}</span></h3>
+      <div><span class="dim">電話の入口：</span>「先日の見立ての続きです。${esc(opener)}」</div>
+      <div><span class="dim">入口で見たもの：</span>${c.saw}</div>
+      <div><span class="dim">言い切りへの反応：</span>${c.r1}</div>
+      <div><span class="dim">客の言葉：</span>「${c.words}」${c.heard ? `<span class="dim">（AIは「${c.heard}」と読んだ）</span>` : ""}</div>
+      <div><span class="dim">手が止まった所：</span>${c.slow}</div>
+      ${c.human ? `<div class="seal">人の出番：${c.human}</div>` : ""}</div>`;
+  }).join("") + `<p class="note">電話の入口の一言は、上の「店の道」から組み立てている。店の道を書き換えると、ここも変わる。</p>`;
+  document.getElementById("drops").innerHTML = DROPS.map(d => `<tr><td>${d[0]}</td><td>${d[1]}</td><td>${d[2]}</td></tr>`).join("");
+}
+
+function dump() {
+  document.getElementById("dump").textContent =
+    "【立ち位置（誰も変えられない）】\n" + STANCE +
+    "\n\n【店の設定（店が書く）】\n" + JSON.stringify(P(), null, 2) +
+    "\n\n【言葉への直し方（アプリが持つ）】\n" + JSON.stringify(CUE_FIX, null, 2) +
+    "\n\n【応答ごとの意志（アプリが持つ）】\n" + WILLS.map(w => w.join("：")).join("\n");
+}
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); document.getElementById(b.dataset.tab).classList.add("on");
+  renderInbox();
+});
+document.getElementById("shopSel").onchange = e => { shop = e.target.value; render(); };
+document.getElementById("resetBtn").onclick = () => { ALL = JSON.parse(JSON.stringify(SAMPLE)); save(); render(); };
+load(); render();
+</script>
+</body>
+</html>
