@@ -33,12 +33,15 @@
   .sheet { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; font-size:13px; }
   .sheet h3 { font-size:13px; margin:8px 0 4px; }
   .empty { color:#b4472b; }
+  .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
+  body.design .will { display:block; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
 </style>
 </head>
 <body>
 <header>
   <h1>土地の見立て ― 試作</h1>
+  <label style="font-size:12px;margin:0"><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label>
   <span class="note">仮データ・AI未接続（台本で動作）。数値は実在しません。</span>
 </header>
 <div class="wrap">
@@ -119,7 +122,7 @@ document.getElementById("go").onclick = () => {
       所在: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積: area + "㎡",
       最寄り標準地: `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: yen(near.price) + "/㎡（仮）",
       用途地域: near.zone + "（仮）",
-      形と向き: null, 持ち主の意向: null, 事情: null, 事情の要点: null
+      形と向き: null, 接道: null, 持ち主の意向: null, 事情: null, 事情の要点: null
     },
     near, area, log: [], signals: [], revised: null
   };
@@ -134,40 +137,72 @@ document.getElementById("go").onclick = () => {
     </table>
     <h2>3. AI判定</h2>
     <div id="talk"></div>`;
-  say(firstJudgment());
-  choices(["角地・南向きです", "旗竿地・奥まっています", "よくわからない"], onShape);
+  firstJudgment();
 };
 
 // ---- 台本（本番ではアプリが組み立てたプロンプトをAIへ送る部分） ----
+// 一投目の型（11-04 合意）：根拠のある決まりを一つ渡し、地図では読めない一点を正直に開ける。
+// 開けた穴は、客だけが知っていることで即答できる。店の得意はまだ出さない（目的を透けさせない）。
+// 各応答の「渡したもの／開けた穴」は設計メモで見える。
+const SETBACK = { "鷺山":"この辺りは2005〜09年に、市が狭い道の解消を進めた地区です（岐阜市「鷺山地区 事後評価」）。ただ、全部の道が広がったわけではありません。" };
+
 function firstJudgment() {
-  const { near, area } = S;
-  const far = near.d > 400, small = area < 100, large = area > 300;
-  let s = "";
-  if (far) s += `標準地から約${Math.round(near.d)}m離れています。上の目安額は、そのまま当てはまらない可能性が高いです。`;
-  else s += `標準地には近い場所です。ただ、上の目安額はあくまで標準的な形の土地の話です。`;
-  if (small) s += "この広さだと建てられるものが限られ、順当な評価では期待しにくい土地です。";
-  else if (large) s += "この広さは一般の住宅向けには大きすぎて、相場どおりには評価されにくい面があります。";
-  else s += "形と向き次第で、目安より大きく下がることもあります。";
-  return s + "<br>まず、土地の形と向きを教えてください。見方が変わります。";
+  say("この土地に家を建て直せるかどうかは、値段より先に、一つの決まりで決まります。<br>"
+    + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
+    + "これは地図からは読めません。この土地は、道にどう接していますか？",
+    "渡したもの：住む・活かす・手放す、どの道にも効く決まり（根拠つき）", "開けた穴：道への接し方（持ち主なら見れば分かる）");
+  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], onRoad);
 }
-function onShape(c) {
-  S.sheet.形と向き = c;
-  const k = PREF.localKnowledge[S.near.name];
-  let s;
-  if (c.startsWith("旗竿")) s = "正直に言えば、売るだけなら目安額よりかなり厳しく見られます。";
-  else if (c.startsWith("角地")) s = "角地で南向きなら、目安額より上を狙える条件がそろっています。";
-  else s = "わからなくても大丈夫です。形と向きは、現地を見れば私たちがお調べできます。";
-  if (k) s += `<br>ただ、この辺りでは「${k}」という事情があります。見方次第で、弱みが強みに変わる土地です。`;
-  say(s + "<br>この土地は、どうしたいとお考えですか？");
-  choices(["活かす道を知りたい", "手放すことも考えている", "そう言える根拠を詳しく"], onIntent);
+function onRoad(c) {
+  if (c.startsWith("細い")) {
+    S.sheet.形と向き = "旗竿地・奥まっています";
+    say("旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
+      "渡したもの：2mが何を決めるか（客は幅を知っていても、意味は知らないことが多い）", "開けた穴：通路の幅");
+    choices(["2mある", "2mない・狭い", "測ったことがない"], onWidth);
+  } else if (c.startsWith("道に")) {
+    S.sheet.形と向き = "道に面している";
+    S.sheet.接道 = "道に広く面している（客の申告）";
+    const local = SETBACK[S.near.name];
+    say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
+      + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
+      "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（すれ違えるか、で答えられる）");
+    choices(["すれ違える", "すれ違えない", "わからない"], c2 => {
+      S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／前の道は4m未満の可能性（セットバック）", "わからない":"／前の道の幅は不明" }[c2];
+      if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
+      askBuilding(c2 === "すれ違えない" ? "それなら、建て直すときに何㎡残るかを先に確かめる土地です。" : "接道の面では、この土地は素直な土地です。");
+    });
+  } else {
+    S.signals.push("接し方：客は分からない（現地確認）");
+    askBuilding("わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
+  }
+}
+function onWidth(c) {
+  if (c === "2mある") {
+    S.sheet.接道 = "旗竿地・通路2m以上（客の申告）";
+    askBuilding("それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
+  } else if (c === "2mない・狭い") {
+    S.sheet.接道 = "旗竿地・通路2m未満（客の申告）＝再建築不可の可能性";
+    const k = PREF.localKnowledge[S.near.name];
+    askBuilding("それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
+      + (k && k.includes("隣地") ? `<br><small>（${PREF.office}の土地勘：${k}）</small>` : ""));
+  } else {
+    S.sheet.接道 = "旗竿地・通路の幅は不明";
+    S.signals.push("通路の幅：客は測ったことがない（現地確認）");
+    askBuilding("測ったことがない方がほとんどです。メジャー一本で分かりますし、担当が見に行くこともできます。");
+  }
+}
+function askBuilding(lead) {
+  say(lead + "<br>もう一つだけ。今、この土地に建物はありますか？",
+    "渡したもの：接道の答えが、この土地にとって何を意味するか", "開けた穴：建物の有無（建て直しが今の話か、先の話かが分かれる）");
+  choices(["住んでいる家がある", "空き家・古い家がある", "何もない（更地）"], onIntent);
 }
 function onIntent(c) {
   S.sheet.持ち主の意向 = c;
-  let s;
-  if (c.startsWith("活かす")) s = "活かし方は、売る・貸す・隣と合わせる・建て替える、で大きく変わります。";
-  else if (c.startsWith("手放す")) s = "手放すにしても、今すぐ売るのが一番とは限りません。順番を変えるだけで手元に残る額が変わることがあります。";
-  else s = `根拠は上のデータです。標準地（${S.near.name}）との距離と、面積・形の違いが主な理由です。数字はすべて上の表から出しています。`;
-  say(s + "<br>差し支えなければ、この土地について気になっていることを、ひと言で聞かせてください。");
+  const s = c.startsWith("住んで") ? "住んでいるなら、建て直しは先の話です。ただ、いつか誰かに渡すときには、今日の接道の話がそのまま値打ちになります。"
+    : c.startsWith("空き家") ? "空き家が残っているなら、建て直せるかどうかが、そのまま「解体して売るか」「そのまま貸すか」の分かれ目になります。"
+    : "更地なら、接道の答えがそのまま、この土地で何ができるかです。";
+  say(s + "<br>この土地のことで、いま気になっていることを、ひと言で聞かせてください。",
+    "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：客の言葉（ここで初めて自由入力）");
   freeInput(1);
 }
 function freeInput(turn) {
@@ -264,7 +299,7 @@ function showSheet() {
     <h2>5. 要所レポート（業者向け）</h2>
     <div class="sheet">
       <h3>電話の入口になる一言</h3>
-      「先日の見立ての続きです。${S.sheet.形と向き}という条件と、${S.sheet.持ち主の意向}というお考えから、売る以外の道も具体的にお持ちしました。」
+      「先日の見立ての続きです。接道（${S.sheet.接道 || "未確認"}）を、現地で一緒に確かめたくてお電話しました。」
       <h3>押さえるべき点</h3>
       ・客が自分の言葉で語ったこと：「${S.sheet.事情}」<br>
       ・土地勘（${S.near.name}）：${PREF.localKnowledge[S.near.name] || "（登録なし）"}<br>
@@ -275,7 +310,11 @@ function showSheet() {
   document.getElementById("talk").appendChild(div);
 }
 // ---- 表示部品 ----
-function say(html) { const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI判定</span>${html}`; document.getElementById("talk").appendChild(d); }
+function say(html, gave, hole) {
+  const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI判定</span>${html}`;
+  if (gave) d.innerHTML += `<div class="will">${gave}<br>${hole}</div>`;
+  document.getElementById("talk").appendChild(d);
+}
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
 function choices(list, cb) {
   const d = document.createElement("div");
