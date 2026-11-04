@@ -116,15 +116,7 @@ const PREF = {
     "柳ケ瀬": "空き店舗の転用相談が増えている。",
     "岐阜駅前": "狭小地でも収益物件の引き合いがある。"
   },
-  tone: "踏み込むが嘘はつかない",
-  // 相談目的の枠（管理画面で店が書く）。枠は余分にあり、空の枠は客の画面に出ない。key は試作の台本用（本番はAIが読む）
-  purposes: [
-    { label:"土地の活かし方", key:"活かす" },
-    { label:"運用するなら", key:"運用" },
-    { label:"維持にかかる負担", key:"負担" },
-    { label:"相続や譲渡について", key:"相続" },
-    { label:"" }, { label:"" }
-  ]
+  tone: "踏み込むが嘘はつかない"
 };
 document.getElementById("prefView").textContent = JSON.stringify(PREF, null, 2);
 
@@ -218,14 +210,14 @@ function firstJudgment() {
     + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
     + "これは地図からは読めません。この土地は、道にどう接していますか？",
     "渡したもの：住む・活かす・手放す、どの道にも効く決まり（根拠つき）", "開けた穴：道への接し方（持ち主なら見れば分かる）");
-  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], onRoad);
+  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], onRoad, null, 1);
 }
 function onRoad(c) {
   if (c.startsWith("細い")) {
     S.sheet.形と向き = "旗竿地・奥まっています";
     say("旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
       "渡したもの：2mが何を決めるか（客は幅を知っていても、意味は知らないことが多い）", "開けた穴：通路の幅");
-    choices(["2mある", "2mない・狭い", "測ったことがない"], onWidth);
+    choices(["2mある", "2mない・狭い", "測ったことがない"], onWidth, null, 2);
   } else if (c.startsWith("道に")) {
     S.sheet.形と向き = "道に面している";
     S.sheet.接道 = "道に広く面している（客の申告）";
@@ -237,7 +229,7 @@ function onRoad(c) {
       S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／前の道は4m未満の可能性（セットバック）", "わからない":"／前の道の幅は不明" }[c2];
       if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
       askBuilding(c2 === "すれ違えない" ? "それなら、建て直すときに何㎡残るかを先に確かめる土地です。" : "接道の面では、この土地は素直な土地です。");
-    });
+    }, null, 2);
   } else {
     S.signals.push("接し方：客は分からない（現地確認）");
     askBuilding("わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
@@ -261,145 +253,50 @@ function onWidth(c) {
 function askBuilding(lead) {
   say(lead + "<br>もう一つだけ。今、この土地に建物はありますか？",
     "渡したもの：接道の答えが、この土地にとって何を意味するか", "開けた穴：建物の有無（建て直しが今の話か、先の話かが分かれる）");
-  choices(["住んでいる家がある", "空き家・古い家がある", "何もない（更地）"], onIntent);
+  choices(["住んでいる家がある", "空き家・古い家がある", "何もない（更地）"], onIntent, null, 3);
 }
 function onIntent(c) {
   S.sheet.持ち主の意向 = c;
   const s = c.startsWith("住んで") ? "住んでいるなら、建て直しは先の話です。ただ、いつか誰かに渡すときには、今日の接道の話がそのまま値打ちになります。"
     : c.startsWith("空き家") ? "空き家が残っているなら、建て直せるかどうかが、そのまま「解体して売るか」「そのまま貸すか」の分かれ目になります。"
     : "更地なら、接道の答えがそのまま、この土地で何ができるかです。";
-  say(s + "<br>この土地のことで、いまいちばん近いのはどれですか？",
-    "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：相談目的（③までがロケーション。ここで初めて客の事情に入る。選んでも書いてもよい）");
-  // ④ 相談目的。選択肢は店が管理画面の枠に書く（PREF.purposes）。空の枠は出さない。下に「書き欄＋送信」を付ける
   inquiryBar(); // 問い合わせのボタンは④から出す
-  const slots = PREF.purposes.filter(p => p.label);
-  choices(slots.map(p => p.label), c => {
-    S.sheet.相談目的 = c;
-    respond([CUES.find(x => x.key === slots.find(p => p.label === c).key)], c);
+  goStep(0, s);
+}
+// ---- ④から先：管理画面（admin_mode.html）で店が書いた選択肢で進む ----
+// 管理画面の設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
+// AIの返事はダミー：回答の後、次のステップのボタンを話題として示す。ボタンのないステップで打ち切る（3 AI型＝誘導あり）。
+const ADMIN_DEFAULT = { steps:[ { topic:"活かし方", btns:["住む・建て直す","建てて貸す","建てずに貸す（駐車場など）","売る","お隣と合わせる"] },
+                                { topic:"次に知りたいこと", btns:["かかる費用の目安","手順と期間","似た土地の例"] } ],
+                        close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" };
+const ADMIN = (() => { try { return JSON.parse(localStorage.getItem("reAdmin")) || ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
+window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で変えたら読み直す
+const END = "セッションでお答えできるのは以上です。詳しくは弊社へお問い合わせください。";
+function topicsOf(list) {
+  return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
+}
+function goStep(i, lead) {
+  const st = ADMIN.steps[i];
+  const list = st ? st.btns.map(b => b.trim()).filter(Boolean) : [];
+  if (!list.length) { say(lead + "<br>" + END); return; }
+  say(lead + "<br>" + topicsOf(list) + "お話ししましょう。",
+    "渡したもの：一つ前の答えへの回答", `開けた穴：管理画面の${NUM[3 + i]}（${st.topic || "題名なし"}）のボタン`);
+  const ans = said => `<span class="hint">（AIの回答：「${esc(said)}」に、ここまでの土地の条件に合わせて短く答える）</span>`;
+  choices(list, c => {
+    if (i === 0) S.sheet.相談目的 = c;
+    goStep(i + 1, ans(c));
   }, t => {
-    S.sheet.相談目的 = "（書いた）" + esc(t); S.sheet.事情 = esc(t);
-    secondWord(t);
-  });
-}
-function freeInput(turn) {
-  const box = newRow();
-  box.innerHTML += `<textarea rows="2" placeholder="例：親から相続したが、固定資産税が負担で…"></textarea>
-    <button>送る</button><div class="hint">（後半の対話。本番ではAIがその場で答えます）</div>`;
-  document.getElementById("talk").appendChild(box);
-  box.querySelector("button").onclick = () => {
-    const t = box.querySelector("textarea").value.trim(); if (!t) return;
-    box.classList.add("done"); PATH.push({ type:t, press:"送る", q:+box.dataset.q }); renderRoute();
-    box.querySelector("textarea").remove(); box.querySelector(".hint").remove(); box.querySelector("button").remove(); // 番号の行は残す
-    me(t);
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
-    secondWord(t);
-  };
+    goStep(i + 1, ans(t)); // 書いても、答えた後は次のボタンへ戻す
+  }, 4 + i);
 }
-// ---- 二言目：客の言葉を読み、最初の見立てのどこが変わるかを言う ----
-// 本番ではAIが行う。ここではアプリがAIに託す判断ルールの見本として書く：
-//   (1) 客の言葉から手がかりを拾う (2) 最初の見立てのどの部分が変わるかを名指しする
-//   (3) 形・土地勘と掛け合わせて具体の道を出す (4) 拾えなければ、拾えなかったと言う
-const CUES = [
-  { key:"負担", re:/固定資産税|税金|税が|維持費|管理|草刈|草が|負担/,
-    revise:"最初に「順当な評価では期待しにくい」と言いましたが、あれは売値の話でした。悩みが負担なら、問うべきは売値ではなく「毎年出ていくお金をどう止めるか」です。",
-    path:"貸して税と管理費を賄う（月極駐車場・資材置き場など）か、早く引き取ってくれる相手を探すか" },
-  { key:"相続", re:/相続|親から|実家|亡くな|遺産|名義/,
-    revise:"相続した土地なら、売るか持つかの前に「名義が誰になっているか」で選べる道が変わります。値段の話はその後です。",
-    path:"名義が整っていれば売るのも貸すのもすぐ動ける。まだなら名義の整理が最初の一歩" },
-  { key:"家族", re:/兄弟|姉妹|共有|家族|親族|妻|夫|子ども|息子|娘/,
-    revise:"ご家族が関わるなら、一番の壁は土地の条件ではなく、皆さんの考えを揃えることかもしれません。",
-    path:"売った場合・貸した場合・持ち続けた場合の数字を並べて、家族で同じ紙を見る" },
-  { key:"建物", re:/空き家|古家|古い家|建物|解体|家が建/,
-    revise:"建物が残っているなら、最初の目安額（更地の計算）はそのまま使えません。解体費を誰が持つかで手取りが変わります。",
-    path:"古家付きのまま売る場合と、解体してから売る場合の手取りを比べる" },
-  { key:"隣", re:/隣|となり|お隣/,
-    revise:"お隣の話が出たのは大きいです。この土地の値打ちは、単独の売値と、お隣にとっての値打ちが別物です。",
-    path:"お隣に一体利用を打診する" },
-  { key:"急ぎ", re:/急|すぐ|早く|期限|年内|今年/,
-    revise:"急ぐなら、最初に言った「目安より下がる」幅は、さらに広がる覚悟が要ります。逆に半年待てるなら、選べる相手が増えます。",
-    path:"期限から逆算して、買い取り（早い・安い）と仲介（遅い・高い）のどちらにするか決める" },
-  { key:"活かす", re:/活か|活用/,
-    revise:"活かし方を考えるなら、今日の接道の答えが出発点です。建て直せる土地かどうかで、選べる道の数が変わります。",
-    path:"住む・建てて貸す・建てずに貸す・お隣と合わせる、を接道の条件で絞る" },
-  { key:"運用", re:/運用|貸|賃/,
-    revise:"運用するなら、問いは売値ではなく「毎月いくら入り、いくら出るか」です。建物を建てずに貸す道は、持ち出しが少なくて済みます。",
-    path:"駐車場・資材置き場など建てずに貸す道と、建てて貸す道の収支を比べる" },
-  { key:"使う", re:/住み|建て|自分で|使い|戻/,
-    revise:"ご自分で使うお考えなら、最初の「評価されにくい」は関係ありません。売値ではなく、何が建てられるかが問いです。",
-    path:"用途地域と形から、建てられるものを先に確かめる" },
-];
-
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-function secondWord(t) {
-  t = esc(t);
-  const hits = CUES.filter(c => c.re.test(t));
-  if (!hits.length) {
-    S.signals.push(`読み取れなかった言葉：「${t}」`);
-    say("正直に言います。今のお話から、最初の見立てを直す手がかりを私は読み取れませんでした。決めつけずに伺います。どれに近いですか？");
-    choices(["お金の負担の話", "家族・相続の話", "使い道の話", "うまく言葉にできない"], c => {
-      if (c === "うまく言葉にできない") { S.signals.push("「うまく言葉にできない」が押された"); say("それで大丈夫です。言葉にしにくいことほど、人と話して整理する価値があります。下の問い合わせから、担当に渡すこともできます。"); return loop(null); }
-      const map = { "お金の負担の話":"負担", "家族・相続の話":"相続", "使い道の話":"使う" };
-      respond([CUES.find(x => x.key === map[c])], c);
-    });
-    return;
-  }
-  respond(hits, t);
-}
-
-function respond(hits, quote) {
-  const main = hits[0], k = PREF.localKnowledge[S.near.name], shape = S.sheet.形と向き || "";
-  let s = `「${quote}」と伺って、見立てを一つ直します。<br>${main.revise}`;
-  const paths = hits.map(h => h.path);
-  if (shape.startsWith("旗竿") && !hits.some(h => h.key === "隣"))
-    paths.push("旗竿地は、お隣と合わせた瞬間に普通の土地になります。お隣への打診も道の一つ");
-  if (shape.startsWith("角地")) paths.push("角地は単独でも強いので、値を下げて急ぐ理由は薄い");
-  s += "<br>考えられる道：<br>・" + paths.join("<br>・");
-  if (k) s += `<br><small>（根拠：${PREF.office}の土地勘「${k}」）</small>`;
-  S.revised = main.revise;
-  S.sheet.事情の要点 = hits.map(h => h.key).join("・");
-  hits.forEach(h => S.used.push(h.key));
-  say(s);
-  loop(main);
-}
-
-// ---- ⑤以降の繰り返し（本番ではAIが毎回その場で書く。ここでは台本） ----
-// 詳しく／別の視点で、または書いて送信。人と話したくなったら、いつでも下の問い合わせへ。
-const DEEP = {
-  "負担":"毎年出ていくのは、固定資産税・草刈りや管理の手間・建物があれば修繕です。まず去年いくら出たかを数えると、貸して賄えるのか、手放したほうが軽いのかが比べられます。",
-  "相続":"名義が亡くなった方のままだと、売るにも貸すにも、まず名義を移す手続き（相続登記）が要ります。2024年から相続登記は義務になりました。",
-  "家族":"家族の考えがそろわないときは、意見より先に、同じ数字を見ることが近道です。売った場合・貸した場合・持ち続けた場合を一枚に並べます。",
-  "建物":"古い家は、残したまま売る・解体して売る・そのまま貸す、の三つで手取りが変わります。解体費は広さと構造で大きく違うので、見積もりを一つ取ると話が具体になります。",
-  "隣":"お隣との話は、こちらから直接切り出すより、間に人が入ったほうがまとまりやすいものです。お隣にとっても、土地の形が良くなる話だからです。",
-  "急ぎ":"期限があるなら、その日から逆算します。3か月なら買い取り、半年あれば仲介も選べる、というのが一つの目安です。",
-  "活かす":"接道が通っていれば、住む・建てて貸す・売るのどれも選べます。通っていなければ、建てずに貸すか、お隣と合わせるかが中心になります。",
-  "運用":"建てずに貸すなら、月極駐車場や資材置き場が候補です。収入は大きくありませんが、固定資産税と管理費を賄えるかどうかが目安になります。",
-  "使う":"ご自分で使うなら、何が建てられるかが先です。用途地域と、今日の接道の答えで、建てられる大きさの見当がつきます。",
-};
-function loop(cur) {
-  choices(["その話を詳しく", "別の視点で"], c => {
-    if (c === "その話を詳しく") {
-      say(cur ? DEEP[cur.key] : `いちばん確かな土台は、今日の接道です（${S.sheet.接道 || "まだ確かめていません"}）。ここが決まると、住む・活かす・手放すの、どの道を選べるかが決まります。`);
-      return loop(cur);
-    }
-    if (c === "別の視点で") {
-      const other = CUES.find(x => !S.used.includes(x.key));
-      if (!other) { say("私が台本で持っている視点は、ここまでです。この先は、担当が直接伺うほうが深くなります。"); S.signals.push("別の視点を出し尽くした"); return loop(cur); }
-      S.used.push(other.key);
-      say(`別の視点から見ます。${other.revise}<br>考えられる道：${other.path}`);
-      return loop(other);
-    }
-  }, t => {
-    if (cur) S.signals.push(`選ばずに書いた（AIは「${cur.key}」の話をしていた）：「${esc(t)}」`);
-    S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
-    secondWord(t);
-  });
-}
 
 // ---- 問い合わせ（いつでも出せる。記録は画面に出さず、送るときに店へ添える） ----
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
 function inquiryBar() {
   const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">この相談を店への問い合わせにする</button>`;
+  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${ADMIN.close && ADMIN.close.trim() ? `<div class="hint">${esc(ADMIN.close)}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
     bar.innerHTML = "";
     const box = newRow(); box.classList.add("inqrow");
@@ -451,8 +348,8 @@ function say(html, gave, hole) {
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
 // onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（④以降）。選ぶか、書いて送信するか、どちらでも進める
-function choices(list, cb, onText) {
-  const d = newRow();
+function choices(list, cb, onText, q) {
+  const d = newRow(q);
   const pick = (b, c, opt, t) => {
     d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, ...(opt ? { opt } : {}), ...(t ? { type:t } : {}) }); renderRoute();
     d.classList.add("done"); b.classList.add("chosen");
@@ -480,9 +377,10 @@ function choices(list, cb, onText) {
 const PATH = [];
 const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 // 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
-function newRow() {
+function newRow(q) {
   const d = document.createElement("div"); d.className = "row";
-  d.dataset.q = document.querySelectorAll("#talk .row").length + 1;
+  const prev = [...document.querySelectorAll("#talk .row")].pop();
+  d.dataset.q = q || (prev ? +prev.dataset.q + 1 : 1);
   d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
   return d;
 }
@@ -522,10 +420,9 @@ const DEMOS = {
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
       { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
-      { press:"維持にかかる負担", note:"ここまでがロケーション。④の選択肢は店が管理画面の枠に書いたもの（空の枠は出ない）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
-      { press:"その話を詳しく", note:"⑤以降の繰り返し。詳しく／別の視点で、または書いて送信。" },
-      { press:"別の視点で", note:"まだ触れていない視点へ。" },
-      { press:"この相談を店への問い合わせにする", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
+      { press:"建てずに貸す（駐車場など）", note:"ここまでがロケーション。④から先は、店が管理画面に書いた選択肢（番号も管理画面と同じ）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
+      { press:"かかる費用の目安", note:"⑤。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
+      { press:"これらの情報をもとにお問い合わせ", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
       { fill:{ fName:"岐阜 太郎", fTel:"058-000-0000", fWhen:"平日の夕方" }, press:"この内容で送る", note:"相談の記録は画面に出さず、送るときに店へ添える。" },
     ]
   }

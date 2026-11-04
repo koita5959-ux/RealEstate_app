@@ -77,7 +77,7 @@
 <body>
 <header>
   <h1>管理画面 ― 試作（コンテンツ：3 AI型）</h1>
-  <div class="note">左の番号は、利用者の画面の番号と同じです。右の「利用者の画面で試す」で、設定どおりに動くかを確かめられます。AIの返事はダミーです。</div>
+  <div class="note">左の番号は、利用者の画面の番号と同じです。右上の「利用者画面」で、設定どおりに動くかを確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
 </header>
 <div class="wrap">
   <main class="admin">
@@ -99,9 +99,8 @@
   </main>
 
   <aside class="side">
-    <div class="tabs"><button id="tabHelp" class="on">設定の説明</button><button id="tabTry">利用者の画面で試す</button></div>
+    <div class="tabs"><button class="on">設定の説明</button><button onclick="window.open('./', 'reUser')">利用者画面 ↗</button></div>
     <div id="help"></div>
-    <div id="try" class="hidden"><div id="talk"></div></div>
   </aside>
 </div>
 
@@ -176,7 +175,7 @@ function renderAdmin() {
     const d = document.createElement("div");
     d.className = "box";
     d.innerHTML = `<div class="head"><span class="num">${NUM[FIRST + i]}</span><input class="topic" placeholder="題名（管理用の呼び名・利用者の画面に出ない）" value="${esc(s.topic)}"></div><div class="slots"></div><button class="small">＋ 枠を足す</button>`;
-    d.querySelector(".topic").oninput = e => { s.topic = e.target.value; };
+    d.querySelector(".topic").oninput = e => { s.topic = e.target.value; save(); };
     const slots = d.querySelector(".slots");
     s.btns.forEach((b, j) => {
       const inp = document.createElement("input");
@@ -209,7 +208,7 @@ function renderHelp() {
   document.getElementById("help").innerHTML = `
     <h3>概要</h3>
     <p>AI型コンテンツの設定画面です。利用者は地図に土地のピンを立て、番号の順にボタンを押して相談を進めます。AIは利用者の答えに短く答え、最後に次のボタンを話題として示します。</p>
-    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者の画面で試す」で、同じ番号の所がどう出るかを確かめてください。</p>
+    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者画面」を開き、同じ番号の所がどう出るかを確かめてください。管理画面で書き換えると、開いている利用者画面は最初から読み直されます。</p>
     <h3>業態モード</h3>
     <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
     <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
@@ -229,77 +228,13 @@ function renderHelp() {
     <p>AIの返事の形、立ち位置、個人情報の扱いです。どの店でも同じで、変えられません。</p>`;
 }
 
-// ---- 右側：利用者の画面で試す ----
-const T = () => document.getElementById("talk");
-function ai(html) {
-  const d = document.createElement("div");
-  d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
-  T().appendChild(d);
-}
-function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = `<span>${esc(t)}</span>`; T().appendChild(d); }
-function topicsOf(list) {
-  return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
-}
-const answer = said => `<span class="dummy">（AIの回答：「${esc(said)}」に、ここまでの土地の条件に合わせて短く答える）</span><br>`;
-function row(n, list, onPick, withText) {
-  const r = document.createElement("div");
-  r.className = "row";
-  r.innerHTML = `<span class="num">${NUM[n]}</span>`;
-  const pick = (said, bt) => { r.classList.add("done"); if (bt) bt.classList.add("chosen"); me(said); onPick(said); moveInquiry(); };
-  list.forEach(b => { const bt = document.createElement("button"); bt.textContent = b; bt.onclick = () => pick(b, bt); r.appendChild(bt); });
-  if (withText) {
-    const tl = document.createElement("div");
-    tl.className = "textline";
-    tl.innerHTML = `<input placeholder="その他（書いて送る）"><button>送信</button>`;
-    tl.querySelector("button").onclick = () => { const v = tl.querySelector("input").value.trim(); if (v) pick(v); };
-    r.appendChild(tl);
-  }
-  T().appendChild(r);
-}
-function startTry() {
-  T().innerHTML = `<div class="notice">この相談の内容は記録され、個人が分からない形で統計に使われます。返事を作るため、文章はAIの会社に送られます。</div>
-    <div class="fixed"><span class="num">⓪</span> 岐阜県岐阜市 鷺山にピン（試しの位置）</div>`;
-  ai(`<span class="dummy">（AIの一投目：この土地に効く決まりを一つ渡し、地図では読めない一点を聞く）</span><br>この土地は、道にどう接していますか？`);
-  row(1, LOC[1].btns, c => {
-    const b = c.startsWith("細い") ? LOC[2].branches[0] : c.startsWith("道に") ? LOC[2].branches[1] : null;
-    if (!b) return askBuilding(c);
-    ai(answer(c) + `${b.title}について伺います。`);
-    row(2, b.btns, askBuilding);
-  });
-}
-function askBuilding(c) {
-  ai(answer(c) + "今、この土地に建物はありますか？");
-  row(3, LOC[3].btns, c3 => goStep(0, c3));
-}
-function goStep(i, said) {
-  const s = steps[i];
-  const list = s ? live(s) : [];
-  if (!list.length) { ai(answer(said) + END); return; }
-  ai(answer(said) + `${topicsOf(list)}お話ししましょう。`);
-  row(FIRST + i, list, c => goStep(i + 1, c), true);
-  if (!document.getElementById("inqBar")) inquiry();
-}
-function inquiry() {
-  const d = document.createElement("div");
-  d.className = "inq"; d.id = "inqBar";
-  d.innerHTML = `<b>これらの情報をもとにお問い合わせ</b>${closeText.trim() ? `<br><span class="hint">${esc(closeText)}</span>` : ""}`;
-  T().appendChild(d);
-}
-function moveInquiry() { const b = document.getElementById("inqBar"); if (b) T().appendChild(b); }
-function resetTry() { if (!document.getElementById("try").classList.contains("hidden")) startTry(); }
+// ---- 利用者画面（index.html）へ連動：設定をこのブラウザに保存し、利用者画面が読む ----
+function save() { try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText })); } catch (e) {} }
+function resetTry() { save(); }
 
-function tab(which) {
-  document.getElementById("help").classList.toggle("hidden", which !== "help");
-  document.getElementById("try").classList.toggle("hidden", which !== "try");
-  document.getElementById("tabHelp").classList.toggle("on", which === "help");
-  document.getElementById("tabTry").classList.toggle("on", which === "try");
-  if (which === "try") startTry();
-}
-document.getElementById("tabHelp").onclick = () => tab("help");
-document.getElementById("tabTry").onclick = () => tab("try");
-
-function renderAll() { renderAdmin(); renderHelp(); resetTry(); }
+function renderAll() { renderAdmin(); renderHelp(); save(); }
 loadMode("m3");
+try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode]) { modeKey = sv.mode; steps = sv.steps; closeText = sv.close; } } catch (e) {}
 renderAll();
 </script>
 </body>
