@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>店の管理画面（Claude.AI案）</title>
+<style>
+  /* Claude Code の admin.html と同じ紙と墨。並べ方だけ、客の画面の番号順に変えた */
+  :root { --paper:#f4f0e6; --sheet:#fbf9f3; --ink:#2b2a26; --sub:#6d685c; --rule:#d8d0bd; --shop:#2e6b4a; --num:#c0392b; --accent:#1d6fb8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif; color:var(--ink); background:var(--paper); }
+  .devbar { background:#2b2a26; color:#d9d3c4; font-size:12px; padding:6px 16px; display:flex; gap:16px; flex-wrap:wrap; }
+  .devbar a { color:#e6a48f; }
+  header { padding:16px 20px 10px; border-bottom:2px solid var(--ink); background:var(--sheet); }
+  header h1 { font-family:"Noto Serif JP","Yu Mincho",serif; font-size:21px; margin:0; }
+  header p { margin:6px 0 0; font-size:13px; color:var(--sub); line-height:1.7; }
+  main { max-width:1000px; margin:0 auto; padding:8px 16px 60px; }
+  .zone { background:var(--sheet); border:1px solid var(--rule); border-left:5px solid var(--shop); padding:14px 16px; margin:14px 0; }
+  .zone.in { border-left-color:var(--num); }
+  .where { font-size:12px; color:var(--num); letter-spacing:.05em; }
+  .zone h2 { font-size:15px; margin:2px 0 4px; }
+  .why { font-size:12px; color:var(--sub); margin:2px 0 10px; line-height:1.7; }
+  label { display:block; font-size:12px; color:var(--sub); margin:8px 0 2px; }
+  input, textarea { width:100%; font:inherit; font-size:14px; padding:7px 9px; border:1px solid var(--rule); background:#fff; color:var(--ink); }
+  textarea { min-height:44px; resize:vertical; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border-bottom:1px dotted var(--rule); padding:6px; text-align:left; vertical-align:top; }
+  th { font-weight:500; font-size:12px; color:var(--sub); }
+  .slotno { width:30px; color:var(--accent); font-weight:700; }
+  /* 客の画面の見え方（index.html の部品に寄せた） */
+  .preview { background:#fff; border:1px dashed var(--rule); padding:10px 12px; margin-top:10px; font-family:system-ui,"Hiragino Sans",sans-serif; }
+  .preview .cap { font-size:11px; color:var(--sub); margin-bottom:6px; }
+  .qnum { font-size:20px; color:var(--num); margin-right:6px; vertical-align:middle; }
+  .pbtn { display:inline-block; font-size:13px; padding:7px 10px; border-radius:6px; border:1px solid var(--accent); color:var(--accent); margin:4px 4px 0 0; }
+  .opt { display:inline-block; min-width:18px; height:18px; line-height:18px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; text-align:center; margin-right:6px; }
+  .ai { background:#fffaf0; border:1px solid #f0c36d; border-radius:6px; padding:8px 10px; font-size:13px; line-height:1.7; }
+  .card { background:#2b2a26; color:#ece6d6; padding:12px 16px; margin:10px 0; font-size:13px; line-height:1.8; }
+  .card h3 { font-size:14px; margin:0 0 6px; color:#f4f0e6; }
+  .card .dim { color:#a9a291; font-size:12px; }
+  .card .path { color:#f4f0e6; }
+  .card .path b { color:#ff9a85; font-weight:400; }
+  .card .hole { color:#e6c98f; }
+  .note { font-size:12px; color:var(--sub); line-height:1.8; }
+  pre { white-space:pre-wrap; font-size:11px; background:#fff; border:1px solid var(--rule); padding:10px; }
+  details summary { cursor:pointer; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="devbar">
+  <span>試作（Claude.AI案）／仮データ・保存はこのブラウザだけ</span>
+  <a href="./" target="_blank">客の画面（index.html）</a>
+  <a href="./?demo=sagiyama" target="_blank">押す順のデモ</a>
+  <a href="admin.html" target="_blank">Claude Code案の管理画面</a>
+</div>
+<header>
+  <h1 id="title"></h1>
+  <p>客の画面と同じ番号で並べた。店が書いたものが、客の画面の何番に出るかを、欄ごとに示す。<br>
+  届いた相談も同じ番号で読む。「④の3を押して、⑤で詳しくを押した客」と、店も同じ言葉で話せる。</p>
+</header>
+<main>
+
+<!-- ①〜③：ロケーション -->
+<div class="zone">
+  <div class="where">客の画面 ①〜③（土地の話）</div>
+  <h2>土地勘（地点ごと）</h2>
+  <div class="why">①〜③は、決まり（接道）と公開データでAIが進める。店の出番は、客の答えがその地点の土地勘を呼んだときだけ（例：鷺山で「②の2 2mない」→ 隣地の話）。<br>
+  空の地点では、AIは店の知見のふりをしない。公開データだけで話す。</div>
+  <div id="local"></div>
+  <label>地域の事実（出典つき。公開の記録。店が知っていれば書き足す）</label>
+  <div id="facts"></div>
+</div>
+
+<!-- ④：相談目的の枠 -->
+<div class="zone">
+  <div class="where">客の画面 ④（ここで初めて客の事情に入る）</div>
+  <h2>相談目的の枠</h2>
+  <div class="why">左の「見出し」が ④ の選択肢になる。空の枠は出ない。<br>
+  右の「店の一手」は ④ には出さない。客が問い合わせを開いたとき、選んだ見出しに合わせて一行だけ出る（下の「問い合わせ」）。<br>
+  ④ で店の色を出しすぎない。客が選んだ後で、店ができることを正直に言う。</div>
+  <table>
+    <thead><tr><th></th><th style="width:38%">見出し（④に出る）</th><th>店の一手（問い合わせで出る）</th></tr></thead>
+    <tbody id="slots"></tbody>
+  </table>
+  <div class="preview"><div class="cap">客の画面 ④ の見え方（例：鷺山の道では ④ が4番目の行）</div>
+    <div><span class="qnum">④</span><span id="pvSlots"></span></div></div>
+</div>
+
+<!-- 問い合わせ -->
+<div class="zone">
+  <div class="where">客の画面 問い合わせの行（④から下に出る）</div>
+  <h2>店の名前・担当・扱わないもの</h2>
+  <div class="grid">
+    <div><label>店の名前</label><input data-k="office"></div>
+    <div><label>担当（問い合わせの行に出る）</label><input data-k="staff"></div>
+  </div>
+  <label>扱わないもの と 紹介先（AIは、答えがここに当たったときだけ見る）</label>
+  <textarea data-k="notHandled"></textarea>
+  <div class="preview"><div class="cap">客の画面 問い合わせの行の見え方（④で選んだ見出しによって変わる）</div>
+    <div class="grid" style="grid-template-columns:auto 1fr;align-items:center;gap:6px">
+      <label style="margin:0">④で選んだのが</label><select id="pvPick" style="padding:5px"></select></div>
+    <div class="ai" id="pvInq" style="margin-top:8px"></div></div>
+</div>
+
+<!-- 届いた相談 -->
+<div class="zone in">
+  <div class="where">店が受け取る</div>
+  <h2>届いた相談</h2>
+  <div class="why">客が送ると届く。測った数字（秒数など）は載せない。載せるのは、客が通った道（番号）・書いた言葉・まだ空いている所。<br>
+  電話の入口の一言は、空いている所から作る。電話は、AIが埋められなかった所を埋めに行くもの。</div>
+  <div id="cards"></div>
+</div>
+
+<div class="zone in">
+  <div class="where">店が受け取る</div>
+  <h2>送らずに閉じた客（件数だけ）</h2>
+  <div class="why">どの番号の行で閉じたか。連絡先はないので電話はしない。見直すのは、その番号に効いている店の欄。</div>
+  <table><thead><tr><th>閉じた行</th><th>件数（見本）</th><th>その行に効いている店の欄</th></tr></thead><tbody id="drops"></tbody></table>
+</div>
+
+<details class="zone" style="border-left-color:var(--rule)">
+  <summary>AIへ渡る順（設定の中身）</summary>
+  <p class="note">客の土地と答え → 店の土地勘・地域の事実 → 相談目的の枠と一手 → 扱わないもの（末尾の参照）。</p>
+  <pre id="dump"></pre>
+</details>
+</main>
+
+<script>
+// 見本の店（index.html の PREF に合わせた。purposes に「店の一手」を足した）
+const SAMPLE = {
+  office:"（仮）〇〇不動産", staff:"担当の山田",
+  localKnowledge:{ "鷺山":"旗竿地が多く相場より厳しく見られがち。隣地取得で化ける例を複数扱った。",
+    "長良":"川沿いは景観で指名買いがある。北側の駐車場は所有者が売却に前向き。",
+    "茜部":"幹線沿いは店舗需要あり。奥は住宅地として落ち着いている。", "柳ケ瀬":"", "岐阜駅前":"" },
+  facts:{ "鷺山":"2005〜09年に、市が狭い道の解消を進めた地区（岐阜市「鷺山地区 事後評価」）。全部の道が広がったわけではない。" },
+  purposes:[
+    { label:"土地の活かし方", move:"接道の条件で、選べる活かし方を現地で一緒に絞ります" },
+    { label:"運用するなら", move:"建てずに貸す場合の収支を、近くの例で並べてお持ちします" },
+    { label:"維持にかかる負担", move:"去年出ていった額を一緒に数え、貸す・手放すと比べます。お隣に持っていただけないか、声をかけることもできます" },
+    { label:"相続や譲渡について", move:"名義を揃えるところから、司法書士と一緒に伺います" },
+    { label:"", move:"" }, { label:"", move:"" }
+  ],
+  notHandled:"賃貸の管理（入居者募集・家賃回収）は扱わない。紹介先：（仮）□□管理"
+};
+// 届いた相談（見本・実在しない）。path は index.html の「通った道」と同じ書き方
+const INBOX = [
+  { place:"岐阜市 鷺山・120㎡", path:[["①の2","細い通路の奥にある（旗竿地）"],["②の2","2mない・狭い"],["③の2","空き家・古い家がある"],["④の3","維持にかかる負担"],["⑤の1","その話を詳しく"]],
+    words:null, pick:2, holes:["事情（客は選ぶだけで、自分の言葉では書いていない）"], stuck:[] ,
+    opener:"去年いくら出ていったかを伺って、貸す場合・手放す場合と並べたくてお電話しました。" },
+  { place:"岐阜市 長良・200㎡", path:[["①の1","道に広く面している"],["②の2","すれ違えない"],["③の1","住んでいる家がある"],["④","「兄と共有で、話がまとまらない」"],["⑤の2","別の視点で"]],
+    words:"兄と共有で、話がまとまらない", pick:null, holes:["前の道の幅（4m未満の可能性・セットバック）"], stuck:[],
+    opener:"前の道の幅を現地で確かめて、建て直すときに何㎡残るかを、お兄様と同じ紙で見られるようにしたくてお電話しました。" },
+  { place:"岐阜市 茜部・400㎡", path:[["①の3","わからない"],["②の3","何もない（更地）"],["④","「父がまだ使っているので、どう切り出せばいいか」"],["⑤の4","うまく言葉にできない"]],
+    words:"父がまだ使っているので、どう切り出せばいいか", pick:null, holes:["道への接し方（客は分からない）"],
+    stuck:["読み取れなかった言葉：「父がまだ使っているので、どう切り出せばいいか」","「うまく言葉にできない」が押された"],
+    opener:"AIでは受け止めきれなかったお話を、直接伺いたくてお電話しました。土地の接し方は、こちらで一度見ておきます。" }
+];
+const DROPS = [
+  ["①（接道の問い）", 14, "なし（決まりの話）。閉じる人が多いなら、問いの言葉を Claude Code と見直す"],
+  ["②・③（土地の答え）", 7, "土地勘。その地点が空だと、答えても何も返ってこない"],
+  ["④（相談目的）", 9, "相談目的の枠の見出し。客の悩みに合う見出しがない可能性"],
+  ["⑤以降", 5, "店の一手。問い合わせに進む理由が見えていない可能性"]
+];
+const KEY = "proto-admin-claudeai-v1";
+let P; try { P = JSON.parse(localStorage.getItem(KEY)); } catch (e) { P = null; }
+if (!P) P = JSON.parse(JSON.stringify(SAMPLE));
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} paint(); };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+function build() {
+  document.querySelectorAll("[data-k]").forEach(el => { el.value = P[el.dataset.k]; el.oninput = () => { P[el.dataset.k] = el.value; save(); }; });
+  document.getElementById("local").innerHTML = Object.keys(P.localKnowledge).map(n =>
+    `<label>${n}${P.localKnowledge[n] ? "" : "（空：AIは公開データだけで話す）"}</label><textarea data-l="${n}">${esc(P.localKnowledge[n])}</textarea>`).join("");
+  document.querySelectorAll("[data-l]").forEach(el => el.oninput = () => { P.localKnowledge[el.dataset.l] = el.value; save(); });
+  document.getElementById("facts").innerHTML = Object.keys(P.localKnowledge).map(n =>
+    `<label>${n}</label><input data-f="${n}" value="${esc(P.facts[n] || "")}" placeholder="例：〇年に〇〇（出典）">`).join("");
+  document.querySelectorAll("[data-f]").forEach(el => el.oninput = () => { P.facts[el.dataset.f] = el.value; save(); });
+  document.getElementById("slots").innerHTML = P.purposes.map((p, i) =>
+    `<tr><td class="slotno">${i + 1}</td><td><input data-s="${i}" data-x="label" value="${esc(p.label)}" placeholder="（空の枠は客の画面に出ない）"></td>
+     <td><textarea data-s="${i}" data-x="move">${esc(p.move)}</textarea></td></tr>`).join("");
+  document.querySelectorAll("[data-s]").forEach(el => el.oninput = () => { P.purposes[el.dataset.s][el.dataset.x] = el.value; save(); });
+  document.getElementById("pvPick").onchange = paint;
+  paint();
+}
+function paint() {
+  document.getElementById("title").textContent = P.office + "　管理画面";
+  const live = P.purposes.filter(p => p.label.trim());
+  document.getElementById("pvSlots").innerHTML = live.map((p, i) => `<span class="pbtn"><span class="opt">${i + 1}</span>${esc(p.label)}</span>`).join("")
+    + `<div style="font-size:12px;color:#888;margin-top:4px">（下に「選ぶ代わりに、書いて送ることもできます」の欄）</div>`;
+  const pick = document.getElementById("pvPick"), was = pick.value;
+  pick.innerHTML = live.map((p, i) => `<option value="${i}">④の${i + 1}「${esc(p.label)}」</option>`).join("") + `<option value="w">④で書いて送った</option>`;
+  if ([...pick.options].some(o => o.value === was)) pick.value = was;
+  const chosen = pick.value === "w" ? null : live[+pick.value];
+  document.getElementById("pvInq").innerHTML = chosen && chosen.move
+    ? `${esc(P.office)}（${esc(P.staff)}）なら、ここから先をこうお手伝いできます。<br><b>${esc(chosen.move)}</b><br><small>ここまでの相談の内容は、店へ自動で添えられます。</small>`
+    : `${esc(P.office)}（${esc(P.staff)}）が、書いてくださったことを読んでから連絡します。<br><small>ここまでの相談の内容は、店へ自動で添えられます。</small>`;
+  document.getElementById("cards").innerHTML = INBOX.map(c => {
+    const move = c.pick != null && live[c.pick] ? live[c.pick].move : null;
+    return `<div class="card"><h3>${c.place}</h3>
+      <div><span class="dim">通った道：</span><span class="path">${c.path.map(([n, t]) => `<b>${n}</b> ${esc(t)}`).join(" → ")}</span></div>
+      <div><span class="dim">客の言葉：</span>${c.words ? "「" + esc(c.words) + "」" : "（書いていない。選ぶだけで進んだ）"}</div>
+      ${move ? `<div><span class="dim">問い合わせで見せた店の一手：</span>${esc(move)}</div>` : ""}
+      <div class="hole"><span class="dim">まだ空いている所：</span>${c.holes.map(esc).join("／")}</div>
+      ${c.stuck.length ? `<div><span class="dim">AIが詰まった所：</span>${c.stuck.map(esc).join("／")}</div>` : ""}
+      <div><span class="dim">電話の入口：</span>「先日の見立ての続きです。${esc(c.opener)}」</div></div>`;
+  }).join("");
+  document.getElementById("drops").innerHTML = DROPS.map(d => `<tr><td>${d[0]}</td><td>${d[1]}</td><td>${d[2]}</td></tr>`).join("");
+  document.getElementById("dump").textContent =
+    "【1 客の土地と答え】（客の画面が積む：所在・面積・公開データ・①〜③の答え）\n\n" +
+    "【2 店の土地勘・地域の事実】\n" + JSON.stringify({ localKnowledge:P.localKnowledge, facts:P.facts }, null, 2) +
+    "\n\n【3 相談目的の枠と店の一手】\n" + JSON.stringify(live, null, 2) +
+    "\n\n【4 扱わないもの（答えが当たったときだけ参照）】\n" + P.notHandled;
+}
+build();
+</script>
+</body>
+</html>
