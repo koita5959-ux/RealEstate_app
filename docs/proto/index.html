@@ -35,6 +35,9 @@
   .empty { color:#b4472b; }
   .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
   body.design .will { display:block; }
+  .demo { position:fixed; left:12px; bottom:12px; max-width:380px; z-index:1000; background:#2b2a26; color:#f4f0e6; font-size:13px; line-height:1.6; padding:10px 14px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+  .demo span { color:#e6c98f; }
+  .demo-badge { display:inline-block; color:#fff; background:#c0392b; border-radius:50%; width:24px; height:24px; text-align:center; line-height:24px; font-size:15px; margin-right:2px; vertical-align:middle; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
 </style>
 </head>
@@ -212,6 +215,7 @@ function freeInput(turn) {
   document.getElementById("talk").appendChild(box);
   box.querySelector("button").onclick = () => {
     const t = box.querySelector("textarea").value.trim(); if (!t) return;
+    box.querySelector("button").textContent = "（送信済み）"; // デモの次の目印が、消える前のこのボタンを拾わないように
     box.remove(); me(t);
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
     if (turn === 1) {
@@ -321,6 +325,48 @@ function choices(list, cb) {
   list.forEach(c => { const b = document.createElement("button"); b.textContent = c;
     b.onclick = () => { d.remove(); me(c); cb(c); }; d.appendChild(b); });
   document.getElementById("talk").appendChild(d);
+}
+
+// ---- デモ再生（?demo=名前）：シミュレーションの記録を、実物のボタンに①②③を付けて見せる ----
+// 記録は「押すボタンの名前（実際の表記のまま）＋その場のひと言」だけ。文章のレポートの代わりに使う。
+const DEMOS = {
+  sagiyama: {
+    title: "鷺山の旗竿地・空き家（一投目＝接道）",
+    place: { lat:35.4482, lng:136.7352, area:120 },
+    steps: [
+      { press:"評価する", note:"鷺山の旗竿地120㎡。ピンは置いてあります。" },
+      { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
+      { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
+      { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
+      { type:"子どもは戻らないし、草刈りが負担", press:"送る", note:"自由入力はここが初めて。三往復で話す材料がそろっている。" },
+      { press:"合っている、続けて", note:"見立てを直した一言に、客が乗った場合。" },
+      { type:"いずれ。急いではいない", press:"送る", note:"データシートと要所レポートを見てください。電話の入口は接道の現地確認。" },
+    ]
+  }
+};
+const DEMO = DEMOS[new URLSearchParams(location.search).get("demo")];
+if (DEMO) {
+  let i = 0;
+  const panel = document.createElement("div"); panel.className = "demo";
+  document.body.appendChild(panel);
+  const mark = () => {
+    document.querySelectorAll(".demo-badge").forEach(b => b.remove());
+    const st = DEMO.steps[i];
+    if (!st) { panel.innerHTML = `<b>${DEMO.title}</b><br>デモはここまで。`; return; }
+    panel.innerHTML = `<b>${DEMO.title}</b>　${i + 1} / ${DEMO.steps.length}<br>${"①②③④⑤⑥⑦⑧⑨⑩"[i]}「${st.press}」を押す<br><span>${st.note}</span>`;
+    const btn = [...document.querySelectorAll("button")].find(b => b.textContent === st.press);
+    if (!btn) return;
+    if (st.type) btn.parentElement.querySelector("textarea").value = st.type;
+    const badge = document.createElement("span"); badge.className = "demo-badge"; badge.textContent = "①②③④⑤⑥⑦⑧⑨⑩"[i];
+    btn.before(badge); btn.scrollIntoView({ block:"center", behavior:"smooth" });
+    btn.addEventListener("click", () => { i++; setTimeout(mark, 0); }, { once:true });
+  };
+  const p = DEMO.place;
+  here = { lat:p.lat, lng:p.lng }; pin = L.marker([p.lat, p.lng]).addTo(map); map.setView([p.lat, p.lng], 15);
+  document.getElementById("area").value = p.area;
+  document.getElementById("picked").textContent = `指定: ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+  document.getElementById("go").disabled = false;
+  mark();
 }
 </script>
 </body>
