@@ -49,6 +49,8 @@
   .demo span { color:#e6c98f; }
   .demo-badge { display:inline-block; color:#fff; background:#c0392b; border-radius:50%; width:24px; height:24px; text-align:center; line-height:24px; font-size:15px; margin-right:2px; vertical-align:middle; }
   .hidden { display:none; }
+  input.other[type=text] { width:auto; min-width:200px; display:inline-block; margin:4px 0 0; padding:7px; }
+  .row.done input.other { display:none; }
   input[type=text], input[type=email], input[type=tel], select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:15px; margin-bottom:4px; }
   button.small { font-size:12px; padding:5px 10px; }
   button.inq { width:100%; margin-top:18px; border-style:dashed; }
@@ -112,7 +114,15 @@ const PREF = {
     "柳ケ瀬": "空き店舗の転用相談が増えている。",
     "岐阜駅前": "狭小地でも収益物件の引き合いがある。"
   },
-  tone: "踏み込むが嘘はつかない"
+  tone: "踏み込むが嘘はつかない",
+  // 相談目的の枠（管理画面で店が書く）。枠は余分にあり、空の枠は客の画面に出ない。key は試作の台本用（本番はAIが読む）
+  purposes: [
+    { label:"土地の活かし方", key:"活かす" },
+    { label:"運用するなら", key:"運用" },
+    { label:"維持にかかる負担", key:"負担" },
+    { label:"相続や譲渡について", key:"相続" },
+    { label:"" }, { label:"" }
+  ]
 };
 document.getElementById("prefView").textContent = JSON.stringify(PREF, null, 2);
 
@@ -260,13 +270,14 @@ function onIntent(c) {
   say(s + "<br>この土地のことで、いまいちばん近いのはどれですか？",
     "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：相談のテーマ（③までは土地の事実。ここで初めて客の事情に入る。書かなくても選べる）");
   // ④ 相談のテーマを選ぶ。書きたい人だけ「その他」から書く
-  const THEMES = { "毎年の負担（税・草刈り）が気になる":"負担", "相続や名義のことがある":"相続", "家族の考えがそろわない":"家族",
-                   "急いで決めたい事情がある":"急ぎ", "建て直して自分で使いたい":"使う", "その他（自分で書く）":null };
-  choices(Object.keys(THEMES), c => {
-    if (!THEMES[c]) { say("ひと言で聞かせてください。"); return freeInput(1); }
-    S.sheet.事情 = c;
-    respond([CUES.find(x => x.key === THEMES[c])], c);
-  });
+  // ④ 選択肢は店が管理画面の枠に書く（PREF.purposes）。空の枠は出さない。最後の「その他」はアプリが必ず付け、同じ行で書ける。書かずに押してもよい
+  const slots = PREF.purposes.filter(p => p.label);
+  choices(slots.map(p => p.label).concat("その他"), c => {
+    const p = slots.find(x => x.label === c);
+    S.sheet.相談目的 = c === "その他" ? "その他" + (S.other ? `（${esc(S.other)}）` : "") : c;
+    if (!p) return S.other ? secondWord(S.other) : (say("書かなくても大丈夫です。ここまでの答えから、もう少し話を進めます。"), loop(null));
+    respond([CUES.find(x => x.key === p.key)], c);
+  }, true);
 }
 function freeInput(turn) {
   const box = newRow();
@@ -305,6 +316,12 @@ const CUES = [
   { key:"急ぎ", re:/急|すぐ|早く|期限|年内|今年/,
     revise:"急ぐなら、最初に言った「目安より下がる」幅は、さらに広がる覚悟が要ります。逆に半年待てるなら、選べる相手が増えます。",
     path:"期限から逆算して、買い取り（早い・安い）と仲介（遅い・高い）のどちらにするか決める" },
+  { key:"活かす", re:/活か|活用/,
+    revise:"活かし方を考えるなら、今日の接道の答えが出発点です。建て直せる土地かどうかで、選べる道の数が変わります。",
+    path:"住む・建てて貸す・建てずに貸す・お隣と合わせる、を接道の条件で絞る" },
+  { key:"運用", re:/運用|貸|賃/,
+    revise:"運用するなら、問いは売値ではなく「毎月いくら入り、いくら出るか」です。建物を建てずに貸す道は、持ち出しが少なくて済みます。",
+    path:"駐車場・資材置き場など建てずに貸す道と、建てて貸す道の収支を比べる" },
   { key:"使う", re:/住み|建て|自分で|使い|戻/,
     revise:"ご自分で使うお考えなら、最初の「評価されにくい」は関係ありません。売値ではなく、何が建てられるかが問いです。",
     path:"用途地域と形から、建てられるものを先に確かめる" },
@@ -352,6 +369,8 @@ const DEEP = {
   "建物":"古い家は、残したまま売る・解体して売る・そのまま貸す、の三つで手取りが変わります。解体費は広さと構造で大きく違うので、見積もりを一つ取ると話が具体になります。",
   "隣":"お隣との話は、こちらから直接切り出すより、間に人が入ったほうがまとまりやすいものです。お隣にとっても、土地の形が良くなる話だからです。",
   "急ぎ":"期限があるなら、その日から逆算します。3か月なら買い取り、半年あれば仲介も選べる、というのが一つの目安です。",
+  "活かす":"接道が通っていれば、住む・建てて貸す・売るのどれも選べます。通っていなければ、建てずに貸すか、お隣と合わせるかが中心になります。",
+  "運用":"建てずに貸すなら、月極駐車場や資材置き場が候補です。収入は大きくありませんが、固定資産税と管理費を賄えるかどうかが目安になります。",
   "使う":"ご自分で使うなら、何が建てられるかが先です。用途地域と、今日の接道の答えで、建てられる大きさの見当がつきます。",
 };
 function loop(cur) {
@@ -424,16 +443,22 @@ function say(html, gave, hole) {
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
-function choices(list, cb) {
+// withOther：最後の選択肢（その他）の横に、同じ行で書ける欄を付ける。書かずに押してもよい
+function choices(list, cb, withOther) {
   const d = newRow();
   list.forEach((c, i) => { const b = document.createElement("button"); b.dataset.c = c; b.dataset.opt = i + 1; b.innerHTML = `<span class="opt">${i + 1}</span>`; b.append(c);
+    const isOther = withOther && i === list.length - 1;
     b.onclick = () => {
       if (d.dataset.step) { if (!b.classList.contains("chosen")) rewind(+d.dataset.step, c); return; }
-      d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, opt:i + 1 }); renderRoute();
+      const t = isOther ? d.querySelector("input.other").value.trim() : "";
+      if (withOther) S.other = t;
+      d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, opt:i + 1, ...(t ? { type:t } : {}) }); renderRoute();
       d.classList.add("done"); b.classList.add("chosen");
       [...d.children].forEach(x => { if (x !== b) x.title = "ここから別の道を試す"; });
-      me(c); cb(c);
-    }; d.appendChild(b); });
+      me(t ? `${c}：${t}` : c); cb(c);
+    }; d.appendChild(b);
+    if (isOther) d.insertAdjacentHTML("beforeend", `<input class="other" type="text" placeholder="（書かなくても選べます）">`);
+  });
   document.getElementById("talk").appendChild(d);
 }
 
@@ -449,7 +474,7 @@ function newRow() {
 }
 function renderRoute() {
   const r = document.getElementById("route");
-  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => NUM[p.q - 1] + (p.type ? `「${esc(p.type)}」` : `の${p.opt} ${p.press}`)).join(" → ")
+  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => NUM[p.q - 1] + (p.opt ? `の${p.opt} ${p.press}${p.type ? "：" + esc(p.type) : ""}` : `「${esc(p.type)}」`)).join(" → ")
     + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
 }
 function rewind(k, c) {
@@ -461,7 +486,9 @@ function replay(steps) {
   for (const st of steps) {
     const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
     if (!row) break;
-    if (st.type) { row.querySelector("textarea").value = st.type; row.querySelector("button").click(); continue; }
+    const ta = row.querySelector("textarea");
+    if (st.type && ta) { ta.value = st.type; row.querySelector("button").click(); continue; }
+    if (st.type) row.querySelector("input.other").value = st.type;
     const b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
     if (!b) break; b.click();
   }
@@ -481,7 +508,7 @@ const DEMOS = {
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
       { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
-      { press:"毎年の負担（税・草刈り）が気になる", note:"④ 相談のテーマを選ぶ。③までは土地の事実、ここで初めて客の事情に入る。書きたい人は「その他」から。" },
+      { press:"維持にかかる負担", note:"ここまでがロケーション。④の選択肢は店が管理画面の枠に書いたもの（空の枠は出ない）。「その他」は同じ行で書けるが、書かずに押してもよい。" },
       { press:"その話を詳しく", note:"⑤以降の繰り返し。詳しく／別の視点で／違う・その他。" },
       { press:"別の視点で", note:"まだ触れていない視点へ。" },
       { press:"この相談を店への問い合わせにする", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
