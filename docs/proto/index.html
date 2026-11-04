@@ -204,7 +204,6 @@ document.getElementById("go").onclick = () => {
     <h2>3. AI</h2>
     <div id="talk"></div>
     <div id="inq"></div>`;
-  inquiryBar();
   firstJudgment();
 };
 
@@ -272,6 +271,7 @@ function onIntent(c) {
   say(s + "<br>この土地のことで、いまいちばん近いのはどれですか？",
     "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：相談目的（③までがロケーション。ここで初めて客の事情に入る。選んでも書いてもよい）");
   // ④ 相談目的。選択肢は店が管理画面の枠に書く（PREF.purposes）。空の枠は出さない。下に「書き欄＋送信」を付ける
+  inquiryBar(); // 問い合わせのボタンは④から出す
   const slots = PREF.purposes.filter(p => p.label);
   choices(slots.map(p => p.label), c => {
     S.sheet.相談目的 = c;
