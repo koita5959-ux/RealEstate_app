@@ -35,6 +35,12 @@
   .empty { color:#b4472b; }
   .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
   body.design .will { display:block; }
+  .row.done button { opacity:.45; }
+  .row.done button.chosen { opacity:1; background:var(--accent); color:#fff; }
+  .row.done textarea { display:none; }
+  .row.done > button:only-of-type, .row.done .hint { display:none; }
+  .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-top:12px; line-height:1.7; }
+  .route:empty { display:none; }
   .demo { position:fixed; left:12px; bottom:12px; max-width:380px; z-index:1000; background:#2b2a26; color:#f4f0e6; font-size:13px; line-height:1.6; padding:10px 14px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
   .demo span { color:#e6c98f; }
   .demo-badge { display:inline-block; color:#fff; background:#c0392b; border-radius:50%; width:24px; height:24px; text-align:center; line-height:24px; font-size:15px; margin-right:2px; vertical-align:middle; }
@@ -57,6 +63,7 @@
       <input id="area" type="number" value="120" min="10">
       <button id="go" class="primary" disabled>評価する</button>
     </div>
+    <div id="route" class="route"></div>
     <div id="result"></div>
     <details>
       <summary>事業所設定（プレファレンス・仮）</summary>
@@ -117,6 +124,7 @@ const R = document.getElementById("result");
 const yen = n => Math.round(n).toLocaleString() + "円";
 
 document.getElementById("go").onclick = () => {
+  PATH.length = 0; renderRoute();
   const area = Number(document.getElementById("area").value) || 0;
   const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
   S = {
@@ -209,13 +217,13 @@ function onIntent(c) {
   freeInput(1);
 }
 function freeInput(turn) {
-  const box = document.createElement("div");
+  const box = document.createElement("div"); box.className = "row";
   box.innerHTML = `<textarea rows="2" placeholder="例：親から相続したが、固定資産税が負担で…"></textarea>
     <button>送る</button><div class="hint">（後半の対話。本番ではAIがその場で答えます）</div>`;
   document.getElementById("talk").appendChild(box);
   box.querySelector("button").onclick = () => {
     const t = box.querySelector("textarea").value.trim(); if (!t) return;
-    box.querySelector("button").textContent = "（送信済み）"; // デモの次の目印が、消える前のこのボタンを拾わないように
+    box.classList.add("done"); PATH.push({ type:t, press:"送る" }); renderRoute();
     box.remove(); me(t);
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
     if (turn === 1) {
@@ -320,11 +328,43 @@ function say(html, gave, hole) {
   document.getElementById("talk").appendChild(d);
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
+// 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
 function choices(list, cb) {
-  const d = document.createElement("div");
+  const d = document.createElement("div"); d.className = "row";
   list.forEach(c => { const b = document.createElement("button"); b.textContent = c;
-    b.onclick = () => { d.remove(); me(c); cb(c); }; d.appendChild(b); });
+    b.onclick = () => {
+      if (d.dataset.step) { if (!b.classList.contains("chosen")) rewind(+d.dataset.step, c); return; }
+      d.dataset.step = PATH.length; PATH.push({ press:c }); renderRoute();
+      d.classList.add("done"); b.classList.add("chosen");
+      [...d.children].forEach(x => { if (x !== b) x.title = "ここから別の道を試す"; });
+      me(c); cb(c);
+    }; d.appendChild(b); });
   document.getElementById("talk").appendChild(d);
+}
+
+// ---- 通った道（データの経路）と巻き戻し ----
+const PATH = [];
+const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+function renderRoute() {
+  const r = document.getElementById("route");
+  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map((p, i) => NUM[i] + (p.type ? `「${esc(p.type)}」` : p.press)).join(" → ")
+    + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
+}
+function rewind(k, c) {
+  document.querySelectorAll(".demo, .demo-badge").forEach(x => x.remove());
+  replay(PATH.slice(0, k).concat({ press:c }));
+}
+function replay(steps) {
+  document.getElementById("go").click();
+  for (const st of steps) {
+    const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
+    if (!row) break;
+    if (st.type) { row.querySelector("textarea").value = st.type; row.querySelector("button").click(); continue; }
+    const b = [...row.querySelectorAll("button")].find(x => x.textContent === st.press);
+    if (!b) break; b.click();
+  }
+  const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
+  (last || document.getElementById("talk").lastElementChild).scrollIntoView({ block:"center" });
 }
 
 // ---- デモ再生（?demo=名前）：シミュレーションの記録を、実物のボタンに①②③を付けて見せる ----
@@ -354,7 +394,8 @@ if (DEMO) {
     const st = DEMO.steps[i];
     if (!st) { panel.innerHTML = `<b>${DEMO.title}</b><br>デモはここまで。`; return; }
     panel.innerHTML = `<b>${DEMO.title}</b>　${i + 1} / ${DEMO.steps.length}<br>${"①②③④⑤⑥⑦⑧⑨⑩"[i]}「${st.press}」を押す<br><span>${st.note}</span>`;
-    const btn = [...document.querySelectorAll("button")].find(b => b.textContent === st.press);
+    const live = [...document.querySelectorAll("#talk .row:not(.done) button"), document.getElementById("go")];
+    const btn = live.find(b => b.textContent === st.press);
     if (!btn) return;
     if (st.type) btn.parentElement.querySelector("textarea").value = st.type;
     const badge = document.createElement("span"); badge.className = "demo-badge"; badge.textContent = "①②③④⑤⑥⑦⑧⑨⑩"[i];
