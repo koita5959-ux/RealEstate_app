@@ -189,7 +189,7 @@ document.getElementById("go").onclick = () => {
       <tr><td>面積</td><td>${area}㎡</td></tr>
       <tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×面積）</td></tr>
     </table>
-    <h2>3. AI判定</h2>
+    <h2>3. AI</h2>
     <div id="talk"></div>
     <div id="inq"></div>`;
   inquiryBar();
@@ -257,9 +257,16 @@ function onIntent(c) {
   const s = c.startsWith("住んで") ? "住んでいるなら、建て直しは先の話です。ただ、いつか誰かに渡すときには、今日の接道の話がそのまま値打ちになります。"
     : c.startsWith("空き家") ? "空き家が残っているなら、建て直せるかどうかが、そのまま「解体して売るか」「そのまま貸すか」の分かれ目になります。"
     : "更地なら、接道の答えがそのまま、この土地で何ができるかです。";
-  say(s + "<br>この土地のことで、いま気になっていることを、ひと言で聞かせてください。",
-    "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：客の言葉（ここで初めて自由入力）");
-  freeInput(1);
+  say(s + "<br>この土地のことで、いまいちばん近いのはどれですか？",
+    "渡したもの：ここまでの答えを、客の今の状況へ戻す", "開けた穴：相談のテーマ（③までは土地の事実。ここで初めて客の事情に入る。書かなくても選べる）");
+  // ④ 相談のテーマを選ぶ。書きたい人だけ「その他」から書く
+  const THEMES = { "毎年の負担（税・草刈り）が気になる":"負担", "相続や名義のことがある":"相続", "家族の考えがそろわない":"家族",
+                   "急いで決めたい事情がある":"急ぎ", "建て直して自分で使いたい":"使う", "その他（自分で書く）":null };
+  choices(Object.keys(THEMES), c => {
+    if (!THEMES[c]) { say("ひと言で聞かせてください。"); return freeInput(1); }
+    S.sheet.事情 = c;
+    respond([CUES.find(x => x.key === THEMES[c])], c);
+  });
 }
 function freeInput(turn) {
   const box = newRow();
@@ -411,7 +418,7 @@ function showSheet(where) {
 }
 // ---- 表示部品 ----
 function say(html, gave, hole) {
-  const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI判定</span>${html}`;
+  const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
   if (gave) d.innerHTML += `<div class="will">${gave}<br>${hole}</div>`;
   document.getElementById("talk").appendChild(d);
 }
@@ -474,7 +481,7 @@ const DEMOS = {
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
       { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
-      { type:"子どもは戻らないし、草刈りが負担", press:"送る", note:"④ 初めてのテキスト。⑤でAIがこれを読んで返す（今は台本）。" },
+      { press:"毎年の負担（税・草刈り）が気になる", note:"④ 相談のテーマを選ぶ。③までは土地の事実、ここで初めて客の事情に入る。書きたい人は「その他」から。" },
       { press:"その話を詳しく", note:"⑤以降の繰り返し。詳しく／別の視点で／違う・その他。" },
       { press:"別の視点で", note:"まだ触れていない視点へ。" },
       { press:"この相談を店への問い合わせにする", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
