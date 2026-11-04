@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>管理画面と客の画面（試作）</title>
+<title>管理画面（試作）</title>
 <style>
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; --lock:#eef1f4; --app:#6b4fa0; }
   * { box-sizing:border-box; }
@@ -14,8 +14,8 @@
   .wrap { display:grid; grid-template-columns: 1fr 440px; min-height:calc(100vh - 56px); }
   @media (max-width:900px){ .wrap{ grid-template-columns:1fr; } }
   .admin { padding:14px 16px 40px; overflow-x:hidden; }
-  .view { background:#fff; border-left:1px solid var(--line); padding:14px 16px 40px; }
-  @media (max-width:900px){ .view{ border-left:none; border-top:2px solid var(--line); } }
+  .side { background:#fff; border-left:1px solid var(--line); padding:14px 16px 40px; }
+  @media (max-width:900px){ .side{ border-left:none; border-top:2px solid var(--line); } }
   h2 { font-size:14px; margin:20px 0 8px; color:var(--sub); }
   h2 .who { font-size:11px; font-weight:normal; padding:1px 6px; border-radius:8px; margin-left:6px; }
   .who.shop { background:#e6f0fa; color:var(--accent); }
@@ -27,33 +27,42 @@
   .seg label.on { border-color:var(--accent); background:#e6f0fa; }
   .seg small { display:block; color:var(--sub); font-size:11px; }
   .box { background:#fff; border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
-  .box.lock { background:var(--lock); color:var(--sub); font-size:13px; }
+  .box.lock { background:var(--lock); }
   .box.app { border-color:#d6c8ec; background:#faf7fd; font-size:13px; }
   .box.app li { margin:2px 0; }
-  .step .head { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
-  .step .num { font-size:18px; color:#c0392b; }
-  .step input.topic { flex:1; min-width:0; font-size:13px; padding:5px 7px; border:1px dashed var(--line); border-radius:4px; color:var(--sub); }
-  .slots { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap:4px; }
-  .slots input { width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:4px; font-size:13px; }
+  .head { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .num { font-size:18px; color:#c0392b; }
+  .head .title { font-size:13px; color:var(--sub); }
+  .head input.topic { flex:1; min-width:0; font-size:13px; padding:5px 7px; border:1px dashed var(--line); border-radius:4px; color:var(--sub); }
+  .slots { display:flex; flex-wrap:wrap; gap:4px; }
+  /* 最低の幅を確保し、文字の長さに合わせて広がる */
+  .slots input { field-sizing:content; min-width:9em; max-width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-size:13px; }
   .slots input:placeholder-shown { background:#fbfbfb; border-style:dashed; }
+  .slots span.fixedbtn { display:inline-block; min-width:9em; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-size:13px; background:#fff; color:var(--sub); }
+  .branch { font-size:12px; color:var(--sub); margin:6px 0 2px; }
   button { font-size:13px; padding:7px 11px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; margin:4px 4px 0 0; }
-  button.plus { width:100%; border-style:dashed; margin-top:6px; }
+  button.plus { width:100%; border-style:dashed; margin-top:2px; }
   button.small { font-size:12px; padding:3px 8px; }
   .hint { font-size:12px; color:var(--sub); }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
-  /* 客の画面 */
-  .view h2:first-child { margin-top:0; }
+  /* 右側 */
+  .tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .tabs button { margin:0; flex:1; }
+  .tabs button.on { background:var(--accent); color:#fff; }
+  .side h3 { font-size:13px; margin:14px 0 4px; }
+  .side h3 .num { font-size:15px; margin-right:2px; }
+  .side p { font-size:13px; line-height:1.7; margin:2px 0 6px; }
+  .side .ex { font-size:12px; color:var(--sub); background:var(--bg); border-left:3px solid var(--line); padding:4px 8px; margin:2px 0 8px; }
+  /* 試す（利用者の画面） */
   .notice { font-size:12px; background:#fff4e5; border:1px solid #f0c36d; border-radius:6px; padding:6px 8px; margin-bottom:8px; }
   .fixed { font-size:13px; color:var(--sub); background:var(--lock); border-radius:6px; padding:6px 10px; margin:4px 0; }
-  .fixed b { color:var(--ink); font-weight:normal; }
   .ai { background:var(--ai); border-left:4px solid var(--ai-line); padding:9px 11px; margin:10px 0 4px; font-size:14px; line-height:1.7; border-radius:4px; }
   .ai .tag { font-size:11px; color:#a0701a; display:block; }
   .ai .dummy { color:var(--sub); }
-  .ai.plain { background:#f4f6f8; border-left-color:#9aa5b1; }
   .me { text-align:right; margin:8px 0; font-size:14px; }
   .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; }
   .row { margin:4px 0 2px; }
-  .row .qnum { font-size:18px; color:#c0392b; margin-right:4px; vertical-align:middle; }
+  .row .num { margin-right:4px; vertical-align:middle; }
   .row.done button { opacity:.45; pointer-events:none; }
   .row.done button.chosen { opacity:1; background:var(--accent); color:#fff; }
   .row.done .textline { display:none; }
@@ -62,57 +71,41 @@
   .textline button { margin:0; }
   .inq { border:1px dashed var(--accent); border-radius:6px; padding:8px 10px; margin-top:14px; font-size:13px; }
   .inq b { color:var(--accent); }
-  .back { margin-top:18px; border-top:2px solid var(--app); padding-top:6px; font-size:12px; }
-  .back h3 { font-size:13px; color:var(--app); margin:4px 0; }
-  .back table { width:100%; border-collapse:collapse; }
-  .back td { border-bottom:1px solid var(--line); padding:4px; vertical-align:top; }
-  .back td:first-child { color:var(--sub); width:34%; }
-  .gone { color:#b4472b; }
+  .hidden { display:none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>管理画面と客の画面 ― 試作</h1>
-  <div class="note">左で設定を変えると、右の客の画面がその場でやり直されます。AIの返事はダミーです（本物のAIはつないでいません）。</div>
+  <h1>管理画面 ― 試作（コンテンツ：3 AI型）</h1>
+  <div class="note">左の番号は、利用者の画面の番号と同じです。右の「利用者の画面で試す」で、設定どおりに動くかを確かめられます。AIの返事はダミーです。</div>
 </header>
 <div class="wrap">
   <main class="admin">
-    <h2>1. 形態 <span class="who app">契約で決まる</span></h2>
-    <div class="seg" id="forms"></div>
-
-    <h2>2. 業態モード <span class="who shop">店が選ぶ</span></h2>
+    <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="modes"></div>
-    <div class="hint">選ぶと、④から先のボタンに初期値が入ります（書き換えた内容は消えます）。</div>
 
-    <h2>3. 共通の部分 <span class="who common">全モード共通・変更なし</span></h2>
-    <div class="box lock" id="common"></div>
+    <h2>ロケーション <span class="who common">全業態共通・変更なし</span></h2>
+    <div id="common"></div>
 
-    <h2>4. ステップごとの選択肢 <span class="who shop">店が書く</span></h2>
-    <div class="hint" id="stepsHint"></div>
+    <h2>選択肢 <span class="who shop">店が書く</span></h2>
     <div id="steps"></div>
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
-    <h2>5. 問い合わせで出す店の一手 <span class="who shop">店が書く</span></h2>
+    <h2>問い合わせで出す店の一手 <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
 
-    <h2>6. アプリが持つ決まり <span class="who app">店は変えられない</span></h2>
+    <h2>アプリが持つ決まり <span class="who app">店は変えられない</span></h2>
     <div class="box app" id="rules"></div>
   </main>
 
-  <section class="view">
-    <h2>客の画面（見本）</h2>
-    <div id="talk"></div>
-    <div id="back" class="back"></div>
-  </section>
+  <aside class="side">
+    <div class="tabs"><button id="tabHelp" class="on">設定の説明</button><button id="tabTry">利用者の画面で試す</button></div>
+    <div id="help"></div>
+    <div id="try" class="hidden"><div id="talk"></div></div>
+  </aside>
 </div>
 
 <script>
-// ---- 形態（11-04 合意）。2と3は契約が同じ（API）、違いは誘導性 ----
-const FORMS = {
-  1: { name:"1 選択式", sub:"AIなし・売り切り" },
-  2: { name:"2 対話型", sub:"フリートーク・API" },
-  3: { name:"3 AI型", sub:"誘導あり・API" }
-};
 // ---- 業態モード 4＋1（Claude.AI「業態モードの分け方」）。④⑤の初期値は Claude Code の仮置き ----
 const MODES = {
   m1: { name:"物件情報をいち早く届ける店", sub:"仲介情報屋",
@@ -135,149 +128,156 @@ const MODES = {
     steps:[ { topic:"", btns:[] }, { topic:"", btns:[] } ], close:"" }
 };
 const END = "セッションでお答えできるのは以上です。詳しくは弊社へお問い合わせください。";
-const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮";
-// 共通の部分（index.html の①〜③と同じ）。見本では鷺山の旗竿地で答えた後として出す
-const COMMON = [
-  ["⓪", "市区町村・地図・ピン", "岐阜県岐阜市 鷺山にピン"],
-  ["①", "道への接し方", "細い通路の奥にある（旗竿地）"],
-  ["②", "通路の幅", "2mない・狭い"],
-  ["③", "建物", "空き家・古い家がある"]
-];
-// 2番の問いの型（アプリが持つ）
-const QTYPES = [
-  t => `${t}については、分かっていますか？`,
-  t => `今、${t}はどんな様子ですか？`,
-  t => `${t}について、どうしたいお考えですか？`,
-  (t, u) => u ? `${t}と${u}なら、どちらに近いですか？` : `${t}は気になりますか？`
-];
-const LIMIT2 = 30; // 2番だけの往復上限（アプリが持つ。画面に数は出さない）
+const NUM = "⓪①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+// ロケーション（index.html と同じ問いとボタン）。②は①の答えで変わる
+const LOC = {
+  1: { title:"道への接し方", btns:["道に広く面している","細い通路の奥にある（旗竿地）","わからない"] },
+  2: { title:"道の幅", branches:[
+        { when:"①で「細い通路の奥」", title:"通路の幅", btns:["2mある","2mない・狭い","測ったことがない"] },
+        { when:"①で「道に広く面している」", title:"前の道", btns:["すれ違える","すれ違えない","わからない"] } ],
+       skip:"①で「わからない」なら②は飛ばして③へ" },
+  3: { title:"建物", btns:["住んでいる家がある","空き家・古い家がある","何もない（更地）"] }
+};
+const FIRST = 4; // 店が書く選択肢は④から
 
-let form = 3, modeKey = "m3", steps = [], closeText = "";
-
+let modeKey = "m3", steps = [], closeText = "";
 function loadMode(k) {
   modeKey = k;
   steps = MODES[k].steps.map(s => ({ topic:s.topic, btns:[...s.btns, "", ""] })); // 初期値＋空白2つ
   closeText = MODES[k].close;
 }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const live = s => s.btns.map(b => b.trim()).filter(Boolean);
+const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
 
 // ---- 管理画面 ----
-function seg(id, items, cur, onPick) {
-  const el = document.getElementById(id);
-  el.innerHTML = "";
-  for (const [k, v] of Object.entries(items)) {
-    const l = document.createElement("label");
-    l.className = String(k) === String(cur) ? "on" : "";
-    l.innerHTML = `<input type="radio" name="${id}"${l.className ? " checked" : ""}>${v.name}<small>${v.sub}</small>`;
-    l.onclick = e => { e.preventDefault(); onPick(k); };
-    el.appendChild(l);
-  }
-}
 function renderAdmin() {
-  seg("forms", FORMS, form, k => { form = Number(k); renderAll(); });
-  seg("modes", MODES, modeKey, k => { loadMode(k); renderAll(); });
-  document.getElementById("common").innerHTML = form === 2
-    ? "⓪ 市区町村 → 地図 → ピン。その後はすべてフリートーク。"
-    : COMMON.map(c => `${c[0]} ${c[1]}`).join("　→　") + "<br><span class='hint'>（ロケーション。どの業態でも同じ問いとボタン）</span>";
-  document.getElementById("stepsHint").textContent = form === 2
-    ? "2 対話型ではボタンは出ません。ここに書いた言葉は、AIが問いかけるときの話題として使います。"
-    : "各ステップに空白を2つ置いています。空白は客の画面に出ません。ボタンが一つも書かれていないステップで、会話は打ち切りになります。";
+  const m = document.getElementById("modes");
+  m.innerHTML = "";
+  for (const [k, v] of Object.entries(MODES)) {
+    const l = document.createElement("label");
+    l.className = k === modeKey ? "on" : "";
+    l.innerHTML = `<input type="radio" name="mode"${k === modeKey ? " checked" : ""}>${v.name}<small>${v.sub}</small>`;
+    l.onclick = e => { e.preventDefault(); if (k !== modeKey) { loadMode(k); renderAll(); } };
+    m.appendChild(l);
+  }
+  document.getElementById("common").innerHTML =
+    `<div class="box lock"><div class="head"><span class="num">⓪</span><span class="title">市区町村・地図・ピン</span></div><div class="hint">利用者が市区町村を選び、地図に土地のピンを立てる。</div></div>`
+    + [1, 2, 3].map(n => {
+      const s = LOC[n];
+      const body = s.branches
+        ? s.branches.map(b => `<div class="branch">${b.when} → ${b.title}</div><div class="slots">${fixedBtns(b.btns)}</div>`).join("") + `<div class="branch">${s.skip}</div>`
+        : `<div class="slots">${fixedBtns(s.btns)}</div>`;
+      return `<div class="box lock"><div class="head"><span class="num">${NUM[n]}</span><span class="title">${s.title}</span></div>${body}</div>`;
+    }).join("");
   const box = document.getElementById("steps");
   box.innerHTML = "";
   steps.forEach((s, i) => {
     const d = document.createElement("div");
-    d.className = "box step";
-    d.innerHTML = `<div class="head"><span class="num">${NUM[i + 3]}</span><input class="topic" placeholder="話題（管理用の呼び名・客の画面には出ない）" value="${esc(s.topic)}"></div><div class="slots"></div><button class="small">＋ 枠を足す</button>`;
+    d.className = "box";
+    d.innerHTML = `<div class="head"><span class="num">${NUM[FIRST + i]}</span><input class="topic" placeholder="題名（管理用の呼び名・利用者の画面に出ない）" value="${esc(s.topic)}"></div><div class="slots"></div><button class="small">＋ 枠を足す</button>`;
     d.querySelector(".topic").oninput = e => { s.topic = e.target.value; };
     const slots = d.querySelector(".slots");
     s.btns.forEach((b, j) => {
       const inp = document.createElement("input");
       inp.value = b; inp.placeholder = "（空白）";
-      inp.oninput = () => { s.btns[j] = inp.value; renderView(); };
+      inp.size = Math.max(b.length * 2, 8); // field-sizing が効かないブラウザ向け
+      inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); };
       slots.appendChild(inp);
     });
     d.querySelector("button").onclick = () => { s.btns.push(""); renderAdmin(); };
     box.appendChild(d);
   });
+  document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const cl = document.getElementById("close");
   cl.value = closeText;
-  cl.oninput = () => { closeText = cl.value; renderView(); };
+  cl.oninput = () => { closeText = cl.value; resetTry(); };
   document.getElementById("rules").innerHTML = `<ul style="margin:0;padding-left:18px">
     <li>立ち位置：売り逃げ・詐欺まがいの相談には協力しない</li>
-    ${form === 1 ? "<li>返事はAIでなく、用意した文言で返す</li>" : "<li>返事の形：短文／入力に対する回答／問いかけ</li>"}
-    ${form === 3 ? "<li>問いかけの答えは、次のステップのボタンになる（誘導）</li>" : ""}
-    ${form === 2 ? `<li>問いかけは型から選ぶ（事実／状況／考え／選んでもらう）。話題は上の言葉から、まだ聞いていないものを選ぶ</li><li>往復には上限がある（フリートークのため）</li>` : ""}
-    ${form !== 2 ? `<li>次のステップにボタンがなければ「${END}」で打ち切る</li>` : ""}
-    ${form !== 1 ? "<li>客が書いた個人情報は、返事で繰り返さない。名前や連絡先を問いで聞かない</li><li>原文は残さない。会話全体の総合判断を毎回更新して残す。統計には札と粗い位置だけ</li>" : "<li>記録は問い合わせのときだけ店へ送る（溜めない）</li>"}
+    <li>返事の形：短文／入力に対する回答／問いかけ</li>
+    <li>問いかけの答えは、次のステップのボタンになる（誘導）</li>
+    <li>次のステップにボタンがなければ「${END}」で打ち切る</li>
+    <li>利用者が書いた個人情報は、返事で繰り返さない。名前や連絡先を問いで聞かない</li>
+    <li>原文は残さない。会話全体の総合判断を毎回更新して残す。統計には札と粗い位置だけ</li>
   </ul>`;
 }
 document.getElementById("addStep").onclick = () => { steps.push({ topic:"", btns:["", ""] }); renderAll(); };
 
-// ---- 客の画面（見本） ----
-const T = () => document.getElementById("talk");
-const live = s => s.btns.map(b => b.trim()).filter(Boolean);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-let log = [];
+// ---- 右側：設定の説明（概要と項目説明） ----
+function renderHelp() {
+  const last = NUM[FIRST + steps.length - 1];
+  document.getElementById("help").innerHTML = `
+    <h3>概要</h3>
+    <p>AI型コンテンツの設定画面です。利用者は地図に土地のピンを立て、番号の順にボタンを押して相談を進めます。AIは利用者の答えに短く答え、最後に次のボタンを話題として示します。</p>
+    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者の画面で試す」で、同じ番号の所がどう出るかを確かめてください。</p>
+    <h3>業態モード</h3>
+    <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
+    <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
+    <h3><span class="num">⓪</span>〜<span class="num">③</span> ロケーション</h3>
+    <p>土地の形に掛かる事実（道への接し方、道の幅、建物）を聞きます。どの業態でも同じで、変えられません。②は①の答えで問いが変わります。</p>
+    <h3><span class="num">④</span>〜<span class="num">${last}</span> 選択肢</h3>
+    <p>利用者を店の得意な方向へ引き寄せる問いです。各ステップのボタンの言葉を書きます。空白の枠は利用者の画面に出ません。題名は管理用の呼び名で、利用者の画面には出ません。</p>
+    <p>AIは一つ前の答えに答えた後、このステップのボタンを話題として示します。</p>
+    <div class="ex">例：（回答）「住む・建て直す」や「建てて貸す」・「売る」などについてお話ししましょう。</div>
+    <p>各ステップの下に記入欄が付きます。利用者が書いても、AIは答えた後、次のボタンへ戻します。</p>
+    <h3>＋ ステップを足す</h3>
+    <p>次の番号のステップが増えます。ボタンを書けば、会話はそこまで続きます。ボタンが一つも書かれていないステップに来たら、AIは回答の後に次の文で打ち切ります。</p>
+    <div class="ex">${END}</div>
+    <h3>問い合わせで出す店の一手</h3>
+    <p>④から下に常に出る「これらの情報をもとにお問い合わせ」に添える一文です。問い合わせると、店が何をしてくれるかを書きます。</p>
+    <h3>アプリが持つ決まり</h3>
+    <p>AIの返事の形、立ち位置、個人情報の扱いです。どの店でも同じで、変えられません。</p>`;
+}
 
-function ai(html, tag) {
+// ---- 右側：利用者の画面で試す ----
+const T = () => document.getElementById("talk");
+function ai(html) {
   const d = document.createElement("div");
-  d.className = "ai" + (form === 1 ? " plain" : "");
-  d.innerHTML = `<span class="tag">${tag || (form === 1 ? "用意した文言" : "AI")}</span>${html}`;
+  d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
   T().appendChild(d);
 }
-function me(t) {
-  const d = document.createElement("div");
-  d.className = "me"; d.innerHTML = `<span>${esc(t)}</span>`;
-  T().appendChild(d);
-}
-// 次のボタン名を並べる：A／AやB・C…などについて
+function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = `<span>${esc(t)}</span>`; T().appendChild(d); }
 function topicsOf(list) {
   return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
 }
-function nextLine(i) {
-  const s = steps[i];
-  if (!s || !live(s).length) return null;
-  return form === 1 ? `次は、${topicsOf(live(s)).replace(/について$/, "")}からお選びください。` : `${topicsOf(live(s))}お話ししましょう。`;
-}
-function answer(said) {
-  return form === 1 ? "" : `<span class="dummy">（AIの回答：「${esc(said)}」に、ここまでの土地の条件に合わせて短く答える）</span><br>`;
-}
-
-function renderView() {
-  T().innerHTML = ""; log = [];
-  if (form !== 1) T().insertAdjacentHTML("beforeend", `<div class="notice">この相談の内容は記録され、個人が分からない形で統計に使われます。返事を作るため、文章はAIの会社に送られます。</div>`);
-  if (form === 2) return startFree();
-  COMMON.forEach(c => T().insertAdjacentHTML("beforeend", `<div class="fixed">${c[0]} ${c[1]}：<b>${c[2]}</b></div>`));
-  const first = nextLine(0);
-  ai(answer("空き家・古い家がある") + (first || END));
-  if (first) { showStep(0); inquiry(); }
-  else inquiry();
-  renderBack();
-}
-function showStep(i) {
-  const row = document.createElement("div");
-  row.className = "row";
-  row.innerHTML = `<span class="qnum">${NUM[i + 3]}</span>`;
-  const pick = (said, btn) => {
-    row.classList.add("done"); if (btn) btn.classList.add("chosen");
-    me(said); log.push([NUM[i + 3], said]);
-    const nx = nextLine(i + 1);
-    ai(answer(said) + (nx || END));
-    if (nx) showStep(i + 1);
-    renderBack(); moveInquiry();
-  };
-  live(steps[i]).forEach(b => {
-    const bt = document.createElement("button");
-    bt.textContent = b; bt.onclick = () => pick(b, bt);
-    row.appendChild(bt);
-  });
-  if (form === 3) { // 記入欄。書いても、答えた後は次のボタンへ戻す
+const answer = said => `<span class="dummy">（AIの回答：「${esc(said)}」に、ここまでの土地の条件に合わせて短く答える）</span><br>`;
+function row(n, list, onPick, withText) {
+  const r = document.createElement("div");
+  r.className = "row";
+  r.innerHTML = `<span class="num">${NUM[n]}</span>`;
+  const pick = (said, bt) => { r.classList.add("done"); if (bt) bt.classList.add("chosen"); me(said); onPick(said); moveInquiry(); };
+  list.forEach(b => { const bt = document.createElement("button"); bt.textContent = b; bt.onclick = () => pick(b, bt); r.appendChild(bt); });
+  if (withText) {
     const tl = document.createElement("div");
     tl.className = "textline";
     tl.innerHTML = `<input placeholder="その他（書いて送る）"><button>送信</button>`;
     tl.querySelector("button").onclick = () => { const v = tl.querySelector("input").value.trim(); if (v) pick(v); };
-    row.appendChild(tl);
+    r.appendChild(tl);
   }
-  T().appendChild(row);
+  T().appendChild(r);
+}
+function startTry() {
+  T().innerHTML = `<div class="notice">この相談の内容は記録され、個人が分からない形で統計に使われます。返事を作るため、文章はAIの会社に送られます。</div>
+    <div class="fixed"><span class="num">⓪</span> 岐阜県岐阜市 鷺山にピン（試しの位置）</div>`;
+  ai(`<span class="dummy">（AIの一投目：この土地に効く決まりを一つ渡し、地図では読めない一点を聞く）</span><br>この土地は、道にどう接していますか？`);
+  row(1, LOC[1].btns, c => {
+    const b = c.startsWith("細い") ? LOC[2].branches[0] : c.startsWith("道に") ? LOC[2].branches[1] : null;
+    if (!b) return askBuilding(c);
+    ai(answer(c) + `${b.title}について伺います。`);
+    row(2, b.btns, askBuilding);
+  });
+}
+function askBuilding(c) {
+  ai(answer(c) + "今、この土地に建物はありますか？");
+  row(3, LOC[3].btns, c3 => goStep(0, c3));
+}
+function goStep(i, said) {
+  const s = steps[i];
+  const list = s ? live(s) : [];
+  if (!list.length) { ai(answer(said) + END); return; }
+  ai(answer(said) + `${topicsOf(list)}お話ししましょう。`);
+  row(FIRST + i, list, c => goStep(i + 1, c), true);
+  if (!document.getElementById("inqBar")) inquiry();
 }
 function inquiry() {
   const d = document.createElement("div");
@@ -286,54 +286,19 @@ function inquiry() {
   T().appendChild(d);
 }
 function moveInquiry() { const b = document.getElementById("inqBar"); if (b) T().appendChild(b); }
+function resetTry() { if (!document.getElementById("try").classList.contains("hidden")) startTry(); }
 
-// 2 対話型：ピンの後はフリートーク。問いは型×話題（まだ聞いていないもの）
-let asked = [], turns = 0;
-function startFree() {
-  asked = []; turns = 0;
-  T().insertAdjacentHTML("beforeend", `<div class="fixed">⓪ 市区町村・地図・ピン：<b>岐阜県岐阜市 鷺山にピン</b></div>`);
-  ai(`<span class="dummy">（AIの回答：ピンの土地について、地図と公開データから言えることを短く）</span><br>` + freeQuestion());
-  inquiry();
-  const tl = document.createElement("div");
-  tl.className = "textline"; tl.id = "freeLine";
-  tl.innerHTML = `<input placeholder="何でも書いてください"><button>送信</button>`;
-  tl.querySelector("button").onclick = () => {
-    const inp = tl.querySelector("input"); const v = inp.value.trim(); if (!v) return;
-    inp.value = ""; me(v); log.push([`往復${++turns}`, v]);
-    if (turns >= LIMIT2) { ai(answer(v) + END); tl.remove(); }
-    else ai(answer(v) + freeQuestion());
-    T().appendChild(document.getElementById("freeLine") || document.createElement("span"));
-    moveInquiry(); renderBack();
-  };
-  T().appendChild(tl);
-  renderBack();
+function tab(which) {
+  document.getElementById("help").classList.toggle("hidden", which !== "help");
+  document.getElementById("try").classList.toggle("hidden", which !== "try");
+  document.getElementById("tabHelp").classList.toggle("on", which === "help");
+  document.getElementById("tabTry").classList.toggle("on", which === "try");
+  if (which === "try") startTry();
 }
-function freeQuestion() {
-  const pool = steps.flatMap(s => live(s)).filter(t => !asked.includes(t));
-  if (!pool.length) return `<span class="dummy">（問い：型から一つ。話題は会話から）</span>この土地のことで、ほかに気になっていることはありますか？`;
-  const t = pool[0], k = asked.length % QTYPES.length;
-  asked.push(t);
-  const u = k === 3 ? pool[1] : null; if (u) asked.push(u);
-  return `<span class="dummy">（問いの型：${["事実","状況","考え","選んでもらう"][k]}）</span>` + QTYPES[k](t, u);
-}
+document.getElementById("tabHelp").onclick = () => tab("help");
+document.getElementById("tabTry").onclick = () => tab("try");
 
-// 裏側：店に届く記録・統計（見本）
-function renderBack() {
-  const b = document.getElementById("back");
-  if (form === 1) {
-    b.innerHTML = `<h3>店に届くもの（問い合わせのときだけ）</h3><table>${COMMON.map(c => `<tr><td>${c[0]} ${c[1]}</td><td>${c[2]}</td></tr>`).join("")}${log.map(l => `<tr><td>${l[0]}</td><td>${esc(l[1])}</td></tr>`).join("")}</table><div class="hint">選択式は記録を溜めません。</div>`;
-    return;
-  }
-  const tags = log.map(l => esc(l[1].length > 14 ? l[1].slice(0, 14) + "…" : l[1]));
-  b.innerHTML = `<h3>裏側：サーバーが持つもの（見本）</h3><table>
-    <tr><td>位置</td><td>岐阜市 鷺山（500mメッシュ）</td></tr>
-    <tr><td>総合の判断</td><td>${log.length ? `<span class="dummy">（AIが会話全体を読み、返事のたびに書き直す。${log.length}回目）</span>` : "まだなし"}</td></tr>
-    <tr><td>札（統計へ）</td><td>${tags.length ? tags.join("／") : "まだなし"}</td></tr>
-    <tr><td>原文</td><td class="gone">残さない（総合の判断を書いたら捨てる）</td></tr>
-    <tr><td>問い合わせ時</td><td>連絡先と、客が同意した記録だけ店へ</td></tr></table>`;
-}
-
-function renderAll() { renderAdmin(); renderView(); }
+function renderAll() { renderAdmin(); renderHelp(); resetTry(); }
 loadMode("m3");
 renderAll();
 </script>
