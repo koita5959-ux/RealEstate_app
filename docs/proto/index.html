@@ -41,6 +41,9 @@
   .row.done > button:only-of-type, .row.done .hint { display:none; }
   .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-top:12px; line-height:1.7; }
   .route:empty { display:none; }
+  .qnum { display:inline-block; font-size:20px; color:#c0392b; margin-right:6px; vertical-align:middle; }
+  .opt { display:inline-block; min-width:18px; height:18px; line-height:18px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; text-align:center; margin-right:6px; }
+  .row.done button.chosen .opt { background:#fff; color:var(--accent); }
   button.demo-next { outline:3px solid #c0392b; outline-offset:2px; }
   .demo { position:fixed; left:12px; bottom:12px; max-width:380px; z-index:1000; background:#2b2a26; color:#f4f0e6; font-size:13px; line-height:1.6; padding:10px 14px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
   .demo span { color:#e6c98f; }
@@ -218,14 +221,15 @@ function onIntent(c) {
   freeInput(1);
 }
 function freeInput(turn) {
-  const box = document.createElement("div"); box.className = "row";
-  box.innerHTML = `<textarea rows="2" placeholder="例：親から相続したが、固定資産税が負担で…"></textarea>
+  const box = newRow();
+  box.innerHTML += `<textarea rows="2" placeholder="例：親から相続したが、固定資産税が負担で…"></textarea>
     <button>送る</button><div class="hint">（後半の対話。本番ではAIがその場で答えます）</div>`;
   document.getElementById("talk").appendChild(box);
   box.querySelector("button").onclick = () => {
     const t = box.querySelector("textarea").value.trim(); if (!t) return;
-    box.classList.add("done"); PATH.push({ type:t, press:"送る" }); renderRoute();
-    box.remove(); me(t);
+    box.classList.add("done"); PATH.push({ type:t, press:"送る", q:+box.dataset.q }); renderRoute();
+    box.querySelector("textarea").remove(); box.querySelector(".hint").remove(); box.querySelector("button").remove(); // 番号の行は残す
+    me(t);
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
     if (turn === 1) {
       secondWord(t);
@@ -331,11 +335,11 @@ function say(html, gave, hole) {
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
 function choices(list, cb) {
-  const d = document.createElement("div"); d.className = "row";
-  list.forEach(c => { const b = document.createElement("button"); b.textContent = c;
+  const d = newRow();
+  list.forEach((c, i) => { const b = document.createElement("button"); b.dataset.c = c; b.dataset.opt = i + 1; b.innerHTML = `<span class="opt">${i + 1}</span>`; b.append(c);
     b.onclick = () => {
       if (d.dataset.step) { if (!b.classList.contains("chosen")) rewind(+d.dataset.step, c); return; }
-      d.dataset.step = PATH.length; PATH.push({ press:c }); renderRoute();
+      d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, opt:i + 1 }); renderRoute();
       d.classList.add("done"); b.classList.add("chosen");
       [...d.children].forEach(x => { if (x !== b) x.title = "ここから別の道を試す"; });
       me(c); cb(c);
@@ -346,9 +350,16 @@ function choices(list, cb) {
 // ---- 通った道（データの経路）と巻き戻し ----
 const PATH = [];
 const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+// 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
+function newRow() {
+  const d = document.createElement("div"); d.className = "row";
+  d.dataset.q = document.querySelectorAll("#talk .row").length + 1;
+  d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
+  return d;
+}
 function renderRoute() {
   const r = document.getElementById("route");
-  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map((p, i) => NUM[i] + (p.type ? `「${esc(p.type)}」` : p.press)).join(" → ")
+  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => NUM[p.q - 1] + (p.type ? `「${esc(p.type)}」` : `の${p.opt} ${p.press}`)).join(" → ")
     + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
 }
 function rewind(k, c) {
@@ -361,7 +372,7 @@ function replay(steps) {
     const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
     if (!row) break;
     if (st.type) { row.querySelector("textarea").value = st.type; row.querySelector("button").click(); continue; }
-    const b = [...row.querySelectorAll("button")].find(x => x.textContent === st.press);
+    const b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
     if (!b) break; b.click();
   }
   const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
@@ -395,13 +406,15 @@ if (DEMO) {
     document.querySelectorAll(".demo-next").forEach(b => b.classList.remove("demo-next"));
     const st = DEMO.steps[i];
     if (!st) { panel.innerHTML = `<b>${DEMO.title}</b><br>デモはここまで。`; return; }
-    panel.innerHTML = `<b>${DEMO.title}</b>　${i + 1} / ${DEMO.steps.length}<br>${"①②③④⑤⑥⑦⑧⑨⑩"[i]}「${st.press}」を押す<br><span>${st.note}</span>`;
     const live = [...document.querySelectorAll("#talk .row:not(.done) button"), document.getElementById("go")];
-    const btn = live.find(b => b.textContent === st.press);
+    const btn = live.find(b => (b.dataset.c || b.textContent) === st.press);
+    const row = btn && btn.closest(".row");
+    const where = row ? NUM[row.dataset.q - 1] + (btn.dataset.opt ? "の" + btn.dataset.opt : "") : "";
+    panel.innerHTML = `<b>${DEMO.title}</b>　手順 ${i + 1} / ${DEMO.steps.length}<br>${where}「${st.press}」を押す<br><span>${st.note}</span>`;
     if (!btn) return;
-    if (st.type) btn.parentElement.querySelector("textarea").value = st.type;
-    const badge = document.createElement("span"); badge.className = "demo-badge"; badge.textContent = "①②③④⑤⑥⑦⑧⑨⑩"[i];
-    btn.prepend(badge); btn.classList.add("demo-next"); // 印はボタンの中に。折り返しで隣のボタンの印に見えないように btn.scrollIntoView({ block:"center", behavior:"smooth" });
+    if (st.type) row.querySelector("textarea").value = st.type;
+    btn.classList.add("demo-next"); // 赤枠で次に押すボタンを示す
+    btn.scrollIntoView({ block:"center", behavior:"smooth" });
     btn.addEventListener("click", () => { i++; setTimeout(mark, 0); }, { once:true });
   };
   const p = DEMO.place;
