@@ -396,11 +396,15 @@ function loop(cur) {
 }
 
 // ---- 問い合わせ（いつでも出せる。送る前に、店へ渡る内容を客が見られる） ----
+// 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
 function inquiryBar() {
-  const box = document.getElementById("inq");
-  box.innerHTML = `<button id="inqOpen" class="inq">この相談を店への問い合わせにする</button>`;
-  box.querySelector("button").onclick = () => {
-    box.innerHTML = `<h2>店への問い合わせ</h2>
+  const bar = document.getElementById("inq");
+  bar.innerHTML = `<button id="inqOpen" class="inq">この相談を店への問い合わせにする</button>`;
+  bar.querySelector("button").onclick = () => {
+    bar.innerHTML = "";
+    const box = newRow(); box.classList.add("inqrow");
+    document.getElementById("talk").appendChild(box);
+    box.insertAdjacentHTML("beforeend", `<b>店への問い合わせ</b>
       <label>お名前</label><input id="fName" type="text">
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
@@ -410,12 +414,13 @@ function inquiryBar() {
       <h2>店へ渡る内容</h2><div class="hint">上の入力に加えて、ここまでの相談の記録が添えられます。</div>
       <div id="inqSheet"></div>
       <button id="inqSend" class="primary">この内容で送る</button>
-      <button id="inqBack" class="small">相談に戻る</button>`;
+      <button id="inqBack" class="small">相談に戻る</button>`);
     showSheet(document.getElementById("inqSheet"));
     box.scrollIntoView({ block:"start" });
-    document.getElementById("inqBack").onclick = inquiryBar;
+    document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
-      box.innerHTML = `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
+      box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
+      box.classList.add("done");
     };
   };
 }
@@ -424,13 +429,14 @@ function showSheet(where) {
   const rows = Object.entries(S.sheet).map(([k, v]) =>
     `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
   const div = document.createElement("div");
-  div.innerHTML = `<h2>4. データシート（対話の結果として）</h2><table class="data">${rows}</table>
-    <h2>5. 要所レポート（業者向け）</h2>
+  div.innerHTML = `<h2>データシート（対話の結果として）</h2><table class="data">${rows}</table>
+    <h2>要所レポート（業者向け）</h2>
     <div class="sheet">
       <h3>電話の入口になる一言</h3>
       「先日の見立ての続きです。接道（${S.sheet.接道 || "未確認"}）を、現地で一緒に確かめたくてお電話しました。」
       <h3>押さえるべき点</h3>
-      ・客が自分の言葉で語ったこと：「${S.sheet.事情}」<br>
+      ・客が自分の言葉で語ったこと：${S.sheet.事情 ? "「" + S.sheet.事情 + "」" : "（書いていない。選択だけで進んだ）"}<br>
+      ・相談目的：${S.sheet.相談目的 || "（まだ選んでいない）"}<br>
       ・土地勘（${S.near.name}）：${PREF.localKnowledge[S.near.name] || "（登録なし）"}<br>
       ・AIが途中で見立てを直した点：${S.revised || "（直していない）"}
       <h3>AIの浅さの記録（会話が詰まった所）</h3>
