@@ -48,6 +48,11 @@
   .demo { position:fixed; left:12px; bottom:12px; max-width:380px; z-index:1000; background:#2b2a26; color:#f4f0e6; font-size:13px; line-height:1.6; padding:10px 14px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
   .demo span { color:#e6c98f; }
   .demo-badge { display:inline-block; color:#fff; background:#c0392b; border-radius:50%; width:24px; height:24px; text-align:center; line-height:24px; font-size:15px; margin-right:2px; vertical-align:middle; }
+  .hidden { display:none; }
+  input[type=text], input[type=email], input[type=tel], select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:15px; margin-bottom:4px; }
+  button.small { font-size:12px; padding:5px 10px; }
+  button.inq { width:100%; margin-top:18px; border-style:dashed; }
+  #inq { border-top:1px solid var(--line); margin-top:16px; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
 </style>
 </head>
@@ -60,8 +65,18 @@
 <div class="wrap">
   <div id="map"></div>
   <aside>
-    <div id="step1">
+    <div id="step0">
+      <h2>0. 土地のある市区町村</h2>
+      <label for="prefName">都道府県</label>
+      <input id="prefName" type="text" value="岐阜県">
+      <label for="cityName">市区町村</label>
+      <input id="cityName" type="text" value="岐阜市">
+      <button id="openMap" class="primary">地図を開く</button>
+      <div id="mapMsg" class="hint"></div>
+    </div>
+    <div id="step1" class="hidden">
       <h2>1. 地図をクリックして場所を指定</h2>
+      <button id="preset" class="small">例：鷺山の旗竿地にピンを置く</button>
       <div id="picked" class="hint">まだ指定されていません（岐阜市内）</div>
       <label for="area">面積（㎡）</label>
       <input id="area" type="number" value="120" min="10">
@@ -114,13 +129,37 @@ L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png", {
   attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>', maxZoom: 18
 }).addTo(map);
 POINTS.forEach(p => L.circleMarker([p.lat, p.lng], { radius:6, color:"#888" }).addTo(map).bindTooltip("標準地(仮) " + p.name));
-let pin = null, here = null;
-map.on("click", e => {
-  here = { lat: e.latlng.lat, lng: e.latlng.lng };
-  if (pin) pin.setLatLng(e.latlng); else pin = L.marker(e.latlng).addTo(map);
-  document.getElementById("picked").textContent = `指定: ${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`;
+let pin = null, here = null, mapOpen = false;
+function setPin(lat, lng) {
+  here = { lat, lng };
+  if (pin) pin.setLatLng([lat, lng]); else pin = L.marker([lat, lng]).addTo(map);
+  document.getElementById("picked").textContent = `指定: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   document.getElementById("go").disabled = false;
-});
+}
+map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
+document.getElementById("preset").onclick = () => { map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352); };
+
+// ---- 0. 都道府県・市区町村 → 地図を開く（国土地理院の住所検索で中心を出す） ----
+map.setView([36.2, 137.5], 5); // 開く前は日本全体
+let PLACE = "";
+document.getElementById("openMap").onclick = async () => {
+  const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
+  const msg = document.getElementById("mapMsg");
+  if (!pref || !city) { msg.textContent = "都道府県と市区町村を入れてください。"; return; }
+  msg.textContent = "地図を探しています…";
+  let at = null;
+  try {
+    const r = await fetch("https://msearch.gsi.go.jp/address-search/AddressSearch?q=" + encodeURIComponent(pref + city));
+    const j = await r.json();
+    if (j.length) at = j[0].geometry.coordinates; // [経度, 緯度]
+  } catch (e) {}
+  if (!at && pref + city === "岐阜県岐阜市") at = [136.7606, 35.4233];
+  if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
+  PLACE = pref + city; mapOpen = true;
+  map.setView([at[1], at[0]], 14);
+  msg.textContent = PLACE + "の地図を開きました。" + (PLACE === "岐阜県岐阜市" ? "" : "（仮データは岐阜市の分しかありません）");
+  document.getElementById("step1").classList.remove("hidden");
+};
 
 // ---- 会話の状態とデータシート ----
 let S = null;
@@ -134,12 +173,12 @@ document.getElementById("go").onclick = () => {
   S = {
     // 層1: 入力で埋まる / 層2: データで埋まる / 層3: 対話で埋まる
     sheet: {
-      所在: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積: area + "㎡",
+      市区町村: PLACE, 所在: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積: area + "㎡",
       最寄り標準地: `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: yen(near.price) + "/㎡（仮）",
       用途地域: near.zone + "（仮）",
       形と向き: null, 接道: null, 持ち主の意向: null, 事情: null, 事情の要点: null
     },
-    near, area, log: [], signals: [], revised: null
+    near, area, log: [], signals: [], revised: null, used: []
   };
   R.innerHTML = `
     <h2>2. データ（公開データから機械的に）</h2>
@@ -151,7 +190,9 @@ document.getElementById("go").onclick = () => {
       <tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×面積）</td></tr>
     </table>
     <h2>3. AI判定</h2>
-    <div id="talk"></div>`;
+    <div id="talk"></div>
+    <div id="inq"></div>`;
+  inquiryBar();
   firstJudgment();
 };
 
@@ -231,12 +272,7 @@ function freeInput(turn) {
     box.querySelector("textarea").remove(); box.querySelector(".hint").remove(); box.querySelector("button").remove(); // 番号の行は残す
     me(t);
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
-    if (turn === 1) {
-      secondWord(t);
-    } else {
-      say("わかりました。ここまでの内容を整理しました。電話では、この続きからお話しできます。");
-      showSheet();
-    }
+    secondWord(t);
   };
 }
 // ---- 二言目：客の言葉を読み、最初の見立てのどこが変わるかを言う ----
@@ -275,7 +311,7 @@ function secondWord(t) {
     S.signals.push(`読み取れなかった言葉：「${t}」`);
     say("正直に言います。今のお話から、最初の見立てを直す手がかりを私は読み取れませんでした。決めつけずに伺います。どれに近いですか？");
     choices(["お金の負担の話", "家族・相続の話", "使い道の話", "うまく言葉にできない"], c => {
-      if (c === "うまく言葉にできない") { S.signals.push("「うまく言葉にできない」が押された"); return askHurry("それで大丈夫です。言葉にしにくいことほど、電話で一緒に整理する価値があります。"); }
+      if (c === "うまく言葉にできない") { S.signals.push("「うまく言葉にできない」が押された"); say("それで大丈夫です。言葉にしにくいことほど、人と話して整理する価値があります。下の問い合わせから、担当に渡すこともできます。"); return loop(null); }
       const map = { "お金の負担の話":"負担", "家族・相続の話":"相続", "使い道の話":"使う" };
       respond([CUES.find(x => x.key === map[c])], c);
     });
@@ -295,20 +331,67 @@ function respond(hits, quote) {
   if (k) s += `<br><small>（根拠：${PREF.office}の土地勘「${k}」）</small>`;
   S.revised = main.revise;
   S.sheet.事情の要点 = hits.map(h => h.key).join("・");
+  hits.forEach(h => S.used.push(h.key));
   say(s);
-  choices(["違う", "合っている、続けて", "うまく言葉にできない"], c => {
-    if (c === "違う") { S.signals.push(`見立てを外した（手がかり「${main.key}」と読んだ）`); say("外しました。すみません。どこが違うか、ひと言で聞かせてください。"); return freeInput(1); }
-    if (c === "うまく言葉にできない") S.signals.push("二言目のあとで「うまく言葉にできない」が押された");
-    askHurry(c === "合っている、続けて" ? "ありがとうございます。" : "それで大丈夫です。");
+  loop(main);
+}
+
+// ---- ⑤以降の繰り返し（本番ではAIが毎回その場で書く。ここでは台本） ----
+// 詳しく／別の視点で／違う・その他（自分で書く）。人と話したくなったら、いつでも下の問い合わせへ。
+const DEEP = {
+  "負担":"毎年出ていくのは、固定資産税・草刈りや管理の手間・建物があれば修繕です。まず去年いくら出たかを数えると、貸して賄えるのか、手放したほうが軽いのかが比べられます。",
+  "相続":"名義が亡くなった方のままだと、売るにも貸すにも、まず名義を移す手続き（相続登記）が要ります。2024年から相続登記は義務になりました。",
+  "家族":"家族の考えがそろわないときは、意見より先に、同じ数字を見ることが近道です。売った場合・貸した場合・持ち続けた場合を一枚に並べます。",
+  "建物":"古い家は、残したまま売る・解体して売る・そのまま貸す、の三つで手取りが変わります。解体費は広さと構造で大きく違うので、見積もりを一つ取ると話が具体になります。",
+  "隣":"お隣との話は、こちらから直接切り出すより、間に人が入ったほうがまとまりやすいものです。お隣にとっても、土地の形が良くなる話だからです。",
+  "急ぎ":"期限があるなら、その日から逆算します。3か月なら買い取り、半年あれば仲介も選べる、というのが一つの目安です。",
+  "使う":"ご自分で使うなら、何が建てられるかが先です。用途地域と、今日の接道の答えで、建てられる大きさの見当がつきます。",
+};
+function loop(cur) {
+  choices(["その話を詳しく", "別の視点で", "違う・その他（自分で書く）"], c => {
+    if (c === "その話を詳しく") {
+      say(cur ? DEEP[cur.key] : `いちばん確かな土台は、今日の接道です（${S.sheet.接道 || "まだ確かめていません"}）。ここが決まると、住む・活かす・手放すの、どの道を選べるかが決まります。`);
+      return loop(cur);
+    }
+    if (c === "別の視点で") {
+      const other = CUES.find(x => !S.used.includes(x.key));
+      if (!other) { say("私が台本で持っている視点は、ここまでです。この先は、担当が直接伺うほうが深くなります。"); S.signals.push("別の視点を出し尽くした"); return loop(cur); }
+      S.used.push(other.key);
+      say(`別の視点から見ます。${other.revise}<br>考えられる道：${other.path}`);
+      return loop(other);
+    }
+    if (cur) S.signals.push(`「違う・その他」が押された（AIは「${cur.key}」の話をしていた）`);
+    say("どこが違うか、ほかに気になることがあれば、ひと言で聞かせてください。");
+    freeInput(1);
   });
 }
 
-function askHurry(lead) {
-  say(lead + "<br>最後にもう一つ。いつ頃までに決めたい、というのはありますか？");
-  freeInput(2);
+// ---- 問い合わせ（いつでも出せる。送る前に、店へ渡る内容を客が見られる） ----
+function inquiryBar() {
+  const box = document.getElementById("inq");
+  box.innerHTML = `<button id="inqOpen" class="inq">この相談を店への問い合わせにする</button>`;
+  box.querySelector("button").onclick = () => {
+    box.innerHTML = `<h2>店への問い合わせ</h2>
+      <label>お名前</label><input id="fName" type="text">
+      <label>メール</label><input id="fMail" type="email">
+      <label>電話</label><input id="fTel" type="tel">
+      <label>連絡の希望</label><select id="fWay"><option>電話がよい</option><option>メールがよい</option><option>どちらでも</option></select>
+      <input id="fWhen" type="text" placeholder="連絡してよい時間帯（例：平日の夕方）">
+      <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
+      <h2>店へ渡る内容</h2><div class="hint">上の入力に加えて、ここまでの相談の記録が添えられます。</div>
+      <div id="inqSheet"></div>
+      <button id="inqSend" class="primary">この内容で送る</button>
+      <button id="inqBack" class="small">相談に戻る</button>`;
+    showSheet(document.getElementById("inqSheet"));
+    box.scrollIntoView({ block:"start" });
+    document.getElementById("inqBack").onclick = inquiryBar;
+    document.getElementById("inqSend").onclick = () => {
+      box.innerHTML = `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
+    };
+  };
 }
 
-function showSheet() {
+function showSheet(where) {
   const rows = Object.entries(S.sheet).map(([k, v]) =>
     `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
   const div = document.createElement("div");
@@ -324,7 +407,7 @@ function showSheet() {
       <h3>AIの浅さの記録（会話が詰まった所）</h3>
       ${S.signals.length ? "・" + S.signals.join("<br>・") : "（なし）"}
     </div>`;
-  document.getElementById("talk").appendChild(div);
+  where.appendChild(div);
 }
 // ---- 表示部品 ----
 function say(html, gave, hole) {
@@ -384,15 +467,18 @@ function replay(steps) {
 const DEMOS = {
   sagiyama: {
     title: "鷺山の旗竿地・空き家（一投目＝接道）",
-    place: { lat:35.4482, lng:136.7352, area:120 },
     steps: [
-      { press:"評価する", note:"鷺山の旗竿地120㎡。ピンは置いてあります。" },
+      { press:"地図を開く", note:"最初は都道府県と市区町村。既定は岐阜県岐阜市。" },
+      { press:"例：鷺山の旗竿地にピンを置く", note:"本番は地図をクリック。デモでは例の場所に置きます。" },
+      { press:"評価する", note:"公開データが機械的に出て、①が始まる。" },
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
       { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
-      { type:"子どもは戻らないし、草刈りが負担", press:"送る", note:"自由入力はここが初めて。三往復で話す材料がそろっている。" },
-      { press:"合っている、続けて", note:"見立てを直した一言に、客が乗った場合。" },
-      { type:"いずれ。急いではいない", press:"送る", note:"データシートと要所レポートを見てください。電話の入口は接道の現地確認。" },
+      { type:"子どもは戻らないし、草刈りが負担", press:"送る", note:"④ 初めてのテキスト。⑤でAIがこれを読んで返す（今は台本）。" },
+      { press:"その話を詳しく", note:"⑤以降の繰り返し。詳しく／別の視点で／違う・その他。" },
+      { press:"別の視点で", note:"まだ触れていない視点へ。" },
+      { press:"この相談を店への問い合わせにする", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
+      { fill:{ fName:"岐阜 太郎", fTel:"058-000-0000", fWhen:"平日の夕方" }, press:"この内容で送る", note:"送る前に、店へ渡る内容（データシート・要所レポート）を客が見られる。" },
     ]
   }
 };
@@ -402,26 +488,22 @@ if (DEMO) {
   const panel = document.createElement("div"); panel.className = "demo";
   document.body.appendChild(panel);
   const mark = () => {
-    document.querySelectorAll(".demo-badge").forEach(b => b.remove());
+    if (!panel.isConnected) return; // 別の道を試すとデモは終わる
     document.querySelectorAll(".demo-next").forEach(b => b.classList.remove("demo-next"));
     const st = DEMO.steps[i];
     if (!st) { panel.innerHTML = `<b>${DEMO.title}</b><br>デモはここまで。`; return; }
-    const live = [...document.querySelectorAll("#talk .row:not(.done) button"), document.getElementById("go")];
+    const live = [...document.querySelectorAll("#talk .row:not(.done) button, #step0 button, #step1:not(.hidden) button, #inq button")];
     const btn = live.find(b => (b.dataset.c || b.textContent) === st.press);
     const row = btn && btn.closest(".row");
     const where = row ? NUM[row.dataset.q - 1] + (btn.dataset.opt ? "の" + btn.dataset.opt : "") : "";
     panel.innerHTML = `<b>${DEMO.title}</b>　手順 ${i + 1} / ${DEMO.steps.length}<br>${where}「${st.press}」を押す<br><span>${st.note}</span>`;
-    if (!btn) return;
+    if (!btn) return setTimeout(mark, 400); // 地図を開く（住所検索）のように、次のボタンが遅れて出る場合
     if (st.type) row.querySelector("textarea").value = st.type;
+    if (st.fill) Object.entries(st.fill).forEach(([id, v]) => document.getElementById(id).value = v);
     btn.classList.add("demo-next"); // 赤枠で次に押すボタンを示す
     btn.scrollIntoView({ block:"center", behavior:"smooth" });
     btn.addEventListener("click", () => { i++; setTimeout(mark, 0); }, { once:true });
   };
-  const p = DEMO.place;
-  here = { lat:p.lat, lng:p.lng }; pin = L.marker([p.lat, p.lng]).addTo(map); map.setView([p.lat, p.lng], 15);
-  document.getElementById("area").value = p.area;
-  document.getElementById("picked").textContent = `指定: ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
-  document.getElementById("go").disabled = false;
   mark();
 }
 </script>
