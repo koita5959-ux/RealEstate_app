@@ -8,12 +8,11 @@
 <style>
   :root { --ink:#1f2933; --sub:#667085; --line:#e4e7ec; --bg:#f7f8fa; --card:#fff; --acc:#1d4ed8; --warn:#b42318; --ok:#067647; --bar:#93b4f5; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif; padding-inline:16px; }
-  header { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; padding:14px 0 6px; }
-  h1 { font-size:18px; margin:0; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:10px 0 6px; }
   h2 { font-size:15px; margin:22px 0 8px; }
   h3 { font-size:13px; margin:14px 0 4px; color:var(--sub); font-weight:600; }
-  .wrap { max-width:1180px; margin:0 auto; padding-bottom:60px; }
+  .wrap { max-width:1180px; margin:0 auto; padding:0 16px 60px; }
   nav { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); margin:8px 0 14px; }
   nav button { border:0; background:none; padding:9px 14px; font:inherit; color:var(--sub); cursor:pointer; border-bottom:2px solid transparent; }
   nav button.on { color:var(--acc); border-bottom-color:var(--acc); font-weight:600; }
@@ -36,11 +35,6 @@
   input, select, button.act { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
   button.act { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
   .hide { display:none; }
-  /* 色の約束：青＝利用者の視点へ／赤＝開発者の視点へ */
-  .btn-user, .btn-dev { display:inline-block; font:inherit; font-size:13px; padding:5px 12px; border-radius:6px; color:#fff; text-decoration:none; }
-  .btn-user { background:#1d6fb8; } .btn-dev { background:#c0392b; }
-  .navs { display:flex; flex-wrap:nowrap; gap:6px; white-space:nowrap; }
-  .navs a { font-size:12px; padding:4px 9px; }
   details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
   summary { cursor:pointer; }
   pre { white-space:pre-wrap; margin:6px 0 0; font:inherit; }
@@ -48,34 +42,20 @@
 </style>
 </head>
 <body>
+<header id="appbar" data-current="dev" data-title="開発利用状況（開発者用）"></header>
+<script src="../../docs/proto/shell.js"></script>
 <div class="wrap">
-<header>
-  <h1>開発の利用状況（開発者用）</h1>
+<div class="toolbar">
   <span id="state" class="pill"></span>
   <span class="note" id="upd"></span>
-  <span class="navs"><a class="btn-user" href="../../docs/proto/" onclick="return goScreen('../../docs/proto/', 'reUser', event)">利用者画面へ</a><a class="btn-user" href="../../docs/proto/report.html" onclick="return goScreen('../../docs/proto/report.html', 'reReport', event)">利用者の利用状況へ</a><a class="btn-dev" href="../../docs/proto/admin_mode.html" onclick="return goScreen('../../docs/proto/admin_mode.html', 'reAdminWin', event)">管理画面へ</a></span>
   <button class="act" id="reload">更新</button>
   <label class="note"><input type="checkbox" id="auto"> 30秒ごとに自動更新</label>
-</header>
+</div>
 <div class="note">金額は、Claude が返したトークン数に単価を掛けた<b>推定</b>です。実額は Console の残高が正です（「設定」で残高を記録すると、実額との差が見えます）。</div>
 <nav id="tabs"></nav>
 <main id="main"></main>
 </div>
 <script>
-window.name = "reDevWin"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
-// ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
-function goScreen(url, name, ev) {
-  if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
-  const abs = new URL(url, location.href).href;
-  try {
-    const w = window.open("", name);
-    if (!w) return false;
-    if (w.location.href === "about:blank") w.location.href = abs; // 新しく開いたときだけ読み込む
-    w.focus();
-  } catch (e) { window.open(abs, name); }
-  return false;
-}
-
 const BASE = location.pathname.replace(/\/?$/, "/");
 const TABS = [["cost","費用"],["explain","費用の目安（販売用）"],["tested","何を試しているか"],["sessions","セッションとやり取り"],["settings","設定（残高・単価・為替）"]];
 let D = null, tab = (location.hash || "#cost").slice(1);

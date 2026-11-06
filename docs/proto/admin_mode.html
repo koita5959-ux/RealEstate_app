@@ -8,10 +8,8 @@
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; --lock:#eef1f4; --app:#6b4fa0; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif; color:var(--ink); background:var(--bg); }
-  header { padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); }
-  header h1 { font-size:17px; margin:0; }
-  header .note { font-size:12px; color:#b4472b; }
-  .wrap { display:grid; grid-template-columns: 1fr 440px; min-height:calc(100vh - 56px); }
+  .noticebar { padding:6px 16px; background:#fff; border-bottom:1px solid var(--line); font-size:12px; color:#b4472b; }
+  .wrap { display:grid; grid-template-columns: 1fr 440px; min-height:calc(100vh - 100px); }
   @media (max-width:900px){ .wrap{ grid-template-columns:1fr; } }
   .admin { padding:14px 16px 40px; overflow-x:hidden; }
   .side { background:#fff; border-left:1px solid var(--line); padding:14px 16px 40px; }
@@ -54,16 +52,6 @@
   .hint { font-size:12px; color:var(--sub); }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
   /* 右側 */
-  /* 色の約束：青＝利用者の視点へ行くボタン／赤＝開発者の視点へ行くボタン */
-  .btn-user, .btn-dev { display:inline-block; font:inherit; font-size:13px; padding:5px 12px; margin:0; border-radius:6px; color:#fff; cursor:pointer; text-decoration:none; border:1px solid; }
-  .btn-user { background:#1d6fb8; border-color:#1d6fb8; }
-  .btn-dev { background:#c0392b; border-color:#c0392b; }
-  .tabs { display:flex; gap:4px; margin-bottom:10px; }
-  .tabs button { margin:0; flex:1; }
-  .tabs button.on { background:#eef2f6; color:var(--ink); }
-  .tabs .btn-user, .tabs .btn-dev { color:#fff; }
-  .tabs button { font-size:12px; padding:5px 6px; white-space:nowrap; }
-  .tabs a { flex:1; margin:0; text-align:center; font-size:12px; padding:6px 6px; white-space:nowrap; }
   .side h3 { font-size:13px; margin:14px 0 4px; }
   .side h3 .num { font-size:15px; margin-right:2px; }
   .side p { font-size:13px; line-height:1.7; margin:2px 0 6px; }
@@ -90,10 +78,9 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>管理画面 ― 試作（コンテンツ：3 AI型）</h1>
-  <div class="note">左の番号は、利用者の画面の番号と同じです。「設定を変更する」で利用者画面に反映し、右上の「利用者画面」で確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
-</header>
+<header id="appbar" data-current="admin" data-title="管理画面 ― 試作（コンテンツ：3 AI型）"></header>
+<script src="shell.js"></script>
+<div class="noticebar">左の番号は、利用者の画面の番号と同じです。「設定を変更する」で利用者画面に反映し、右上の「利用者画面」で確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
 <div class="wrap">
   <main class="admin">
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
@@ -120,8 +107,7 @@
   </main>
 
   <aside class="side">
-    <div class="hint"><b>設定の説明</b>　（ほかの画面へ）</div>
-    <div class="tabs"><a id="toUser" class="btn-user" href="./">利用者画面 ↗</a><a id="toReport" class="btn-user" href="report.html">利用者の利用状況 ↗</a><a id="toDev" class="btn-dev" href="../../api/admin/">開発の利用状況 ↗</a></div>
+    <div class="hint"><b>設定の説明</b></div>
     <div id="help"></div>
   </aside>
 </div>
@@ -132,20 +118,6 @@
   <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
 </form></dialog>
 <script>
-window.name = "reAdminWin"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
-// ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
-function goScreen(url, name, ev) {
-  if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
-  const abs = new URL(url, location.href).href;
-  try {
-    const w = window.open("", name);
-    if (!w) return false;
-    if (w.location.href === "about:blank") w.location.href = abs; // 新しく開いたときだけ読み込む
-    w.focus();
-  } catch (e) { window.open(abs, name); }
-  return false;
-}
-
 // ---- 業態モード 4＋1（Claude.AI「業態モードの分け方」「AI型の全容と動く形の依頼」11-05）----
 // ④のボタンは二つの枝（1・2）に振り分け、⑤は枝ごとにボタン・種類（答える／聞く）・締めを持つ。⑥から先は枝に関係なく共通。
 // s4：[ボタン, 枝]。相続・税の⑤は B（時期で分ける）を採用。総合系の⑤は Claude.AI の案（ユーザー未確認）
@@ -391,13 +363,10 @@ function loadSaved() {
   lamp();
 }
 document.getElementById("commit").onclick = commit;
-document.getElementById("toDev").onclick = e => goScreen("../../api/admin/", "reDevWin", e); // 開発の利用状況（別の画面。下書きには影響しない）
-document.getElementById("toReport").onclick = e => goScreen("report.html", "reReport", e); // 利用者の利用状況（別の画面）
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
-document.getElementById("toUser").onclick = e => {
-  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return true; // 別タブ・別ウインドウで開く操作は、この画面の下書きに影響しないのでブラウザ標準
-  if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
-  return goScreen("./", "reUser", e);
+Shell.beforeGo = key => { // 利用者画面へ行くとき、未確定の下書きがあれば三択を出す（ほかの画面へ行くのは下書きに影響しない）
+  if (key === "user" && dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
+  return true;
 };
 // 未確定のときの三択：OK＝入力を捨てて移動／確定して移動＝設定を変更してから移動（エラーならとどまる）／キャンセル＝とどまる
 document.getElementById("leave").onclose = e => {
