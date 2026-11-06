@@ -68,6 +68,9 @@ const money = (v, d = 4) => v == null ? "—" : `${usd(v, d)}<span class="note">
 const tm = ts => ts ? new Date(ts).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
 const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
 const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
+const actorSel = () => window.actorSel || "all"; // 対象：全部／一般の訪問者（visitor）／テスト（visitor 以外）
+const actorOk = s => actorSel() === "all" || (actorSel() === "visitor" ? s.by === "visitor" : s.by !== "visitor");
+const actorSelect = () => `対象：<select id="asel"><option value="all" ${actorSel() === "all" ? "selected" : ""}>全部</option><option value="visitor" ${actorSel() === "visitor" ? "selected" : ""}>一般の訪問者（visitor）</option><option value="test" ${actorSel() === "test" ? "selected" : ""}>テスト（visitor 以外）</option></select>`;
 const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
 
 // 再表示：すでに開いている「利用状況」の窓の中身を切り替えるだけ（画面は開かない）。届いたか（返事があったか）だけをここに表示する
@@ -102,7 +105,7 @@ function viewCost() {
   for (const x of D.days) perDay[x.day] = (perDay[x.day] || 0) + x.est;
   const dayRows = Object.entries(perDay).slice(0, 14).map(([day, est]) => ({ day, est }));
   const costSort = window.costSort || "new"; // 新しい順／費用の大きい順
-  const top = D.sessions.filter(s => s.rounds).sort((a, b) => costSort === "cost" ? b.est - a.est : (b.last || "").localeCompare(a.last || "")); // AIを呼んで費用が発生したセッションすべて
+  const top = D.sessions.filter(s => s.rounds && actorOk(s)).sort((a, b) => costSort === "cost" ? b.est - a.est : (b.last || "").localeCompare(a.last || "")); // AIを呼んで費用が発生したセッションすべて
   return `
   <div class="cards">
     <div class="card"><div class="t">今日（日本時間）</div><div class="v">${jpy(T.today.est)}</div><div class="s">${usd(T.today.est)} ／ ${T.today.rounds}往復</div></div>
@@ -119,7 +122,7 @@ function viewCost() {
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>費用が発生したセッション（${top.length}件）</h2>
-  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、開いている「利用状況」の画面に再表示します。並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
+  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、開いている「利用状況」の画面に再表示します。　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
@@ -179,9 +182,10 @@ function viewSessions() {
   const st = s => live(s) ? '<span class="pill ok">進行中</span>' : s.ended ? '<span class="pill">終了</span>' : '<span class="pill">離脱</span>';
   return `
   <h2>セッション（新しい順・最大300件）</h2>
+  <div class="note">${actorSelect()}</div>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
   <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
-  ${D.sessions.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
+  ${D.sessions.filter(actorOk).map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>最近のやり取り（200件まで・本文つき）</h2>
   ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}</pre></details>`).join("") || '<div class="note">まだありません</div>'}`;
 }
@@ -217,6 +221,7 @@ document.addEventListener("click", e => {
 });
 function bind() {
   const $ = id => document.getElementById(id);
+  if ($("asel")) $("asel").onchange = e => { window.actorSel = e.target.value; render(); };
   if ($("csort")) $("csort").onchange = e => { window.costSort = e.target.value; render(); };
   if ($("fsel")) $("fsel").onchange = e => { window.fSel = e.target.value; render(); };
   if ($("balSave")) $("balSave").onclick = async () => { const ok = await post("balance", { amount_usd: +$("balAmt").value, note: $("balNote").value }); $("balMsg").textContent = ok ? "記録しました" : "入力を確認してください"; if (ok) load(); };
