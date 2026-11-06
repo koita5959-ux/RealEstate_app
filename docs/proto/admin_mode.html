@@ -45,6 +45,9 @@
   .branch { font-size:12px; color:var(--sub); margin:6px 0 2px; }
   button { font-size:13px; padding:7px 11px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; margin:4px 4px 0 0; }
   button.plus { width:100%; border-style:dashed; margin-top:2px; }
+  #commit { border-style:solid; }
+  #commit.on { background:var(--accent); color:#fff; }
+  #commit:disabled { border-color:var(--line); color:var(--sub); background:#f2f4f6; cursor:default; }
   button.small { font-size:12px; padding:3px 8px; }
   .hint { font-size:12px; color:var(--sub); }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
@@ -80,7 +83,7 @@
 <body>
 <header>
   <h1>管理画面 ― 試作（コンテンツ：3 AI型）</h1>
-  <div class="note">左の番号は、利用者の画面の番号と同じです。「設定確定」で利用者画面に反映し、右上の「利用者画面」で確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
+  <div class="note">左の番号は、利用者の画面の番号と同じです。「設定を変更する」で利用者画面に反映し、右上の「利用者画面」で確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
 </header>
 <div class="wrap">
   <main class="admin">
@@ -100,7 +103,7 @@
     <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
 
-    <button class="plus" id="commit" style="border-style:solid;background:var(--accent);color:#fff">設定確定（利用者画面に反映）</button>
+    <button class="plus" id="commit">設定を変更する</button>
     <div id="checks"></div>
 
     <h2>アプリが持つ決まり <span class="who app">店は変えられない</span></h2>
@@ -284,7 +287,7 @@ function renderHelp() {
   document.getElementById("help").innerHTML = `
     <h3>概要</h3>
     <p>AI型コンテンツの設定画面です。利用者は地図に土地のピンを立て、番号の順にボタンを押して相談を進めます。AIは利用者の答えに短く答え、最後に次のボタンを話題として示します。</p>
-    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者画面」を開き、同じ番号の所がどう出るかを確かめてください。書き換えは「設定確定」を押すまで利用者画面に届きません。確定すると、開いている利用者画面は最初から読み直されます。確定せずに利用者画面へ移ると、書き換えは捨てられます。</p>
+    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者画面」を開き、同じ番号の所がどう出るかを確かめてください。書き換えは「設定を変更する」を押すまで利用者画面に届きません。このボタンは書き換えがあるときだけ点灯します。押すと、開いている利用者画面は最初から読み直されます。押さずに利用者画面へ移ると、書き換えは捨てられます。</p>
     <h3>業態モード</h3>
     <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
     <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
@@ -309,12 +312,14 @@ function renderHelp() {
 }
 
 // ---- 利用者画面（index.html）へ連動：設定をこのブラウザに保存し、利用者画面が読む ----
-// 書き換えは下書き。「設定確定」で初めて保存し、利用者画面が読む
+// 書き換えは下書き。「設定を変更する」で初めて保存し、利用者画面が読む
 let dirty = false;
-function save() { dirty = true; document.getElementById("checks").innerHTML = ""; }
+function save() { dirty = true; document.getElementById("checks").innerHTML = ""; lamp(); }
+// 「設定を変更する」は書き換えがあるときだけ点灯
+function lamp() { const b = document.getElementById("commit"); b.disabled = !dirty; b.classList.toggle("on", dirty); }
 function resetTry() { save(); }
 
-// 確定時のチェック。エラーは確定を止め、アドバイスは表示だけ
+// 「設定を変更する」時のチェック。エラーは変更を止め、アドバイスは表示だけ
 function check() {
   const err = [], adv = [];
   const has = steps.map(hasBtns);
@@ -340,27 +345,26 @@ function commit() {
   const { err, adv } = check();
   const li = a => a.map(t => `<li>${esc(t)}</li>`).join("");
   document.getElementById("checks").innerHTML =
-    (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（確定していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>確定しました。</b>利用者画面に反映されます。</div>`)
+    (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>利用者画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
   if (err.length) return;
   try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText, limit })); } catch (e) {}
   dirty = false;
+  lamp();
 }
-// 確定済みの設定を読む（なければ総合系の初期値）
+// 保存済みの設定を読む（なければ総合系の初期値）
 function loadSaved() {
   loadMode("m3");
   try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
     modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.limit ?? null; } } catch (e) {}
   dirty = false;
+  lamp();
 }
 document.getElementById("commit").onclick = commit;
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 document.getElementById("toUser").onclick = () => {
   if (dirty) {
-    if (!confirm("未確定の入力があります。
-
-OK：入力を捨てて利用者画面へ移動する
-キャンセル：移動せず、このまま管理画面で続ける")) return;
+    if (!confirm("未確定の入力があります。\n\nOK：入力を捨てて利用者画面へ移動する\nキャンセル：移動せず、このまま管理画面で続ける")) return;
     loadSaved(); renderAdmin(); renderHelp();
   }
   window.open("./", "reUser");
