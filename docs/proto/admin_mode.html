@@ -201,7 +201,11 @@ function renderAdmin() {
   };
   showLimit();
   lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : null; save(); };
-  lm.onchange = showLimit;
+  lm.onchange = () => {
+    const n = autoLimit() - 2; // ボタンを設定したステップの数
+    if (limit != null && limit < n) alert(`上限 ${limit} 往復は、ボタンを設定したステップ（${n}）より少なく、店のボタンを最後まで出せません。`);
+    showLimit();
+  };
   const cl = document.getElementById("close");
   cl.value = closeText;
   cl.oninput = () => { closeText = cl.value; resetTry(); };
