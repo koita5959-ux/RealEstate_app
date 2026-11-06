@@ -16,8 +16,6 @@
   .devbar { display:flex; flex-wrap:nowrap; align-items:center; gap:4px; padding:6px 6px; margin:-4px 0 14px; border:1px solid #f0c9c4; background:#fdf3f2; border-radius:8px; font-size:11px; color:#8a3a30; white-space:nowrap; overflow-x:auto; }
   .devbar label { margin:0; font-size:10px; }
   .devbar .btn-dev { font-size:11px; padding:3px 8px; }
-  #report > summary { display:inline-block; list-style:none; background:#1d6fb8; color:#fff; padding:6px 14px; border-radius:6px; font-size:13px; }
-  #report > summary::-webkit-details-marker { display:none; }
   header { padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
   header h1 { font-size:17px; margin:0; }
   .note { font-size:12px; color:#b4472b; }
@@ -82,7 +80,7 @@
   <aside>
     <div class="devbar">
       <button class="btn-dev" onclick="window.open('admin_mode.html', 'reAdminWin')" title="店の設定（管理画面）">管理画面へ</button>
-      <button class="btn-dev" onclick="window.open('../../api/admin/', 'reDevWin')" title="利用状況レポート（開発者用）">利用状況レポートへ</button>
+      <button class="btn-dev" onclick="window.open('../../api/admin/', 'reDevWin')" title="開発の利用状況（開発者用）">開発の利用状況へ</button>
       <label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label>
     </div>
     <div id="step0">
@@ -103,10 +101,7 @@
       <button id="go" class="primary" disabled>評価する</button>
     </div>
     <div id="route" class="route"></div>
-    <details id="report" class="hidden" style="font-size:13px;color:var(--ink)">
-      <summary style="cursor:pointer;font-weight:600">この体験のレポートを見る（通った道・データシート・AIの利用状況）</summary>
-      <div id="reportBody"></div>
-    </details>
+    <div id="usernav" style="margin-top:12px"><button class="btn-user" onclick="window.open('report.html', 'reReport')" title="あなたの体験の履歴・データシート・AIの利用状況（別画面）">利用者の利用状況を見る（別画面）</button></div>
     <div id="result"></div>
     <details>
       <summary>事業所設定（プレファレンス・仮）</summary>
@@ -228,7 +223,7 @@ document.getElementById("go").onclick = () => {
 const SETBACK = { "鷺山":"この辺りは2005〜09年に、市が狭い道の解消を進めた地区です（岐阜市「鷺山地区 事後評価」）。ただ、全部の道が広がったわけではありません。" };
 
 function firstJudgment() {
-  showReport();
+  saveSession();
   say("この土地に家を建て直せるかどうかは、値段より先に、一つの決まりで決まります。<br>"
     + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
     + "これは地図からは読めません。この土地は、道にどう接していますか？",
@@ -328,21 +323,13 @@ if (!AI_OFF) fetch(PUB_URL).then(r => r.json()).then(d => { PUB = d; }).catch(()
 window.addEventListener("pagehide", () => ev("end", { path:PATH.length, rounds:Math.floor(AI_HIST.length / 2) }));
 let reportOpenSent = false;
 const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
-function showReport() {
-  const box = document.getElementById("report"); box.classList.remove("hidden");
-  const body = document.getElementById("reportBody"); body.innerHTML = "";
-  const a = S.api || [], n = a.length, tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
-  const u = document.createElement("div"); u.className = "sheet";
-  let h = `<h3>AIの利用状況（このブラウザを開いてから）</h3>`
-    + (n ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yenUsd(cost)}</b>（推定）`
-         : `まだAIとのやり取りはありません（④から先でAIが返事をします）。`);
-  h += `<h3>導入した場合の費用の目安</h3>`;
-  h += PUB && PUB.ready
-    ? `相談1件あたり、平均で<b>約${yenUsd(PUB.avgUsd)}</b>（多めの場合で約${yenUsd(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${yenUsd(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
-    : `試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。`;
-  h += `<div class="hint" style="margin-top:6px">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>`;
-  u.innerHTML = h; body.appendChild(u);
-  showSheet(body);
+// 体験の記録をこのブラウザに保存する。別画面「利用者の利用状況」（report.html）がこれを読んで表示する。
+function saveSession() {
+  if (typeof S === "undefined" || !S) return;
+  try {
+    const tmp = document.createElement("div"); showSheet(tmp);
+    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, updated:Date.now(), routeHtml:document.getElementById("route").innerHTML, sheetHtml:tmp.innerHTML, api:S.api || [] }));
+  } catch (e) { /* 保存できなくても体験は止めない */ }
 }
 ev("open", { mobile: innerWidth < 700, ref: (() => { try { return document.referrer ? new URL(document.referrer).host : ""; } catch (e) { return ""; } })() });
 const plain = h => { const e = document.createElement("div"); e.innerHTML = h; return e.textContent; };
@@ -380,7 +367,7 @@ async function askAI(n, ask, userText, meta) {
     AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
-  } finally { clearTimeout(timer); w.remove(); showReport(); }
+  } finally { clearTimeout(timer); w.remove(); saveSession(); }
 }
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
@@ -522,6 +509,7 @@ function renderRoute() {
   const r = document.getElementById("route");
   r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => NUM[p.q - 1] + (p.opt ? `の${p.opt} ${p.press}${p.type ? "：" + esc(p.type) : ""}` : `「${esc(p.type)}」`)).join(" → ")
     + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
+  saveSession();
 }
 function rewind(k, c) {
   ev("rewind", { k });

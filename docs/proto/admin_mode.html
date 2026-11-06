@@ -119,7 +119,8 @@
   </main>
 
   <aside class="side">
-    <div class="tabs"><button class="on">設定の説明</button><button id="toUser" class="btn-user">利用者画面 ↗</button><button id="toDev" class="btn-dev">利用状況レポート ↗</button></div>
+    <div class="hint"><b>設定の説明</b>　（ほかの画面へ）</div>
+    <div class="tabs"><button id="toUser" class="btn-user">利用者画面 ↗</button><button id="toReport" class="btn-user">利用者の利用状況 ↗</button><button id="toDev" class="btn-dev">開発の利用状況 ↗</button></div>
     <div id="help"></div>
   </aside>
 </div>
@@ -375,7 +376,8 @@ function loadSaved() {
   lamp();
 }
 document.getElementById("commit").onclick = commit;
-document.getElementById("toDev").onclick = () => window.open("../../api/admin/", "reDevWin"); // 開発者向けの利用状況レポート（別の画面。下書きには影響しない）
+document.getElementById("toDev").onclick = () => window.open("../../api/admin/", "reDevWin"); // 開発の利用状況（別の画面。下書きには影響しない）
+document.getElementById("toReport").onclick = () => window.open("report.html", "reReport"); // 利用者の利用状況（別の画面）
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 document.getElementById("toUser").onclick = () => {
   if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return; }

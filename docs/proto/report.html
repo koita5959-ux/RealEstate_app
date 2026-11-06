@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>利用者の利用状況（試作）</title>
+<style>
+  :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif; color:var(--ink); background:var(--bg); padding-inline:16px; }
+  .wrap { max-width:760px; margin:0 auto; padding-block:14px 60px; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; justify-content:space-between; }
+  h1 { font-size:18px; margin:0; }
+  h2 { font-size:14px; margin:22px 0 8px; color:var(--sub); }
+  .nav { display:flex; flex-wrap:nowrap; gap:6px; white-space:nowrap; }
+  /* 色の約束：青＝利用者の視点へ／赤＝開発者の視点へ */
+  .btn-user, .btn-dev { display:inline-block; font:inherit; font-size:12px; padding:4px 10px; border-radius:6px; color:#fff; text-decoration:none; border:0; cursor:pointer; }
+  .btn-user { background:#1d6fb8; } .btn-dev { background:#c0392b; }
+  .hint { font-size:12px; color:var(--sub); }
+  .logline { font-size:12px; color:var(--sub); margin:8px 0 0; }
+  .sheet { background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px; font-size:14px; line-height:1.7; }
+  .sheet h3 { font-size:13px; margin:10px 0 4px; }
+  .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; line-height:1.7; }
+  .route .hint { display:none; }
+  table.data { width:100%; border-collapse:collapse; font-size:13px; background:#fff; }
+  table.data td { border-bottom:1px solid var(--line); padding:6px 8px; vertical-align:top; }
+  table.data td:first-child { color:var(--sub); width:34%; }
+  .empty { color:#b4472b; }
+  button.quiet { font:inherit; font-size:12px; padding:5px 10px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; margin-top:18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>あなたの体験のレポート</h1>
+    <div class="nav">
+      <a class="btn-user" href="./" target="reUser">利用者画面へ</a>
+      <a class="btn-dev" href="admin_mode.html" target="reAdminWin">管理画面へ</a>
+      <a class="btn-dev" href="../../api/admin/" target="reDevWin">開発の利用状況へ</a>
+    </div>
+  </header>
+  <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
+
+  <div id="none" class="sheet" style="margin-top:16px" hidden>
+    まだ体験の記録がありません。「利用者画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。
+  </div>
+
+  <div id="main" hidden>
+    <div class="hint" style="margin-top:10px">体験の途中でも、この画面は自動で更新されます。</div>
+    <div id="route" class="route" style="margin-top:12px"></div>
+    <h2>AIの利用状況</h2>
+    <div id="usage" class="sheet"></div>
+    <h2>導入した場合の費用の目安</h2>
+    <div id="cost" class="sheet"></div>
+    <div id="sheet"></div>
+    <button class="quiet" id="clear">この記録を、このブラウザから消す</button>
+    <div class="hint">消すのは、このブラウザに残した表示用の記録だけです。</div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let PUB = null;
+const jpy = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
+function load() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("reSession")); } catch (e) { /* 読めなければ空扱い */ }
+  $("none").hidden = !!s; $("main").hidden = !s;
+  if (!s) return;
+  $("route").innerHTML = s.routeHtml || '<span class="hint">まだ選んだボタンはありません。</span>';
+  const a = s.api || [], n = a.length;
+  const tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
+  $("usage").innerHTML = n
+    ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${jpy(cost)}</b>（推定）`
+    : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
+  $("cost").innerHTML = PUB && PUB.ready
+    ? `相談1件あたり、平均で<b>約${jpy(PUB.avgUsd)}</b>（多めの場合で約${jpy(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${jpy(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
+    : "試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。";
+  $("sheet").innerHTML = s.sheetHtml || "";
+}
+$("clear").onclick = () => { try { localStorage.removeItem("reSession"); } catch (e) { /* 何もしない */ } load(); };
+window.addEventListener("storage", e => { if (e.key === "reSession") load(); }); // 体験画面で進むと、開いたままのこの画面も更新される
+fetch("../../api/public-stats").then(r => r.json()).then(d => { PUB = d; load(); }).catch(() => {});
+load();
+</script>
+</body>
+</html>
