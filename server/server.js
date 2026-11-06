@@ -256,6 +256,17 @@ function cleanState(s) {
     pub: p.ready ? { ready: true, avgUsd: num(p.avgUsd), p90Usd: num(p.p90Usd), sessions: num(p.sessions), usdJpy: num(p.usdJpy) || 150 } : { ready: false, usdJpy: num(p.usdJpy) || 150 },
   };
 }
+// スナップショット（その時の会話欄の中身を、データとして）：種類・件数・文字数を絞って保存する。HTMLの要素は受け取らず、戻すときに画面側が決まった要素だけを作り直す
+function cleanSnapshot(x) {
+  if (!x || typeof x !== "object") return null;
+  const talk = (Array.isArray(x.talk) ? x.talk : []).slice(0, 80).map((it) => {
+    if (it?.t === "ai") return { t: "ai", html: clip(it.html, 4000), will: clip(it.will, 800) };
+    if (it?.t === "me") return { t: "me", text: clip(it.text, 600) };
+    if (it?.t === "row") return { t: "row", q: num(it.q) | 0, step: it.step == null ? null : num(it.step) | 0, done: !!it.done, hasText: !!it.hasText, buttons: (Array.isArray(it.buttons) ? it.buttons : []).slice(0, 14).map((b) => ({ c: clip(b?.c, 80), opt: num(b?.opt) | 0, chosen: !!b?.chosen })) };
+    return null;
+  }).filter(Boolean);
+  return { v: 1, talk, pin: { lat: num(x.pin?.lat), lng: num(x.pin?.lng) }, area: num(x.area) | 0, place: clip(x.place, 80), near: clip(x.near, 40) };
+}
 const sessHits = new Map();
 async function handleSession(req, res) {
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
@@ -265,10 +276,12 @@ async function handleSession(req, res) {
   arr.push(now); sessHits.set(who, arr); if (sessHits.size > 5000) sessHits.clear();
   if (arr.length > 60) return send(res, 429, { error: "rate_limited" });
   let b;
-  try { b = await readBody(req, 65_536); } catch { return send(res, 400, { error: "bad_request" }); }
+  try { b = await readBody(req, 262_144); } catch { return send(res, 400, { error: "bad_request" }); }
   const sid = String(b.sid || "");
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return send(res, 400, { error: "bad_sid" });
-  const rec = { sid, by: clip(b.by, 32) || "visitor", savedAt: new Date().toISOString(), state: cleanState(b.state) };
+  // 復元したもの（reconstructed）は、元のセッションの時刻を残せる
+  const savedAt = b.reconstructed && /^\d{4}-\d\d-\d\dT[\d:.]{8,12}Z$/.test(String(b.savedAt || "")) ? String(b.savedAt) : new Date().toISOString();
+  const rec = { sid, by: clip(b.by, 32) || "visitor", savedAt, state: cleanState(b.state), snapshot: cleanSnapshot(b.snapshot), reconstructed: !!b.reconstructed };
   try {
     const f = path.join(SESSIONS_DIR, sid + ".json");
     fs.writeFileSync(f + ".tmp", JSON.stringify(rec), { mode: 0o600 });

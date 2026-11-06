@@ -333,7 +333,7 @@ export async function adminHandler(req, res, url, ctx) {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
     const turns = turnsOf(ctx.DATA_DIR, sid);
     const rec = readJson(path.join(ctx.DATA_DIR, "sessions", sid + ".json"), null);
-    if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, turns });
+    if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, snapshot: rec.snapshot || null, turns, reconstructed: !!rec.reconstructed });
     const re = reconstruct(ctx, sid);
     if (!re) return json(404, { error: "not_found" });
     return json(200, { sid, by: re.by, savedAt: re.savedAt, state: re.state, turns, reconstructed: true, pin: re.pin });

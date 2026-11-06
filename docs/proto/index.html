@@ -176,6 +176,8 @@ const R = document.getElementById("result");
 const yen = n => Math.round(n).toLocaleString() + "円";
 
 document.getElementById("go").onclick = () => {
+  // 進めた体験のあとに「評価する」を押し直したら、新しい体験として分ける（前の体験の保存内容を上書きしない）。巻き戻し・元に戻すの再現中は分けない
+  if (!REPLAYING && typeof S !== "undefined" && S && (PATH.length || (S.api || []).length)) SID = newSid();
   PATH.length = 0; AI_HIST.length = 0; renderRoute();
   const area = Number(document.getElementById("area").value) || 0;
   const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
@@ -319,8 +321,26 @@ const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", {
 // 「利用状況」の画面は、これを出すだけ。サーバーに送る分は、開発利用状況から後で再表示できる（HTMLではなくデータだけを送る）。
 const SESSION_URL = "../../api/session";
 let syncTimer = null, lastState = null;
-function postState(st) {
-  try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st }), keepalive:true }).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
+// スナップショット：その時の会話欄の中身（AIの吹き出し・利用者の発言・選択肢の行とどれを選んだか）、ピン、面積を、データとして取る。
+// 戻すとき（再表示）は、操作を再現し直さず、これをそのまま描き直すので、店の設定が変わっていても確実に戻る。
+function snapshotNow() {
+  if (typeof S === "undefined" || !S || !here) return null;
+  const talk = [];
+  for (const el of document.getElementById("talk").children) {
+    if (el.classList.contains("ai")) {
+      const c = el.cloneNode(true); const w = c.querySelector(".will"), tg = c.querySelector(".tag");
+      const will = w ? w.innerHTML : ""; if (w) w.remove(); if (tg) tg.remove();
+      talk.push({ t:"ai", html:c.innerHTML, will });
+    } else if (el.classList.contains("me")) talk.push({ t:"me", text:el.textContent });
+    else if (el.classList.contains("row") && !el.classList.contains("inqrow")) {
+      talk.push({ t:"row", q:+el.dataset.q, step:el.dataset.step === undefined ? null : +el.dataset.step, done:el.classList.contains("done"), hasText:!!el.querySelector(".textline"),
+        buttons:[...el.querySelectorAll("button")].map(b => ({ c:b.dataset.c || "", opt:+(b.dataset.opt || 0), chosen:b.classList.contains("chosen") })).filter(b => b.c) });
+    }
+  }
+  return { talk, pin:{ lat:here.lat, lng:here.lng }, area:S.area, place:PLACE, near:S.near.name };
+}
+function postState(st, extra) {
+  try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st, snapshot:snapshotNow(), ...(extra || {}) }), keepalive:true }).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
 }
 function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だけ送る
   if (AI_OFF || REPLAYING || window.__restored) return; // 元に戻した直後は、新しい操作が始まるまで送らない
@@ -330,21 +350,24 @@ function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だ�
 }
 window.addEventListener("pagehide", () => { // 閉じるときは、まだ送っていない最新の状態を送る
   if (!lastState || AI_OFF) return;
-  try { navigator.sendBeacon(SESSION_URL, new Blob([JSON.stringify({ sid:SID, by:BY, state:lastState })], { type:"application/json" })); } catch (e) { /* 何もしない */ }
+  try { navigator.sendBeacon(SESSION_URL, new Blob([JSON.stringify({ sid:SID, by:BY, state:lastState, snapshot:snapshotNow() })], { type:"application/json" })); } catch (e) { /* 何もしない */ }
 });
+function buildState() {
+  const a = S.api || [];
+  const sheet = {};
+  for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
+  return {
+    updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (PREF.localKnowledge[S.near.name] || ""), revised: S.revised || "",
+    path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
+    sheet, signals: S.signals.slice(),
+    usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
+    pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
+  };
+}
 function saveSession() {
   try {
     if (typeof S === "undefined" || !S) return;
-    const a = S.api || [];
-    const sheet = {};
-    for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
-    const st = {
-      updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (PREF.localKnowledge[S.near.name] || ""), revised: S.revised || "",
-      path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
-      sheet, signals: S.signals.slice(),
-      usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
-      pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
-    };
+    const st = buildState();
     localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, state:st }));
     if (window.Shell) Shell.refresh(); // 記録ができたので「利用状況」をグレー解除
     syncSession(st);
@@ -613,7 +636,96 @@ function pinFrom(d) {
   if (p && Math.abs(p.lat - PRE.lat) < 0.01 && Math.abs(p.lng - PRE.lng) < 0.01) return PRE;
   return p || PRE;
 }
+// 安全な描き直し：保存された文字列は信用しない。決まった種類の要素（b・br・small・i・em・strong・span）だけを、属性なしで作り直す
+const SAFE_TAGS = new Set(["B", "BR", "SMALL", "I", "EM", "STRONG", "SPAN"]);
+function safeFragment(html) {
+  const doc = new DOMParser().parseFromString("<body>" + String(html || "") + "</body>", "text/html");
+  const out = document.createDocumentFragment();
+  const walk = (src, dst) => {
+    for (const n of src.childNodes) {
+      if (n.nodeType === 3) dst.appendChild(document.createTextNode(n.nodeValue));
+      else if (n.nodeType === 1 && SAFE_TAGS.has(n.tagName)) {
+        const el = document.createElement(n.tagName.toLowerCase());
+        if (n.tagName === "SPAN" && /^[\w -]{1,30}$/.test(n.getAttribute("class") || "")) el.className = n.getAttribute("class"); // class だけ許す（hint など）
+        walk(n, el); dst.appendChild(el);
+      } else if (n.nodeType === 1) walk(n, dst); // 許さない要素は、中身の文字だけ残す
+    }
+  };
+  walk(doc.body, out);
+  return out;
+}
+function restoreFromSnapshot(d) {
+  const st = d.state || {}, sn = d.snapshot, sh = st.sheet || {};
+  REPLAYING = true;
+  try {
+    SID = newSid(); window.__restored = true;
+    mapOpen = true; document.getElementById("step1").classList.remove("hidden");
+    if (sn.place) PLACE = sn.place;
+    document.getElementById("area").value = sn.area || 120;
+    map.setView([sn.pin.lat, sn.pin.lng], 16); setPin(sn.pin.lat, sn.pin.lng);
+    // 状態：保存された記録から作り直す（店の設定には頼らない）
+    const near = POINTS.find(p => p.name === sn.near) || POINTS[3];
+    PATH.length = 0; for (const p of st.path || []) PATH.push({ press:p.press, q:p.q, ...(p.opt ? { opt:p.opt } : {}), ...(p.type ? { type:p.type } : {}) });
+    AI_HIST.length = 0;
+    const oks = (d.turns || []).filter(t => t.status === "ok" && t.reply);
+    for (const t of oks) AI_HIST.push({ role:"user", content:t.user || "" }, { role:"assistant", content:t.reply });
+    const sheet = {}; for (const [k, v] of Object.entries(sh)) sheet[k] = v == null || v === "" ? null : esc(String(v));
+    S = { sheet, near, area:sn.area || 120, log:[], signals:(st.signals || []).slice(), revised:st.revised || null, used:[],
+      api: oks.map((t, i) => ({ step:i + 1, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
+    const p4 = PATH.find(x => x.q === 4);
+    if (p4 && ADMIN.steps[1] && ADMIN.steps[1].branches) { const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === p4.press); BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0] || null; }
+    renderRoute();
+    // 画面：データの表と会話欄を、保存された中身から作り直す
+    R.innerHTML = `
+      <h2>2. データ（公開データから機械的に）</h2>
+      <table class="data">
+        <tr><td>最寄りの標準地</td><td>${esc(String(sh.最寄り標準地 || near.name))}</td></tr>
+        <tr><td>標準地価格</td><td>${esc(String(sh.標準地価格 || yen(near.price) + "/㎡（仮）"))}</td></tr>
+        <tr><td>用途地域</td><td>${esc(String(sh.用途地域 || near.zone + "（仮）"))}</td></tr>
+        <tr><td>面積</td><td>${esc(String(sh.面積 || (sn.area || 120) + "㎡"))}</td></tr>
+      </table>
+      <h2>3. AI</h2>
+      <div id="talk"></div>
+      <div id="inq"></div>`;
+    const talk = document.getElementById("talk");
+    for (const it of sn.talk) {
+      if (it.t === "ai") {
+        const el = document.createElement("div"); el.className = "ai";
+        const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = "AI"; el.appendChild(tag);
+        el.appendChild(safeFragment(it.html));
+        if (it.will) { const w = document.createElement("div"); w.className = "will"; w.appendChild(safeFragment(it.will)); el.appendChild(w); }
+        talk.appendChild(el);
+      } else if (it.t === "me") {
+        const el = document.createElement("div"); el.className = "me"; const sp = document.createElement("span"); sp.textContent = it.text; el.appendChild(sp); talk.appendChild(el);
+      } else if (it.t === "row" && it.done) { // まだ答えていなかった最後の行は、戻した画面では操作できないので出さない
+        const el = document.createElement("div"); el.className = "row done restored"; el.dataset.q = it.q; if (it.step !== null) el.dataset.step = it.step;
+        const q = document.createElement("span"); q.className = "qnum"; q.textContent = NUM[it.q - 1] || it.q; el.appendChild(q);
+        let line = null;
+        for (const b of it.buttons) {
+          const btn = document.createElement("button"); btn.dataset.c = b.c; if (b.opt) { btn.dataset.opt = b.opt; const o = document.createElement("span"); o.className = "opt"; o.textContent = b.opt; btn.appendChild(o); }
+          btn.append(b.c); if (b.chosen) btn.classList.add("chosen"); else btn.title = "ここから別の道を試す";
+          if (b.c === "送信" && it.hasText) { if (!line) { line = document.createElement("div"); line.className = "textline"; el.appendChild(line); } line.appendChild(btn); } else el.appendChild(btn);
+        }
+        talk.appendChild(el);
+      }
+    }
+    if (p4) inquiryBar();
+  } finally { REPLAYING = false; }
+  talk_banner(d, true);
+  saveSession();
+}
+// 戻した画面の、選ばなかったボタンを押すと、その場所から別の道を試せる（既存の巻き戻しをそのまま使う）
+R.addEventListener("click", e => {
+  const b = e.target.closest(".row.restored button"); if (!b || b.classList.contains("chosen")) return;
+  const row = b.closest(".row"); if (row.dataset.step === undefined) return;
+  rewind(+row.dataset.step, b.dataset.c);
+});
+function talk_banner(d, fromSnapshot) {
+  const talk = document.getElementById("talk");
+  if (talk) talk.insertAdjacentHTML("afterbegin", `<div class="hint" style="background:#fff7e6;border:1px solid #f5d28a;border-radius:6px;padding:6px 10px;margin:6px 0">元に戻した体験：セッション ${esc(String(d.sid).slice(0, 8))}（${esc(new Date(d.savedAt).toLocaleString("ja-JP"))}）。${fromSnapshot ? "保存された画面をそのまま戻しています。" : "操作を再現し直して戻しています。"}ここから操作を続けるには、薄いボタンを押して、その場所から別の道を試してください。${d.reconstructed ? "ログからの復元のため、一部は今の画面の値です。" : ""}</div>`);
+}
 function restoreSession(d) {
+  if (d.snapshot && Array.isArray(d.snapshot.talk) && d.snapshot.talk.length && d.snapshot.pin) return restoreFromSnapshot(d); // スナップショットがあれば、再現し直さず、そのまま描き直す
   const st = d.state || {}, sh = st.sheet || {};
   REPLAYING = true;
   try {
@@ -626,8 +738,7 @@ function restoreSession(d) {
   } finally { REPLAYING = false; }
   replay((st.path || []).map(x => ({ press:x.press, type:x.type, q:x.q, opt:x.opt })));
   RESTORE = null;
-  const talk = document.getElementById("talk");
-  if (talk) talk.insertAdjacentHTML("afterbegin", `<div class="hint" style="background:#fff7e6;border:1px solid #f5d28a;border-radius:6px;padding:6px 10px;margin:6px 0">元に戻した体験：セッション ${esc(String(d.sid).slice(0, 8))}（${esc(new Date(d.savedAt).toLocaleString("ja-JP"))}）。ここから操作を続けると、新しい体験として記録されます。${d.reconstructed ? "ログからの復元のため、面積・地価などは今の画面の値です。" : ""}</div>`);
+  talk_banner(d, false);
   saveSession();
 }
 if ("BroadcastChannel" in window) {
