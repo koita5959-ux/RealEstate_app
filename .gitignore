@@ -17,3 +17,7 @@ Thumbs.db
 
 # Claude memory (shared via disk, not git)
 .claude/
+
+# 秘密情報とログ（Git に入れない）
+secrets/
+data/
