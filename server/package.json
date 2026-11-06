@@ -1,0 +1,9 @@
+{
+  "name": "realestate-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RealEstate_app の小さな API サーバー（Claude への問い合わせと利用記録）",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "@anthropic-ai/sdk": "1.6.0" }
+}

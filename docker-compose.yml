@@ -1,6 +1,6 @@
 # RealEstate_app 試作の公開用。ほかのサイトとは別コンテナ・別ポート。
 # サーバーの Nginx が /RealEstate_app/ をここ（127.0.0.1:8110）へ渡す。
-# API サーバー（server/）は後で同じファイルに api サービスとして足す。
+# web = 画面（docs/）と /api/ の振り分け。api = Claude への問い合わせ（server/）。
 services:
   web:
     image: nginx:alpine
@@ -10,3 +10,23 @@ services:
       - ./docs:/usr/share/nginx/html/docs:ro
       - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+
+  api:
+    build: ./server
+    # ポートは外に出さない。web コンテナからだけ api:3000 で届く。
+    environment:
+      TZ: Asia/Tokyo
+      MODEL: claude-opus-5-5     # 変更例: claude-haiku-5-5（安い）/ claude-sonnet-5-5
+      EFFORT: low
+      DAILY_USD_CAP: "2"         # 1日の推定費用の上限（USD）。超えると止まる
+      # DISABLED: "1"            # 停止スイッチ（data/DISABLED というファイルでも止まる）
+    secrets:
+      - anthropic_api_key
+    volumes:
+      - ./data:/data
+    mem_limit: 256m
+    restart: unless-stopped
+
+secrets:
+  anthropic_api_key:
+    file: ./secrets/anthropic_api_key.txt
