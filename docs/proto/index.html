@@ -36,7 +36,7 @@
   .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
   body.design .will { display:block; }
   .row.done button { opacity:.45; }
-  .row button.sel { background:#e6f0fa; border-width:2px; }
+  .row button.sel { background:#b9d5f0; border-width:2px; }
   .row.done button.chosen { opacity:1; background:var(--accent); color:#fff; }
   .row.done textarea { display:none; }
   .row.done > button:only-of-type, .row.done .hint { display:none; }
@@ -385,7 +385,7 @@ function choices(list, cb, onText, q) {
     }; d.appendChild(b);
   });
   if (onText) {
-    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="選んで送る、書いて送る、選んで書き添えて送る、どれでもできます"><button data-c="送信">送信</button></div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="リクエストメッセージも送れます"><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
     b.onclick = () => {
       if (d.dataset.step) return;
