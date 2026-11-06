@@ -39,6 +39,8 @@
   /* 色の約束：青＝利用者の視点へ／赤＝開発者の視点へ */
   .btn-user, .btn-dev { display:inline-block; font:inherit; font-size:13px; padding:5px 12px; border-radius:6px; color:#fff; text-decoration:none; }
   .btn-user { background:#1d6fb8; } .btn-dev { background:#c0392b; }
+  .navs { display:flex; flex-wrap:nowrap; gap:6px; white-space:nowrap; }
+  .navs a { font-size:12px; padding:4px 9px; }
   details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
   summary { cursor:pointer; }
   pre { white-space:pre-wrap; margin:6px 0 0; font:inherit; }
@@ -51,8 +53,7 @@
   <h1>利用状況レポート（開発者用）</h1>
   <span id="state" class="pill"></span>
   <span class="note" id="upd"></span>
-  <a class="btn-user" href="../../docs/proto/" target="reUser">利用者画面へ</a>
-  <a class="btn-dev" href="../../docs/proto/admin_mode.html" target="reAdminWin">管理画面（設定）へ</a>
+  <span class="navs"><a class="btn-user" href="../../docs/proto/" target="reUser">利用者画面へ</a><a class="btn-dev" href="../../docs/proto/admin_mode.html" target="reAdminWin">管理画面（設定）へ</a></span>
   <button class="act" id="reload">更新</button>
   <label class="note"><input type="checkbox" id="auto"> 30秒ごとに自動更新</label>
 </header>

@@ -237,12 +237,40 @@ function passwordOk(req, ctx) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// ---- 総当たり対策：パスワードが短くても破られにくいよう、間違いを重ねたら一定時間ロックする ----
+// 同じ人（IPのハッシュ）が5回間違えると15分ロック。全体でも1時間に100回間違えられたら、1時間ロック。
+const fails = new Map();
+let globalFails = [], globalLockUntil = 0;
+function lockLeft(who) {
+  const now = Date.now();
+  if (now < globalLockUntil) return globalLockUntil - now;
+  const f = fails.get(who);
+  return f && now < f.lockUntil ? f.lockUntil - now : 0;
+}
+function recordFail(who) {
+  const now = Date.now();
+  const f = fails.get(who) || { n: 0, lockUntil: 0, last: 0 };
+  if (now - f.last > 15 * 60_000) f.n = 0;
+  f.n++; f.last = now;
+  if (f.n >= 5) { f.lockUntil = now + 15 * 60_000; f.n = 0; }
+  fails.set(who, f); if (fails.size > 5000) fails.clear();
+  globalFails = globalFails.filter((t) => now - t < 3600_000); globalFails.push(now);
+  if (globalFails.length >= 100) { globalLockUntil = now + 3600_000; globalFails = []; }
+}
+
 // 管理系の入口。処理したら true。
 export async function adminHandler(req, res, url, ctx) {
   if (!url.pathname.startsWith("/api/admin")) return false;
   const deny = () => { res.writeHead(401, { "WWW-Authenticate": 'Basic realm="RealEstate_app admin", charset="UTF-8"', "Content-Type": "text/plain; charset=utf-8" }); res.end("認証が必要です"); return true; };
   if (!ctx.adminRate()) { res.writeHead(429); res.end(); return true; }
-  if (!passwordOk(req, ctx)) return deny();
+  const who = crypto.createHash("sha256").update(String(req.headers["x-real-ip"] || req.socket.remoteAddress || "")).digest("hex").slice(0, 12);
+  const wait = lockLeft(who);
+  if (wait > 0) { res.writeHead(429, { "Content-Type": "text/plain; charset=utf-8", "Retry-After": String(Math.ceil(wait / 1000)) }); res.end("間違いが続いたため、しばらくロックしています。時間をおいてください。"); return true; }
+  if (!passwordOk(req, ctx)) {
+    if ((req.headers.authorization || "").startsWith("Basic ")) recordFail(who); // 入力が無い最初の表示は、間違いに数えない
+    return deny();
+  }
+  fails.delete(who);
   const json = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(JSON.stringify(obj)); return true; };
 
   if (req.method === "GET" && (url.pathname === "/api/admin" || url.pathname === "/api/admin/")) {
