@@ -257,7 +257,9 @@ function reconstruct(ctx, sid) {
   };
   const ps = ctx.getSnapshot().explain, e = ps.visitor.n >= 5 ? ps.visitor : ps.all.n >= 5 ? ps.all : null;
   const last = [...logs, ...evs].sort(byTs).pop();
+  const pinEv = evs.find((e) => e.type === "pin" && Number.isFinite(+e.data?.lat));
   return {
+    pin: pinEv ? { lat: +pinEv.data.lat, lng: +pinEv.data.lng } : null,
     by: (logs[0] || evs[0]).by || "?", savedAt: last.ts,
     state: {
       updated: new Date(last.ts).getTime(), place: sheet.市区町村 || "", near: sheet.最寄り標準地 || "", localKnowledge: "（ログからの復元のため、記録なし）", revised: "",
@@ -334,7 +336,7 @@ export async function adminHandler(req, res, url, ctx) {
     if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, turns });
     const re = reconstruct(ctx, sid);
     if (!re) return json(404, { error: "not_found" });
-    return json(200, { sid, by: re.by, savedAt: re.savedAt, state: re.state, turns, reconstructed: true });
+    return json(200, { sid, by: re.by, savedAt: re.savedAt, state: re.state, turns, reconstructed: true, pin: re.pin });
   }
 
   if (req.method === "POST") {

@@ -73,26 +73,72 @@ const actorOk = s => actorSel() === "all" || (actorSel() === "visitor" ? s.by ==
 const actorSelect = () => `対象：<select id="asel"><option value="all" ${actorSel() === "all" ? "selected" : ""}>全部</option><option value="visitor" ${actorSel() === "visitor" ? "selected" : ""}>一般の訪問者（visitor）</option><option value="test" ${actorSel() === "test" ? "selected" : ""}>テスト（visitor 以外）</option></select>`;
 const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
 
-// 再表示：すでに開いている「利用状況」の窓の中身を切り替えるだけ（画面は開かない）。届いたか（返事があったか）だけをここに表示する
-let replayTimer = null;
+// 再表示（元に戻す）：画面は開かない。すでに開いている窓へ合図を送るだけ。
+//  ・利用者画面（メイン）：そのセッションの状態へ戻す（地図・ピン・①〜⑦の選択を再現し、AIの返事は記録にある本物の文）
+//  ・利用状況の画面：そのセッションの表示に切り替える
+// 届いたか（返事があったか）だけを、ここに通知する。メイン画面は今の表示が置き換わるので、先に確認する。
+let replayTimer = null, replayWait = null;
 function toast(msg, bad) {
   let t = document.getElementById("toast");
-  if (!t) { t = document.createElement("div"); t.id = "toast"; t.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 16px;border-radius:8px;font-size:13px;color:#fff;z-index:2000;box-shadow:0 2px 8px rgba(0,0,0,.25)"; document.body.appendChild(t); }
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 16px;border-radius:8px;font-size:13px;color:#fff;z-index:2000;box-shadow:0 2px 8px rgba(0,0,0,.25);max-width:90vw"; document.body.appendChild(t); }
   t.textContent = msg; t.style.background = bad ? "#b42318" : "#067647"; t.hidden = false;
-  clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 3500);
+  clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 5000);
 }
-if (window.Shell && Shell.channel) Shell.channel.onmessage = e => {
-  if (e.data && e.data.type === "ack") { clearTimeout(replayTimer); toast("「利用状況」の画面に表示しました（セッション " + String(e.data.sid).slice(0, 8) + "）"); }
-};
-function replay(sid) {
+const userCh = "BroadcastChannel" in window ? new BroadcastChannel("reUser") : null;
+function settleReplay() { // 返事がそろった、または待ち時間が過ぎたとき、結果を通知する
+  if (!replayWait) return;
+  const w = replayWait; replayWait = null; clearTimeout(replayTimer);
+  const parts = [], missing = [];
+  if (w.wantUser) (w.gotUser ? parts : missing).push(w.gotUser ? "利用者画面（メイン）を元に戻しました" : "利用者画面（メイン）が開いていません（更新前の古い画面なら、リロードしてください）");
+  if (w.wantReport) (w.gotReport ? parts : missing).push(w.gotReport ? "利用状況の画面に表示しました" : "利用状況の画面が開いていません（更新前の古い画面なら、リロードしてください）");
+  if (w.failed) missing.push("メイン画面で元に戻せませんでした（" + w.failed + "）");
+  toast([...parts, ...missing].join("／") + "（セッション " + w.sid.slice(0, 8) + "）", missing.length > 0);
+}
+function onReplayAck(kind, data) {
+  if (!replayWait || data.sid !== replayWait.sidFull) return;
+  if (kind === "user") replayWait.gotUser = true; else if (kind === "report") replayWait.gotReport = true; else if (kind === "failed") { replayWait.failed = data.message || "不明"; }
+  if ((!replayWait.wantUser || replayWait.gotUser || replayWait.failed) && (!replayWait.wantReport || replayWait.gotReport)) settleReplay();
+}
+if (userCh) userCh.onmessage = e => { if (e.data && e.data.type === "restored") onReplayAck("user", e.data); else if (e.data && e.data.type === "restore-failed") onReplayAck("failed", e.data); };
+if (window.Shell && Shell.channel) Shell.channel.onmessage = e => { if (e.data && e.data.type === "ack") onReplayAck("report", e.data); };
+function sendReplay(d, wantUser) {
   clearTimeout(replayTimer);
-  if (!(window.Shell && Shell.channel)) { toast("このブラウザでは、画面間の合図が使えません", true); return false; }
-  Shell.channel.postMessage({ type: "replay", sid });
-  replayTimer = setTimeout(() => toast("「利用状況」の画面が開いていません（ヘッダーの「利用状況」から開いてください）", true), 900);
+  replayWait = { sidFull: d.sid, sid: d.sid, wantUser, wantReport: true, gotUser: false, gotReport: false, failed: null };
+  if (wantUser && userCh) userCh.postMessage({ type: "restore", data: d });
+  if (window.Shell && Shell.channel) Shell.channel.postMessage({ type: "replay", sid: d.sid });
+  replayTimer = setTimeout(settleReplay, 1500);
+}
+function askRestore(d) { // 確認：メイン画面の今の表示は置き換わる
+  const old = document.getElementById("rconfirm"); if (old) old.remove();
+  const box = document.createElement("div"); box.id = "rconfirm";
+  box.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px";
+  const when = new Date(d.savedAt).toLocaleString("ja-JP");
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;max-width:460px;width:100%;padding:18px 20px;box-shadow:0 8px 30px rgba(0,0,0,.3)">
+    <div style="font-weight:600;margin-bottom:6px">このセッションを元に戻しますか？</div>
+    <div class="note" style="margin-bottom:10px">セッション ${esc(d.sid.slice(0, 8))}（${esc(d.by)}／${esc(when)}）${d.reconstructed ? "<br>ログからの復元です。面積・地価などは今の画面の値になります。" : ""}</div>
+    <div style="font-size:13px;margin-bottom:14px">開いている<b>利用者画面（メイン）の今の表示は、このセッションの内容に置き換わります</b>。AIの返事は、記録にある本物の文です（Claudeは呼びません）。戻したあとの操作は、新しい体験として記録されます。</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+      <button class="act" id="rcBoth" style="background:#1d6fb8;border-color:#1d6fb8">メイン画面と利用状況を元に戻す</button>
+      <button class="act" id="rcReport" style="background:#fff;color:#1d6fb8;border-color:#1d6fb8">利用状況の画面だけ</button>
+      <button class="act" id="rcCancel" style="background:#fff;color:#444;border-color:#bbb">やめる</button>
+    </div></div>`;
+  document.body.appendChild(box);
+  const close = () => box.remove();
+  box.querySelector("#rcBoth").onclick = () => { close(); sendReplay(d, true); };
+  box.querySelector("#rcReport").onclick = () => { close(); sendReplay(d, false); };
+  box.querySelector("#rcCancel").onclick = close;
+  box.onclick = e => { if (e.target === box) close(); };
+}
+async function replay(sid) {
+  try {
+    const r = await fetch(BASE + "session?sid=" + encodeURIComponent(sid), { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    askRestore(await r.json());
+  } catch (e) { toast("このセッションを読み込めませんでした（" + e.message + "）", true); }
   return false;
 }
 const replayCell = s => s.canReplay ? `<a class="btn-user-link" href="#" onclick="return replay('${esc(s.sid)}')">再表示</a>` : '<span class="note">—</span>';
-const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、開いている「利用状況」の画面に、このセッションを再表示します"` : "";
+const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面）"` : "";
 function bars(rows, valf, labf, fmt) {
   const max = Math.max(...rows.map(valf), 1e-9);
   return `<table>${rows.map(r => `<tr><td style="width:34%">${esc(labf(r))}</td><td><div class="barbox"><div class="bar" style="width:${Math.max(1, valf(r) / max * 100)}%"></div><span class="note">${fmt(r)}</span></div></td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table>`;
@@ -122,7 +168,7 @@ function viewCost() {
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>費用が発生したセッション（${top.length}件）</h2>
-  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、開いている「利用状況」の画面に再表示します。　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
+  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>

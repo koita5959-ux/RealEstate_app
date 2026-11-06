@@ -143,7 +143,7 @@ function setPin(lat, lng) {
   if (pin) pin.setLatLng([lat, lng]); else pin = L.marker([lat, lng]).addTo(map);
   document.getElementById("picked").textContent = `指定: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   document.getElementById("go").disabled = false;
-  ev("pin", { lat:+lat.toFixed(2), lng:+lng.toFixed(2) });
+  ev("pin", { lat:+lat.toFixed(4), lng:+lng.toFixed(4) }); // 元に戻す（再表示）で、同じ場所にピンを置けるように
 }
 map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
 document.getElementById("preset").onclick = () => { map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352); };
@@ -291,15 +291,17 @@ let BRANCH = null; // ④で決まる枝
 // ---- ④から先の返事：サーバー（/api/chat）経由で Claude に作らせる。つながらなければ台本の返事に戻る ----
 const QS = new URLSearchParams(location.search);
 const AI_OFF = QS.has("demo") || QS.get("ai") === "off"; // デモ再生中は呼ばない
-const SID = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36); // ブラウザを開いてから閉じるまで
+const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36);
+let SID = newSid(); // ブラウザを開いてから閉じるまで
 const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "visitor"; // ?by=名前 で誰の利用か分ける
 const AI_URL = "../../api/chat"; // /RealEstate_app/docs/proto/ から /RealEstate_app/api/chat へ
 const AI_FAIL = "<br><small>（AIにつながらなかったため、台本の仮の返事です）</small>";
-let AI_HIST = [], REPLAYING = false;
+let AI_HIST = [], REPLAYING = false, RESTORE = null;
 // ---- 画面の動きの記録（開いた・地図・押したボタン・閉じた）。本文や個人情報は送らない ----
 const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
 function ev(type, data) {
   if (AI_OFF || REPLAYING) return;
+  window.__restored = false; // 本物の操作が始まった＝ここから新しい体験として記録する
   try {
     const b = JSON.stringify({ sid:SID, by:BY, type, data:data || {} });
     if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
@@ -321,7 +323,7 @@ function postState(st) {
   try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st }), keepalive:true }).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
 }
 function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だけ送る
-  if (AI_OFF || REPLAYING) return;
+  if (AI_OFF || REPLAYING || window.__restored) return; // 元に戻した直後は、新しい操作が始まるまで送らない
   lastState = st;
   if (syncTimer) return;
   syncTimer = setTimeout(() => { syncTimer = null; postState(lastState); }, 1500);
@@ -414,9 +416,12 @@ function goStep(i, lead, real) {
     enter(c || t);
     const said = c ? c + (t ? "」と「" + t : "") : t;
     const userText = (c ? "選んだボタン：" + c : "") + (c && t ? "\n" : "") + (t ? "書いた言葉：" + t : "");
-    if (REPLAYING || AI_OFF) { // 巻き戻し・デモでは Claude を呼ばない（費用と記録の重複を避ける）
-      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:"（以前の返答）" });
-      goStep(i + 1, ans(said)); return;
+    if (REPLAYING || AI_OFF) { // 巻き戻し・デモ・元に戻すでは Claude を呼ばない（費用と記録の重複を避ける）
+      const rp = RESTORE && RESTORE.replies.shift(); // 元に戻すときは、記録にある本物の返事を順に使う
+      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:rp ? rp.reply : "（以前の返答）" });
+      if (rp) { (S.api = S.api || []).push({ step:i + 1, usage:rp.usage, costUsd:rp.costUsd, ms:rp.ms }); goStep(i + 1, esc(rp.reply).replace(/\n/g, "<br>"), true); }
+      else goStep(i + 1, ans(said));
+      return;
     }
     askAI(i + 1, ask, userText, { q:4 + i, press:c || "", typed:!!t, branch:BRANCH ? BRANCH.name : "", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:ask ? "聞く" : "答える" }).then(r => goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r)); // 答えた後は次のボタンへ戻す
   }, 4 + i);
@@ -544,7 +549,8 @@ function replay(steps) {
     const ta = row.querySelector("textarea");
     if (st.type && ta) { ta.value = st.type; row.querySelector("button").click(); continue; }
     if (st.type) row.querySelector("input.other").value = st.type;
-    const b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
+    let b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
+    if (!b && st.type) b = row.querySelector('button[data-c="送信"]'); // 当時あったボタン（例：廃止した仮のAI候補）が今はないときは、書いた言葉だけを送信して続ける
     if (!b) break; b.click();
     const send = row.querySelector('button[data-c="送信"]');
     if (send && b !== send && !row.classList.contains("done")) { row.querySelector("input.other").value = st.type || ""; send.click(); }
@@ -596,6 +602,41 @@ if (DEMO) {
     btn.addEventListener("click", () => { i++; setTimeout(mark, 0); }, { once:true });
   };
   mark();
+}
+
+// ---- 元に戻す（再表示）：開発利用状況から、保存されたセッションの状態へ、この画面を戻す ----
+// 地図・ピン・①〜⑦の選択を順に再現し、AIの返事は記録にある本物の文を使う（Claude は呼ばない）。戻したあとの操作は、新しい体験として記録される。
+function pinFrom(d) {
+  const m = String(((d.state || {}).sheet || {}).所在 || "").match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (m) return { lat:+m[1], lng:+m[2] };
+  const PRE = { lat:35.4482, lng:136.7352 }, p = d.pin; // 古い記録は、小数2桁に丸めた位置だけ。例のピン付近なら、例のピンとみなす
+  if (p && Math.abs(p.lat - PRE.lat) < 0.01 && Math.abs(p.lng - PRE.lng) < 0.01) return PRE;
+  return p || PRE;
+}
+function restoreSession(d) {
+  const st = d.state || {}, sh = st.sheet || {};
+  REPLAYING = true;
+  try {
+    SID = newSid(); window.__restored = true;
+    RESTORE = { replies: (d.turns || []).filter(t => t.status === "ok" && t.reply).map(t => ({ reply:t.reply, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
+    mapOpen = true; document.getElementById("step1").classList.remove("hidden");
+    if (sh.市区町村) PLACE = sh.市区町村;
+    const a = String(sh.面積 || "").match(/\d+/); if (a) document.getElementById("area").value = a[0];
+    const p = pinFrom(d); map.setView([p.lat, p.lng], 16); setPin(p.lat, p.lng);
+  } finally { REPLAYING = false; }
+  replay((st.path || []).map(x => ({ press:x.press, type:x.type, q:x.q, opt:x.opt })));
+  RESTORE = null;
+  const talk = document.getElementById("talk");
+  if (talk) talk.insertAdjacentHTML("afterbegin", `<div class="hint" style="background:#fff7e6;border:1px solid #f5d28a;border-radius:6px;padding:6px 10px;margin:6px 0">元に戻した体験：セッション ${esc(String(d.sid).slice(0, 8))}（${esc(new Date(d.savedAt).toLocaleString("ja-JP"))}）。ここから操作を続けると、新しい体験として記録されます。${d.reconstructed ? "ログからの復元のため、面積・地価などは今の画面の値です。" : ""}</div>`);
+  saveSession();
+}
+if ("BroadcastChannel" in window) {
+  const userCh = new BroadcastChannel("reUser");
+  userCh.onmessage = e => {
+    if (!e.data || e.data.type !== "restore" || !e.data.data) return;
+    try { restoreSession(e.data.data); userCh.postMessage({ type:"restored", sid:e.data.data.sid }); }
+    catch (err) { REPLAYING = false; userCh.postMessage({ type:"restore-failed", sid:e.data.data.sid, message:String(err && err.message || err) }); }
+  };
 }
 </script>
 </body>
