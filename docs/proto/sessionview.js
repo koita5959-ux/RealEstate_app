@@ -28,7 +28,7 @@ window.SessionView = (function () {
     const rows = Object.entries(sh).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v ? esc(v) : '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
     const sig = st.signals || [];
     return `<h2>データシート（対話の結果として）</h2><table class="data">${rows}</table>
-    <h2>要所レポート（業者向け）</h2>
+    <h2>要所レポート（弊社向け）</h2>
     <div class="sheet">
       <h3>電話の入口になる一言</h3>
       「先日の見立ての続きです。接道（${esc(sh.接道 || "未確認")}）を、現地で一緒に確かめたくてお電話しました。」

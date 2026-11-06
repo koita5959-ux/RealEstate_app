@@ -129,7 +129,7 @@ const LOCAL_MAX_M = 1500;
 const localNear = n => (n && !n.none && n.d <= LOCAL_MAX_M ? n.name : null);
 // 事業所の土地勘（プレファレンス）
 const PREF = {
-  office: "（仮）〇〇不動産",
+  office: "弊社", // 実装のときは、導入先の社名に差し替える（基本は「弊社」）
   strengths: ["売買仲介", "隣地との一体活用の提案"],
   localKnowledge: {
     "長良": "川沿いは景観で指名買いがある。北側の駐車場は所有者が売却に前向き。",
@@ -456,7 +456,7 @@ function aiContext(n, ask) {
   if (S.near && !S.near.none) c += "\n【注意】標準地価格・用途地域は、試作用の実在しない仮の値です。利用者に価格・相場・用途地域として伝えないでください。";
   if (S.near && S.near.none) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
-  if (ask) c += "\nこの段階は、利用者の答えが店にとって何を意味するかを正直に返してください。";
+  if (ask) c += "\nこの段階は、利用者の答えが弊社にとって何を意味するかを正直に返してください。";
   const nb = nextButtons(n);
   if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。直前の利用者の言葉への答えだけを、2〜3文で返してください。新しい話題（税金・専門家への相談の勧めなど）は持ち出さず、問いかけも付けません。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
   else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事の最後の一文は、このボタンのどれかで答えられる問いにしてください。";
@@ -533,7 +533,7 @@ function inquiryBar() {
     bar.innerHTML = "";
     const box = newRow(); box.classList.add("inqrow");
     document.getElementById("talk").appendChild(box);
-    box.insertAdjacentHTML("beforeend", `<b>店への問い合わせ</b>
+    box.insertAdjacentHTML("beforeend", `<b>弊社へのお問い合わせ</b>
       <label>お名前</label><input id="fName" type="text">
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
@@ -541,7 +541,7 @@ function inquiryBar() {
       <input id="fWhen" type="text" placeholder="連絡してよい時間帯（例：平日の夕方）">
       <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
       <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
-      <div class="hint">本番では、ここまでの相談の内容が、店へ自動で添えられます。</div>
+      <div class="hint">本番では、ここまでの相談の内容が、弊社へ自動で添えられます。</div>
       <button id="inqSend" class="primary">この内容で送る</button>
       <button id="inqBack" class="small">相談に戻る</button>`);
     box.scrollIntoView({ block:"start" });
@@ -563,7 +563,7 @@ function showSheet(where) {
     `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
   const div = document.createElement("div");
   div.innerHTML = `<h2>データシート（対話の結果として）</h2><table class="data">${rows}</table>
-    <h2>要所レポート（業者向け）</h2>
+    <h2>要所レポート（弊社向け）</h2>
     <div class="sheet">
       <h3>電話の入口になる一言</h3>
       「先日の見立ての続きです。接道（${S.sheet.接道 || "未確認"}）を、現地で一緒に確かめたくてお電話しました。」
