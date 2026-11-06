@@ -63,6 +63,7 @@
   .tabs button.on { background:#eef2f6; color:var(--ink); }
   .tabs .btn-user, .tabs .btn-dev { color:#fff; }
   .tabs button { font-size:12px; padding:5px 6px; white-space:nowrap; }
+  .tabs a { flex:1; margin:0; text-align:center; font-size:12px; padding:6px 6px; white-space:nowrap; }
   .side h3 { font-size:13px; margin:14px 0 4px; }
   .side h3 .num { font-size:15px; margin-right:2px; }
   .side p { font-size:13px; line-height:1.7; margin:2px 0 6px; }
@@ -120,7 +121,7 @@
 
   <aside class="side">
     <div class="hint"><b>設定の説明</b>　（ほかの画面へ）</div>
-    <div class="tabs"><button id="toUser" class="btn-user">利用者画面 ↗</button><button id="toReport" class="btn-user">利用者の利用状況 ↗</button><button id="toDev" class="btn-dev">開発の利用状況 ↗</button></div>
+    <div class="tabs"><a id="toUser" class="btn-user" href="./">利用者画面 ↗</a><a id="toReport" class="btn-user" href="report.html">利用者の利用状況 ↗</a><a id="toDev" class="btn-dev" href="../../api/admin/">開発の利用状況 ↗</a></div>
     <div id="help"></div>
   </aside>
 </div>
@@ -133,7 +134,8 @@
 <script>
 window.name = "reAdminWin"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
 // ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
-function goScreen(url, name) {
+function goScreen(url, name, ev) {
+  if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
   const abs = new URL(url, location.href).href;
   try {
     const w = window.open("", name);
@@ -389,12 +391,13 @@ function loadSaved() {
   lamp();
 }
 document.getElementById("commit").onclick = commit;
-document.getElementById("toDev").onclick = () => goScreen("../../api/admin/", "reDevWin"); // 開発の利用状況（別の画面。下書きには影響しない）
-document.getElementById("toReport").onclick = () => goScreen("report.html", "reReport"); // 利用者の利用状況（別の画面）
+document.getElementById("toDev").onclick = e => goScreen("../../api/admin/", "reDevWin", e); // 開発の利用状況（別の画面。下書きには影響しない）
+document.getElementById("toReport").onclick = e => goScreen("report.html", "reReport", e); // 利用者の利用状況（別の画面）
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
-document.getElementById("toUser").onclick = () => {
-  if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return; }
-  goScreen("./", "reUser");
+document.getElementById("toUser").onclick = e => {
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return true; // 別タブ・別ウインドウで開く操作は、この画面の下書きに影響しないのでブラウザ標準
+  if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
+  return goScreen("./", "reUser", e);
 };
 // 未確定のときの三択：OK＝入力を捨てて移動／確定して移動＝設定を変更してから移動（エラーならとどまる）／キャンセル＝とどまる
 document.getElementById("leave").onclose = e => {

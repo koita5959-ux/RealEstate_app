@@ -79,8 +79,8 @@
   <div id="map"></div>
   <aside>
     <div class="devbar">
-      <button class="btn-dev" onclick="goScreen('admin_mode.html', 'reAdminWin')" title="店の設定（管理画面）">管理画面へ</button>
-      <button class="btn-dev" onclick="goScreen('../../api/admin/', 'reDevWin')" title="開発の利用状況（開発者用）">開発の利用状況へ</button>
+      <a class="btn-dev" href="admin_mode.html" onclick="return goScreen('admin_mode.html', 'reAdminWin', event)" title="店の設定（管理画面）">管理画面へ</a>
+      <a class="btn-dev" href="../../api/admin/" onclick="return goScreen('../../api/admin/', 'reDevWin', event)" title="開発の利用状況（開発者用）">開発の利用状況へ</a>
       <label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label>
     </div>
     <div id="step0">
@@ -101,7 +101,7 @@
       <button id="go" class="primary" disabled>評価する</button>
     </div>
     <div id="route" class="route"></div>
-    <div id="usernav" style="margin-top:12px"><button class="btn-user" onclick="goScreen('report.html', 'reReport')" title="あなたの体験の履歴・データシート・AIの利用状況（別画面）">利用者の利用状況を見る（別画面）</button></div>
+    <div id="usernav" style="margin-top:12px"><a class="btn-user" href="report.html" onclick="return goScreen('report.html', 'reReport', event)" title="あなたの体験の履歴・データシート・AIの利用状況（別画面）">利用者の利用状況を見る（別画面）</a></div>
     <div id="result"></div>
     <details>
       <summary>事業所設定（プレファレンス・仮）</summary>
@@ -115,7 +115,8 @@
 // ---- 仮データ（実在しない数値） ----
 window.name = "reUser"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
 // ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
-function goScreen(url, name) {
+function goScreen(url, name, ev) {
+  if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
   const abs = new URL(url, location.href).href;
   try {
     const w = window.open("", name);
