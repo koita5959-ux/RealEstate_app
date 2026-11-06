@@ -313,21 +313,39 @@ window.addEventListener("pagehide", () => ev("end", { path:PATH.length, rounds:M
 let reportOpenSent = false;
 const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
 // 体験の記録をこのブラウザに保存する。別画面「利用者の利用状況」（report.html）がこれを読んで表示する。
+// 体験の記録（構造化した状態）。動きがあるたびに作って、このブラウザ（localStorage「reSession」）に保存し、サーバーにも送る。
+// 「利用状況」の画面は、これを出すだけ。サーバーに送る分は、開発利用状況から後で再表示できる（HTMLではなくデータだけを送る）。
+const SESSION_URL = "../../api/session";
+let syncTimer = null, lastState = null;
+function postState(st) {
+  try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st }), keepalive:true }).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
+}
+function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だけ送る
+  if (AI_OFF || REPLAYING) return;
+  lastState = st;
+  if (syncTimer) return;
+  syncTimer = setTimeout(() => { syncTimer = null; postState(lastState); }, 1500);
+}
+window.addEventListener("pagehide", () => { // 閉じるときは、まだ送っていない最新の状態を送る
+  if (!lastState || AI_OFF) return;
+  try { navigator.sendBeacon(SESSION_URL, new Blob([JSON.stringify({ sid:SID, by:BY, state:lastState })], { type:"application/json" })); } catch (e) { /* 何もしない */ }
+});
 function saveSession() {
   try {
     if (typeof S === "undefined" || !S) return;
-    // 表示用の内容は、メイン画面で動きがあるたびにここで計算して保存する。別画面は保存された内容を出すだけ（開くときに計算しない）
-    const tmp = document.createElement("div"); showSheet(tmp);
-    const a = S.api || [], n = a.length;
-    const tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
-    const usageHtml = n
-      ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yenUsd(cost)}</b>（推定）`
-      : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
-    const costHtml = PUB && PUB.ready
-      ? `相談1件あたり、平均で<b>約${yenUsd(PUB.avgUsd)}</b>（多めの場合で約${yenUsd(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${yenUsd(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
-      : "試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。";
-    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, updated:Date.now(), routeHtml:document.getElementById("route").innerHTML, sheetHtml:tmp.innerHTML, usageHtml, costHtml }));
+    const a = S.api || [];
+    const sheet = {};
+    for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
+    const st = {
+      updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (PREF.localKnowledge[S.near.name] || ""), revised: S.revised || "",
+      path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
+      sheet, signals: S.signals.slice(),
+      usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
+      pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
+    };
+    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, state:st }));
     if (window.Shell) Shell.refresh(); // 記録ができたので「利用状況」をグレー解除
+    syncSession(st);
   } catch (e) { /* 保存できなくても体験は止めない */ }
 }
 ev("open", { mobile: innerWidth < 700, ref: (() => { try { return document.referrer ? new URL(document.referrer).host : ""; } catch (e) { return ""; } })() });

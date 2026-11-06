@@ -35,6 +35,7 @@
   input, select, button.act { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
   button.act { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
   .hide { display:none; }
+  a.btn-user-link { display:inline-block; font-size:12px; padding:2px 9px; border-radius:6px; background:#1d6fb8; color:#fff; text-decoration:none; white-space:nowrap; }
   details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
   summary { cursor:pointer; }
   pre { white-space:pre-wrap; margin:6px 0 0; font:inherit; }
@@ -156,8 +157,8 @@ function viewSessions() {
   return `
   <h2>セッション（新しい順・最大300件）</h2>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
-  <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th></tr>
-  ${D.sessions.map(s => `<tr><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td></tr>`).join("") || `<tr><td colspan="10" class="note">まだありません</td></tr>`}</table></div>
+  <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
+  ${D.sessions.map(s => `<tr><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${s.hasState ? `<a class="btn-user-link" href="../../docs/proto/report.html?sid=${encodeURIComponent(s.sid)}" onclick="return goScreen(this.href, 'reReportView', event)">再表示</a>` : '<span class="note">—</span>'}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>最近のやり取り（200件まで・本文つき）</h2>
   ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}</pre></details>`).join("") || '<div class="note">まだありません</div>'}`;
 }

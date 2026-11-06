@@ -42,7 +42,8 @@
   const hasSession = () => { try { return !!localStorage.getItem("reSession"); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  window.name = SCREENS[current].name; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
+  // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける。保存セッションの再表示（?sid=）は、体験用の「利用状況」とは別の窓にする
+  window.name = (current === "report" && /[?&]sid=/.test(location.search)) ? "reReportView" : SCREENS[current].name;
 
   const h1 = document.createElement("h1"); h1.textContent = bar.dataset.title || "";
   const nav = document.createElement("nav"); nav.className = "gonav"; nav.setAttribute("aria-label", "画面の移動");

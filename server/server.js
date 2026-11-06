@@ -239,6 +239,45 @@ async function handleEvent(req, res) {
   return send(res, 204, {});
 }
 
+// ---- セッションの記録（再表示用）：画面が送る「構造化した状態」だけを、無害な形に整えて保存する（HTMLは受け取らない） ----
+const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
+try { fs.mkdirSync(SESSIONS_DIR, { recursive: true }); } catch { /* 後で書くときに失敗として記録 */ }
+const num = (v) => (Number.isFinite(+v) ? +v : 0);
+function cleanState(s) {
+  s = s && typeof s === "object" ? s : {};
+  const sheet = {};
+  for (const [k, v] of Object.entries(s.sheet && typeof s.sheet === "object" ? s.sheet : {}).slice(0, 24)) sheet[clip(k, 24)] = v == null ? null : clip(v, 400);
+  const p = s.pub && typeof s.pub === "object" ? s.pub : {};
+  return {
+    updated: num(s.updated), place: clip(s.place, 80), near: clip(s.near, 40), localKnowledge: clip(s.localKnowledge, 300), revised: clip(s.revised, 200),
+    path: (Array.isArray(s.path) ? s.path : []).slice(0, 40).map((x) => ({ press: clip(x?.press, 80), q: num(x?.q) | 0, opt: num(x?.opt) | 0, type: clip(x?.type, 300) })),
+    sheet, signals: (Array.isArray(s.signals) ? s.signals : []).slice(0, 20).map((x) => clip(x, 200)),
+    usage: { n: num(s.usage?.n), tin: num(s.usage?.tin), tout: num(s.usage?.tout), costUsd: num(s.usage?.costUsd) },
+    pub: p.ready ? { ready: true, avgUsd: num(p.avgUsd), p90Usd: num(p.p90Usd), sessions: num(p.sessions), usdJpy: num(p.usdJpy) || 150 } : { ready: false, usdJpy: num(p.usdJpy) || 150 },
+  };
+}
+const sessHits = new Map();
+async function handleSession(req, res) {
+  const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
+  const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
+  const now = Date.now();
+  const arr = (sessHits.get(who) || []).filter((t) => now - t < 60_000);
+  arr.push(now); sessHits.set(who, arr); if (sessHits.size > 5000) sessHits.clear();
+  if (arr.length > 60) return send(res, 429, { error: "rate_limited" });
+  let b;
+  try { b = await readBody(req, 65_536); } catch { return send(res, 400, { error: "bad_request" }); }
+  const sid = String(b.sid || "");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return send(res, 400, { error: "bad_sid" });
+  const rec = { sid, by: clip(b.by, 32) || "visitor", savedAt: new Date().toISOString(), state: cleanState(b.state) };
+  try {
+    const f = path.join(SESSIONS_DIR, sid + ".json");
+    fs.writeFileSync(f + ".tmp", JSON.stringify(rec), { mode: 0o600 });
+    fs.renameSync(f + ".tmp", f);
+  } catch (e) { console.error("session write failed:", e.message); return send(res, 500, { error: "server" }); }
+  touchSnap();
+  return send(res, 204, {});
+}
+
 // ---- 管理画面の用意 ----
 const adminHits = [];
 const adminCtx = {
@@ -261,6 +300,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
+    if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
     if (await adminHandler(req, res, url, adminCtx)) return;
     return send(res, 404, { error: "not_found" });

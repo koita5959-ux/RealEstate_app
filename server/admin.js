@@ -131,8 +131,10 @@ export function summarize(ctx) {
     if (e.type === "map" && e.data?.place) s.place = e.data.place;
     if (e.type === "choice") s.maxQ = Math.max(s.maxQ, +e.data?.q || 0);
   }
+  let saved = new Set();
+  try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
   const now = Date.now();
-  const sessions = [...sess.values()].map((s) => ({ ...s, active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
   // 日別（日本時間）
   const dayMap = new Map();
@@ -281,6 +283,15 @@ export async function adminHandler(req, res, url, ctx) {
   if (req.method === "GET" && url.pathname === "/api/admin/summary") { // 保存した集計を返すだけ。設定の読み取り値（停止スイッチ・今日の費用）だけは今の値に差し替える
     const snap = ctx.getSnapshot();
     return json(200, { ...snap, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/session") { // 保存されたセッションの再表示用（記録＋会話の本文）
+    const sid = url.searchParams.get("sid") || "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
+    const rec = readJson(path.join(ctx.DATA_DIR, "sessions", sid + ".json"), null);
+    if (!rec) return json(404, { error: "not_found" });
+    const turns = readJsonl(ctx.DATA_DIR, "log").filter((r) => r.sid === sid).map((r) => ({ ts: r.ts, status: r.status, reason: r.reason, q: r.meta?.q, press: r.meta?.press, user: r.userText, reply: r.reply, inTok: r.inputTokens, outTok: r.outputTokens, costUsd: r.costUsd, ms: r.ms }));
+    return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, turns });
   }
 
   if (req.method === "POST") {
