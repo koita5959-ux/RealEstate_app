@@ -222,7 +222,7 @@ export function summarize(ctx) {
 // 利用者に見せてよい平均値だけ（個々の記録・本文は出さない）。データが少ないうちは null。
 export function publicStats(ctx) {
   const s = ctx.getSnapshot().explain;
-  const e = s.visitor.n >= 5 ? s.visitor : s.all.n >= 5 ? s.all : null;
+  const e = s.visitor.n >= 5 ? s.visitor : null; // 公開用は、一般の訪問者（visitor）の分だけ。5件に満たなければ出さない（開発のテスト分は混ぜない）
   if (!e) return { ready: false };
   return { ready: true, sessions: e.n, avgUsd: e.avgUsd, p90Usd: e.p90, avgRounds: e.avgRounds, usdJpy: s.usdJpy, model: s.model };
 }

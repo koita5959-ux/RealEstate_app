@@ -124,6 +124,9 @@ const POINTS = [
 const NEAR_MAX_M = 5000;
 const NO_DATA = { name:"データなし", none:true, d:null, price:null, zone:null };
 const NO_DATA_TEXT = "データなし（仮データは岐阜市中心部のみ）";
+// 店の土地勘・地区の事実（鷺山の事後評価など）は、その標準地のごく近く（LOCAL_MAX_M 以内）だけに使う。離れた場所には当てはめない
+const LOCAL_MAX_M = 1500;
+const localNear = n => (n && !n.none && n.d <= LOCAL_MAX_M ? n.name : null);
 // 事業所の土地勘（プレファレンス）
 const PREF = {
   office: "（仮）〇〇不動産",
@@ -165,7 +168,8 @@ const goBtn = document.getElementById("go"), areaInp = document.getElementById("
 const refreshGo = () => lamp(goBtn, !!here && Number(areaInp.value) >= 10);
 areaInp.addEventListener("input", refreshGo);
 document.getElementById("preset").onclick = () => {
-  if (!PLACE) { prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden"); } // 地図を開かずに例のピンを使った場合
+  // 例のピンは岐阜市にあるので、市区町村の表示も岐阜県岐阜市に合わせる（別の市区町村を選んでいた場合も、ピンと表示が食い違わないように）
+  prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden");
   map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352);
 };
 
@@ -296,7 +300,7 @@ function onRoad(c) {
   } else if (c.startsWith("道に")) {
     S.sheet.形と向き = "道に面している";
     S.sheet.接道 = "道に広く面している（客の申告）";
-    const local = SETBACK[S.near.name];
+    const local = localNear(S.near) && SETBACK[S.near.name];
     say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
       + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
       "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（すれ違えるか、で答えられる）");
@@ -316,7 +320,7 @@ function onWidth(c) {
     askBuilding("それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
   } else if (c === "2mない・狭い") {
     S.sheet.接道 = "旗竿地・通路2m未満（客の申告）＝再建築不可の可能性";
-    const k = PREF.localKnowledge[S.near.name];
+    const k = localNear(S.near) && PREF.localKnowledge[S.near.name];
     askBuilding("それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
       + (k && k.includes("隣地") ? `<br><small>（${PREF.office}の土地勘：${k}）</small>` : ""));
   } else {
@@ -423,7 +427,7 @@ function buildState() {
   const sheet = {};
   for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
   return {
-    updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (PREF.localKnowledge[S.near.name] || ""), revised: S.revised || "",
+    updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "",
     path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
     sheet, signals: S.signals.slice(),
     usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
@@ -449,6 +453,7 @@ function nextButtons(n) { // 次のステップnで利用者に出る、店の�
 function aiContext(n, ask) {
   const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
+  if (S.near && !S.near.none) c += "\n【注意】標準地価格・用途地域は、試作用の実在しない仮の値です。利用者に価格・相場・用途地域として伝えないでください。";
   if (S.near && S.near.none) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   if (ask) c += "\nこの段階は、利用者の答えが店にとって何を意味するかを正直に返してください。";
@@ -535,7 +540,8 @@ function inquiryBar() {
       <label>連絡の希望</label><select id="fWay"><option>電話がよい</option><option>メールがよい</option><option>どちらでも</option></select>
       <input id="fWhen" type="text" placeholder="連絡してよい時間帯（例：平日の夕方）">
       <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
-      <div class="hint">ここまでの相談の内容は、店へ自動で添えられます。</div>
+      <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
+      <div class="hint">本番では、ここまでの相談の内容が、店へ自動で添えられます。</div>
       <button id="inqSend" class="primary">この内容で送る</button>
       <button id="inqBack" class="small">相談に戻る</button>`);
     box.scrollIntoView({ block:"start" });
@@ -546,7 +552,7 @@ function inquiryBar() {
     document.getElementById("inqSend").onclick = () => {
       if (!inqOk()) return; // お名前と、メールか電話のどちらかが必要
       ev("inquiry_send");
-      box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
+      box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">（試作）送信の操作を確認しました。<br><small>この内容は送られておらず、記録もしていません。本番では、${PREF.office}から、ご希望の方法で連絡します。</small></div>`;
       box.classList.add("done");
     };
   };
