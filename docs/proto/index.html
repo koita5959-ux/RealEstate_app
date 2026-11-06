@@ -332,16 +332,26 @@ function ev(type, data) {
   } catch (e) { /* 記録できなくても画面は止めない */ }
 }
 let PUB = null; // 導入後の費用の目安（平均だけ。個別の記録は出ない）
-if (!AI_OFF) fetch(PUB_URL).then(r => r.json()).then(d => { PUB = d; }).catch(() => {});
+function refreshPub() { if (!AI_OFF) fetch(PUB_URL).then(r => r.json()).then(d => { PUB = d; saveSession(); }).catch(() => {}); } // 費用の目安は、メイン画面で動きがあったときに取り直して保存する
+refreshPub();
 window.addEventListener("pagehide", () => ev("end", { path:PATH.length, rounds:Math.floor(AI_HIST.length / 2) }));
 let reportOpenSent = false;
 const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
 // 体験の記録をこのブラウザに保存する。別画面「利用者の利用状況」（report.html）がこれを読んで表示する。
 function saveSession() {
-  if (typeof S === "undefined" || !S) return;
   try {
+    if (typeof S === "undefined" || !S) return;
+    // 表示用の内容は、メイン画面で動きがあるたびにここで計算して保存する。別画面は保存された内容を出すだけ（開くときに計算しない）
     const tmp = document.createElement("div"); showSheet(tmp);
-    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, updated:Date.now(), routeHtml:document.getElementById("route").innerHTML, sheetHtml:tmp.innerHTML, api:S.api || [] }));
+    const a = S.api || [], n = a.length;
+    const tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
+    const usageHtml = n
+      ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yenUsd(cost)}</b>（推定）`
+      : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
+    const costHtml = PUB && PUB.ready
+      ? `相談1件あたり、平均で<b>約${yenUsd(PUB.avgUsd)}</b>（多めの場合で約${yenUsd(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${yenUsd(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
+      : "試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。";
+    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, updated:Date.now(), routeHtml:document.getElementById("route").innerHTML, sheetHtml:tmp.innerHTML, usageHtml, costHtml }));
   } catch (e) { /* 保存できなくても体験は止めない */ }
 }
 ev("open", { mobile: innerWidth < 700, ref: (() => { try { return document.referrer ? new URL(document.referrer).host : ""; } catch (e) { return ""; } })() });
@@ -364,6 +374,7 @@ function aiContext(n, ask) {
 }
 async function askAI(n, ask, userText, meta) {
   AI_HIST.push({ role:"user", content:userText });
+  saveSession(); // 送った時点の内容（データシートなど）も、返事を待つ間に保存しておく
   const w = document.createElement("div"); w.className = "ai";
   w.innerHTML = '<span class="tag">AI</span><span class="hint">考えています…</span>';
   document.getElementById("talk").appendChild(w); w.scrollIntoView({ block:"center" });
@@ -380,7 +391,7 @@ async function askAI(n, ask, userText, meta) {
     AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
-  } finally { clearTimeout(timer); w.remove(); saveSession(); }
+  } finally { clearTimeout(timer); w.remove(); saveSession(); refreshPub(); }
 }
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
@@ -472,8 +483,9 @@ function say(html, gave, hole) {
   const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
   if (gave) d.innerHTML += `<div class="will">${gave}<br>${hole}</div>`;
   document.getElementById("talk").appendChild(d);
+  saveSession();
 }
-function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
+function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); saveSession(); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
 // onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（④以降）。この行ではボタンは選ぶだけで、「送信」がリクエストになる。
 // 送るのは「選択＋書いた言葉」。どちらか片方だけでもよい。onText(t, c)：t＝書いた言葉（なければ空）、c＝選んだボタン（なければ null）

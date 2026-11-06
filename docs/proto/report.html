@@ -74,27 +74,19 @@ function goScreen(url, name, ev) {
   return false;
 }
 
-let PUB = null;
-const jpy = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
+// この画面は、メイン画面が保存した内容を出すだけ。開くときに計算もサーバーへの問い合わせもしない。
 function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem("reSession")); } catch (e) { /* 読めなければ空扱い */ }
   $("none").hidden = !!s; $("main").hidden = !s;
   if (!s) return;
   $("route").innerHTML = s.routeHtml || '<span class="hint">まだ選んだボタンはありません。</span>';
-  const a = s.api || [], n = a.length;
-  const tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
-  $("usage").innerHTML = n
-    ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${jpy(cost)}</b>（推定）`
-    : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
-  $("cost").innerHTML = PUB && PUB.ready
-    ? `相談1件あたり、平均で<b>約${jpy(PUB.avgUsd)}</b>（多めの場合で約${jpy(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${jpy(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
-    : "試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。";
+  $("usage").innerHTML = s.usageHtml || "体験を進めると、ここに表示されます。";
+  $("cost").innerHTML = s.costHtml || "体験を進めると、ここに表示されます。";
   $("sheet").innerHTML = s.sheetHtml || "";
 }
 $("clear").onclick = () => { try { localStorage.removeItem("reSession"); } catch (e) { /* 何もしない */ } load(); };
 window.addEventListener("storage", e => { if (e.key === "reSession") load(); }); // 体験画面で進むと、開いたままのこの画面も更新される
-fetch("../../api/public-stats").then(r => r.json()).then(d => { PUB = d; load(); }).catch(() => {});
 load();
 </script>
 </body>

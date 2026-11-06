@@ -171,7 +171,8 @@ function viewTested() {
 }
 
 function viewSessions() {
-  const st = s => s.active ? '<span class="pill ok">進行中</span>' : s.ended ? '<span class="pill">終了</span>' : '<span class="pill">離脱</span>';
+  const live = s => !s.ended && s.last && Date.now() - new Date(s.last).getTime() < 30 * 60000; // 最後の動きから30分以内
+  const st = s => live(s) ? '<span class="pill ok">進行中</span>' : s.ended ? '<span class="pill">終了</span>' : '<span class="pill">離脱</span>';
   return `
   <h2>セッション（新しい順・最大300件）</h2>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
@@ -219,7 +220,7 @@ function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; location.hash = tab; render(); });
   const st = document.getElementById("state");
   st.textContent = D.config.disabled ? "停止中" : "稼働中"; st.className = "pill " + (D.config.disabled ? "warn" : "ok");
-  document.getElementById("upd").textContent = "更新 " + new Date().toLocaleTimeString("ja-JP");
+  document.getElementById("upd").textContent = "集計: " + new Date(D.computedAt).toLocaleTimeString("ja-JP") + "（動きがあるたびに更新）";
   document.getElementById("main").innerHTML = ({ cost:viewCost, explain:viewExplain, tested:viewTested, sessions:viewSessions, settings:viewSettings }[tab] || viewCost)();
   bind();
 }

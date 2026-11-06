@@ -209,7 +209,7 @@ export function summarize(ctx) {
   const refs = tally(events.filter((e) => e.type === "open"), (e) => e.data?.ref || "（直接・不明）");
 
   return {
-    now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.DAILY_USD_CAP, spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
+    computedAt: new Date().toISOString(), now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.DAILY_USD_CAP, spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
     totals, rejected, errorsToday, balances, balanceNow, segments, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
     explain, prices: vs, themeRules: THEME_RULES.map(([n, re]) => ({ name: n, rule: re.source })),
     tested: { funnel, purposes, later, branches, roads, places, near, texts: texts.slice(-150).reverse(), themes, devices, refs },
@@ -219,7 +219,7 @@ export function summarize(ctx) {
 
 // 利用者に見せてよい平均値だけ（個々の記録・本文は出さない）。データが少ないうちは null。
 export function publicStats(ctx) {
-  const s = summarize(ctx).explain;
+  const s = ctx.getSnapshot().explain;
   const e = s.visitor.n >= 5 ? s.visitor : s.all.n >= 5 ? s.all : null;
   if (!e) return { ready: false };
   return { ready: true, sessions: e.n, avgUsd: e.avgUsd, p90Usd: e.p90, avgRounds: e.avgRounds, usdJpy: s.usdJpy, model: s.model };
@@ -278,7 +278,10 @@ export async function adminHandler(req, res, url, ctx) {
     res.end(fs.readFileSync(new URL("./admin.html", import.meta.url)));
     return true;
   }
-  if (req.method === "GET" && url.pathname === "/api/admin/summary") return json(200, summarize(ctx));
+  if (req.method === "GET" && url.pathname === "/api/admin/summary") { // 保存した集計を返すだけ。設定の読み取り値（停止スイッチ・今日の費用）だけは今の値に差し替える
+    const snap = ctx.getSnapshot();
+    return json(200, { ...snap, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
+  }
 
   if (req.method === "POST") {
     let body;
@@ -288,12 +291,14 @@ export async function adminHandler(req, res, url, ctx) {
       if (!Number.isFinite(amount) || amount < 0) return json(400, { error: "bad_amount" });
       const rec = { ts: new Date().toISOString(), amount_usd: amount, note: String(body.note || "").slice(0, 100) };
       fs.appendFileSync(path.join(ctx.DATA_DIR, `balances-${rec.ts.slice(0, 4)}.jsonl`), JSON.stringify(rec) + "\n", { mode: 0o600 });
+      ctx.refresh(); // 設定を変えたので、すぐ集計を作り直す
       return json(200, { ok: true });
     }
     if (url.pathname === "/api/admin/settings") {
       const usdJpy = Number(body.usdJpy);
       if (!(usdJpy > 50 && usdJpy < 500)) return json(400, { error: "bad_rate" });
       fs.writeFileSync(path.join(ctx.DATA_DIR, "settings.json"), JSON.stringify({ ...readJson(path.join(ctx.DATA_DIR, "settings.json"), {}), usdJpy }), { mode: 0o600 });
+      ctx.refresh();
       return json(200, { ok: true });
     }
     if (url.pathname === "/api/admin/prices") { // 保存すると「今から有効な新しい版」になる。過去の往復は当時の単価のまま。
@@ -302,6 +307,7 @@ export async function adminHandler(req, res, url, ctx) {
       const vs = priceVersions(ctx.DATA_DIR, ctx.PRICES);
       vs.push({ from: new Date().toISOString(), models });
       fs.writeFileSync(path.join(ctx.DATA_DIR, "prices.json"), JSON.stringify({ versions: vs }, null, 1), { mode: 0o600 });
+      ctx.refresh();
       return json(200, { ok: true });
     }
   }

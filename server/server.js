@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { adminHandler, publicStats } from "./admin.js";
+import { adminHandler, publicStats, summarize } from "./admin.js";
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -45,12 +45,22 @@ const client = apiKey ? new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 const logPath = (d = today()) => path.join(DATA_DIR, `log-${d}.jsonl`);
+// ---- 集計の保存：動き（記録の書き込み）があるたびに作り直し、開発の利用状況は保存した集計を返すだけ（開くときに計算しない） ----
+let snap = null, snapTimer = null, snapDay = "";
+function rebuild() {
+  try { snap = summarize(adminCtx); snapDay = today(); } catch (e) { console.error("summarize failed:", e.message); }
+}
+function touchSnap() { // 連続した動きは1秒にまとめて、1回だけ作り直す
+  if (snapTimer) return;
+  snapTimer = setTimeout(() => { snapTimer = null; rebuild(); }, 1000);
+}
 function writeLog(rec) {
   try {
     fs.appendFileSync(logPath(), JSON.stringify(rec) + "\n", { mode: 0o600 });
   } catch (e) {
     console.error("log write failed:", e.message);
   }
+  touchSnap();
 }
 
 // 今日の費用を、起動時に記録から復元する
@@ -225,6 +235,7 @@ async function handleEvent(req, res) {
   try {
     fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, data }) + "\n", { mode: 0o600 });
   } catch (e) { console.error("event write failed:", e.message); }
+  touchSnap();
   return send(res, 204, {});
 }
 
@@ -233,8 +244,13 @@ const adminHits = [];
 const adminCtx = {
   DATA_DIR, MODEL, DAILY_USD_CAP, PRICES, ADMIN_PASSWORD_FILE, readBody, disabled,
   getSpent: () => (today() === spentDate ? spentUsd : 0),
+  getSnapshot: () => { if (!snap) rebuild(); return snap; },
+  refresh: rebuild,
   adminRate: () => { const n = Date.now(); while (adminHits.length && n - adminHits[0] > 60_000) adminHits.shift(); adminHits.push(n); return adminHits.length <= 120; },
 };
+
+rebuild(); // 起動時に1回
+setInterval(() => { if (today() !== snapDay) rebuild(); }, 5 * 60_000); // 日が替わったときだけ、日付の集計を作り直す
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
