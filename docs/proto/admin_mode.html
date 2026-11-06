@@ -354,9 +354,15 @@ function loadSaved() {
   dirty = false;
 }
 document.getElementById("commit").onclick = commit;
-// 移動：未確定ならアラートだけ出し、下書きは捨てて戻ってきたら確定済みの設定
+// 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 document.getElementById("toUser").onclick = () => {
-  if (dirty) { alert("未確定の入力があります。"); loadSaved(); renderAdmin(); renderHelp(); }
+  if (dirty) {
+    if (!confirm("未確定の入力があります。
+
+OK：入力を捨てて利用者画面へ移動する
+キャンセル：移動せず、このまま管理画面で続ける")) return;
+    loadSaved(); renderAdmin(); renderHelp();
+  }
   window.open("./", "reUser");
 };
 
