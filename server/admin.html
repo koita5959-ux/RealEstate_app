@@ -84,7 +84,8 @@ function viewCost() {
   const perDay = {};
   for (const x of D.days) perDay[x.day] = (perDay[x.day] || 0) + x.est;
   const dayRows = Object.entries(perDay).slice(0, 14).map(([day, est]) => ({ day, est }));
-  const top = [...D.sessions].sort((a, b) => b.est - a.est).filter(s => s.rounds).slice(0, 8);
+  const costSort = window.costSort || "new"; // 新しい順／費用の大きい順
+  const top = D.sessions.filter(s => s.rounds).sort((a, b) => costSort === "cost" ? b.est - a.est : (b.last || "").localeCompare(a.last || "")); // AIを呼んで費用が発生したセッションすべて
   return `
   <div class="cards">
     <div class="card"><div class="t">今日（日本時間）</div><div class="v">${jpy(T.today.est)}</div><div class="s">${usd(T.today.est)} ／ ${T.today.rounds}往復</div></div>
@@ -100,7 +101,8 @@ function viewCost() {
       ${D.actors.sort((a, b) => b.est - a.est).map(a => `<tr><td>${esc(a.by)}</td><td class="n">${a.sessions}</td><td class="n">${a.withAi}</td><td class="n">${a.rounds}</td><td class="n">${money(a.est)}</td></tr>`).join("")}</table></div>
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
-  <h2>費用が大きかったセッション</h2>
+  <h2>費用が発生したセッション（${top.length}件）</h2>
+  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと再表示します。並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
@@ -200,6 +202,7 @@ document.addEventListener("click", e => {
 });
 function bind() {
   const $ = id => document.getElementById(id);
+  if ($("csort")) $("csort").onchange = e => { window.costSort = e.target.value; render(); };
   if ($("fsel")) $("fsel").onchange = e => { window.fSel = e.target.value; render(); };
   if ($("balSave")) $("balSave").onclick = async () => { const ok = await post("balance", { amount_usd: +$("balAmt").value, note: $("balNote").value }); $("balMsg").textContent = ok ? "記録しました" : "入力を確認してください"; if (ok) load(); };
   if ($("rateSave")) $("rateSave").onclick = async () => { const ok = await post("settings", { usdJpy: +$("rate").value }); $("rateMsg").textContent = ok ? "保存しました" : "50〜500の数字で入れてください"; if (ok) load(); };
