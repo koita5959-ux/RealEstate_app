@@ -244,7 +244,8 @@ const adminHits = [];
 const adminCtx = {
   DATA_DIR, MODEL, DAILY_USD_CAP, PRICES, ADMIN_PASSWORD_FILE, readBody, disabled,
   getSpent: () => (today() === spentDate ? spentUsd : 0),
-  getSnapshot: () => { if (!snap) rebuild(); return snap; },
+  // 読むとき：反映待ちの動き（1秒のまとめ待ち）があれば先に作り直す。リロードすれば、それまでの動きが必ず入った集計になる
+  getSnapshot: () => { if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; rebuild(); } else if (!snap) rebuild(); return snap; },
   refresh: rebuild,
   adminRate: () => { const n = Date.now(); while (adminHits.length && n - adminHits[0] > 60_000) adminHits.shift(); adminHits.push(n); return adminHits.length <= 120; },
 };

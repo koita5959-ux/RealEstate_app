@@ -47,7 +47,7 @@
   </div>
 
   <div id="main" hidden>
-    <div class="hint" style="margin-top:10px">体験の途中でも、この画面は自動で更新されます。</div>
+    <div class="hint" style="margin-top:10px" id="stamp"></div>
     <div id="route" class="route" style="margin-top:12px"></div>
     <h2>AIの利用状況</h2>
     <div id="usage" class="sheet"></div>
@@ -80,6 +80,7 @@ function load() {
   try { s = JSON.parse(localStorage.getItem("reSession")); } catch (e) { /* 読めなければ空扱い */ }
   $("none").hidden = !!s; $("main").hidden = !s;
   if (!s) return;
+  $("stamp").textContent = "最終更新 " + (s.updated ? new Date(s.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに更新されます。別のウインドウで開いたままでも、リロードで最新が見られます。";
   $("route").innerHTML = s.routeHtml || '<span class="hint">まだ選んだボタンはありません。</span>';
   $("usage").innerHTML = s.usageHtml || "体験を進めると、ここに表示されます。";
   $("cost").innerHTML = s.costHtml || "体験を進めると、ここに表示されます。";
