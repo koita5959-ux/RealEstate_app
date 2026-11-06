@@ -20,6 +20,14 @@
   button { font-size:14px; padding:9px 12px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; margin:4px 4px 0 0; }
   button.primary { background:var(--accent); color:#fff; width:100%; margin-top:10px; }
   button:disabled { opacity:.4; cursor:default; }
+  .pc-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:4px; }
+  .pc label { display:block; margin:0 0 2px; }
+  .pc input[type=text] { margin-bottom:0; }
+  .combo { position:relative; }
+  .combo-list { position:absolute; left:0; right:0; top:100%; z-index:1200; max-height:260px; overflow-y:auto; margin:2px 0 0; padding:3px 0; list-style:none; background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 6px 16px rgba(0,0,0,.18); }
+  .combo-list li { padding:7px 10px; font-size:14px; cursor:pointer; }
+  .combo-list li.on, .combo-list li:hover { background:#eef4fb; }
+  .combo-list li.none { color:var(--sub); cursor:default; font-size:13px; }
   button.off, button.off:hover { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; opacity:1; }
   .data { width:100%; border-collapse:collapse; font-size:13px; }
   .data td { border-bottom:1px solid var(--line); padding:5px 4px; }
@@ -73,10 +81,12 @@
   <aside>
     <div id="step0">
       <h2>0. 土地のある市区町村</h2>
-      <label for="prefName">都道府県</label>
-      <input id="prefName" type="text" placeholder="例：岐阜県" autocomplete="off">
-      <label for="cityName">市区町村</label>
-      <input id="cityName" type="text" placeholder="例：岐阜市" autocomplete="off">
+      <div class="pc-row">
+        <div class="pc"><label for="prefName">都道府県</label>
+          <div class="combo"><input id="prefName" type="text" placeholder="例：岐阜県" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><ul class="combo-list" id="prefList" role="listbox" hidden></ul></div></div>
+        <div class="pc"><label for="cityName">市区町村</label>
+          <div class="combo"><input id="cityName" type="text" placeholder="例：岐阜市" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><ul class="combo-list" id="cityList" role="listbox" hidden></ul></div></div>
+      </div>
       <button id="openMap" class="primary">地図を開く</button>
       <div id="mapMsg" class="hint"></div>
     </div>
@@ -161,8 +171,46 @@ let PLACE = ""; // 都道府県・市区町村は空白で始める（日本地�
 // ---- ボタンの点灯／グレー：受け付けられる入力があれば点灯、未入力ならグレー ----
 const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
 const prefInp = document.getElementById("prefName"), cityInp = document.getElementById("cityName"), openBtn = document.getElementById("openMap");
-const refreshOpen = () => lamp(openBtn, !!prefInp.value.trim() && !!cityInp.value.trim());
-[prefInp, cityInp].forEach(i => i.addEventListener("input", refreshOpen)); refreshOpen();
+// 一覧：カーソルを入れる／押すと開く。都道府県を選ぶと、その都道府県の市区町村だけが候補に出る（連動）
+const PREFS_FALLBACK = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+let MUNI = null; // {prefs:[…], munis:{都道府県:[市区町村…]}}。読み込めなければ、都道府県だけの一覧＋市区町村は自由入力
+fetch("muni.json").then(r => r.json()).then(j => { if (j && Array.isArray(j.prefs) && j.munis) { MUNI = j; refreshOpen(); } }).catch(() => {});
+const prefList = () => (MUNI ? MUNI.prefs : PREFS_FALLBACK);
+const cityList = () => (MUNI && MUNI.munis[prefInp.value.trim()]) || null; // 都道府県が決まっていなければ null
+const prefOk = () => prefList().includes(prefInp.value.trim());
+const cityOk = () => { const c = cityInp.value.trim(), L = cityList(); return !!c && (L ? L.includes(c) : !MUNI); };
+const refreshOpen = () => lamp(openBtn, prefOk() && cityOk());
+function setupCombo(inp, ul, options, emptyMsg, onPick) {
+  let idx = -1, shown = [];
+  const hide = () => { ul.hidden = true; inp.setAttribute("aria-expanded", "false"); idx = -1; };
+  const mark = () => [...ul.querySelectorAll("li[data-v]")].forEach((li, i) => { li.classList.toggle("on", i === idx); if (i === idx) li.scrollIntoView({ block:"nearest" }); });
+  const show = () => {
+    if (document.activeElement !== inp) return; // 入力欄にカーソルがあるときだけ開く（デモ・再現で値が入っても開かない）
+    const all = options(), q = inp.value.trim();
+    shown = all ? (q ? all.filter(x => x.includes(q)) : all) : [];
+    ul.innerHTML = "";
+    if (!all) { const li = document.createElement("li"); li.className = "none"; li.textContent = emptyMsg; ul.appendChild(li); }
+    else if (!shown.length) { const li = document.createElement("li"); li.className = "none"; li.textContent = "候補がありません"; ul.appendChild(li); }
+    else for (const v of shown) { const li = document.createElement("li"); li.dataset.v = v; li.textContent = v; li.setAttribute("role", "option"); ul.appendChild(li); }
+    ul.hidden = false; inp.setAttribute("aria-expanded", "true"); idx = -1;
+    const cur = ul.querySelector(`li[data-v="${CSS.escape(q)}"]`); if (cur) { idx = [...ul.querySelectorAll("li[data-v]")].indexOf(cur); mark(); }
+  };
+  const pick = v => { inp.value = v; hide(); inp.dispatchEvent(new Event("change", { bubbles:true })); if (onPick) onPick(); };
+  inp.addEventListener("focus", show); inp.addEventListener("click", show); inp.addEventListener("input", show);
+  inp.addEventListener("blur", () => setTimeout(hide, 120));
+  inp.addEventListener("keydown", e => {
+    const n = ul.querySelectorAll("li[data-v]").length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (ul.hidden) show(); else if (n) { idx = (idx + (e.key === "ArrowDown" ? 1 : -1) + n) % n; mark(); } }
+    else if (e.key === "Enter" && !ul.hidden && idx >= 0) { e.preventDefault(); pick(ul.querySelectorAll("li[data-v]")[idx].dataset.v); }
+    else if (e.key === "Escape") hide();
+  });
+  ul.addEventListener("mousedown", e => { e.preventDefault(); const li = e.target.closest("li[data-v]"); if (li) pick(li.dataset.v); }); // 入力欄からカーソルが外れる前に選ぶ
+}
+setupCombo(prefInp, document.getElementById("prefList"), prefList, "", () => { if (!cityOk()) cityInp.value = ""; refreshOpen(); setTimeout(() => cityInp.focus(), 0); }); // 都道府県を選んだら、続けて市区町村へ
+setupCombo(cityInp, document.getElementById("cityList"), cityList, "先に都道府県を選んでください", refreshOpen);
+[prefInp, cityInp].forEach(i => { i.addEventListener("input", refreshOpen); i.addEventListener("change", refreshOpen); });
+prefInp.addEventListener("input", () => { if (cityInp.value && !cityOk()) { /* 都道府県を書き換えたとき、合わなくなった市区町村はそのまま残し、点灯だけ消える */ } });
+refreshOpen();
 document.getElementById("openMap").onclick = async () => {
   const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
   const msg = document.getElementById("mapMsg");
