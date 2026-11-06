@@ -14,7 +14,7 @@ window.SessionView = (function () {
   function usage(st) {
     const u = st.usage || {};
     return u.n
-      ? `AI（Claude）とのやり取り：<b>${u.n}往復</b>（入力 ${(u.tin || 0).toLocaleString()}・出力 ${(u.tout || 0).toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yen(st, u.costUsd || 0)}</b>（推定）`
+      ? `AIとのやり取り：<b>${u.n}往復</b>（入力 ${(u.tin || 0).toLocaleString()}・出力 ${(u.tout || 0).toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yen(st, u.costUsd || 0)}</b>（推定）`
       : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
   }
   function cost(st) {

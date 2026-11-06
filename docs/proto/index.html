@@ -67,7 +67,6 @@
   #inq { border-top:1px solid var(--line); margin-top:16px; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
   .logline { font-size:12px; color:var(--sub); padding:4px 14px; border-bottom:1px solid var(--line); flex:none; }
-  .logline .note { font-size:12px; color:#b4472b; margin-left:10px; }
 </style>
 </head>
 <body>
@@ -75,7 +74,7 @@
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="shell.js"></script>
-<div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。<span class="note">①〜③は台本、④からの返事はAI（Claude）です。数値は仮データで実在しません。</span></div>
+<div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
   <aside>
@@ -367,7 +366,7 @@ const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-"
 let SID = newSid(); // ブラウザを開いてから閉じるまで
 const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "visitor"; // ?by=名前 で誰の利用か分ける
 const AI_URL = "../../api/chat"; // /RealEstate_app/docs/proto/ から /RealEstate_app/api/chat へ
-const AI_FAIL = "<br><small>（AIにつながらなかったため、台本の仮の返事です）</small>";
+const AI_FAIL = "<br><small>（AIにつながらなかったため、簡易の返事を表示しています）</small>";
 let AI_HIST = [], REPLAYING = false, RESTORE = null;
 // ---- 画面の動きの記録（開いた・地図・押したボタン・閉じた）。本文や個人情報は送らない ----
 const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
@@ -497,7 +496,7 @@ function goStep(i, lead, real) {
   const ask = i === 1 && st.kind === "聞く";
   // AIの返事（real）は、最後の一文が「次のボタンが答えになる問い」なので、台本の導入は足さない
   say(real ? lead : lead + "<br>" + (!list.length ? "続けて、書いてお知らせください。" : ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
-    real ? "渡したもの：一つ前の答えへのClaudeの返事" : "渡したもの：一つ前の答えへの回答（台本）", hole);
+    real ? "渡したもの：一つ前の答えへのAIの返事" : "渡したもの：一つ前の答えへの回答（台本）", hole);
   const ans = said => `<span class="hint">（AIの${ask ? "返事：「" + esc(said) + "」が店にとって何を意味するかを正直に返す" : "回答：「" + esc(said) + "」に、ここまでの土地の条件に合わせて短く答える"}）</span>`;
   const enter = c => {
     if (i !== 0) return;
