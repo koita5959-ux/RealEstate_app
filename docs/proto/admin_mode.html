@@ -54,9 +54,14 @@
   .hint { font-size:12px; color:var(--sub); }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
   /* 右側 */
+  /* 色の約束：青＝利用者の視点へ行くボタン／赤＝開発者の視点へ行くボタン */
+  .btn-user, .btn-dev { display:inline-block; font:inherit; font-size:13px; padding:5px 12px; margin:0; border-radius:6px; color:#fff; cursor:pointer; text-decoration:none; border:1px solid; }
+  .btn-user { background:#1d6fb8; border-color:#1d6fb8; }
+  .btn-dev { background:#c0392b; border-color:#c0392b; }
   .tabs { display:flex; gap:4px; margin-bottom:10px; }
   .tabs button { margin:0; flex:1; }
-  .tabs button.on { background:var(--accent); color:#fff; }
+  .tabs button.on { background:#eef2f6; color:var(--ink); }
+  .tabs .btn-user, .tabs .btn-dev { color:#fff; }
   .side h3 { font-size:13px; margin:14px 0 4px; }
   .side h3 .num { font-size:15px; margin-right:2px; }
   .side p { font-size:13px; line-height:1.7; margin:2px 0 6px; }
@@ -113,7 +118,7 @@
   </main>
 
   <aside class="side">
-    <div class="tabs"><button class="on">設定の説明</button><button id="toUser">利用者画面 ↗</button></div>
+    <div class="tabs"><button class="on">設定の説明</button><button id="toUser" class="btn-user">利用者画面 ↗</button><button id="toDev" class="btn-dev">利用状況レポート ↗</button></div>
     <div id="help"></div>
   </aside>
 </div>
@@ -369,6 +374,7 @@ function loadSaved() {
   lamp();
 }
 document.getElementById("commit").onclick = commit;
+document.getElementById("toDev").onclick = () => window.open("../../api/admin/", "reDevWin"); // 開発者向けの利用状況レポート（別の画面。下書きには影響しない）
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 document.getElementById("toUser").onclick = () => {
   if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return; }
