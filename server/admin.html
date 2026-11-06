@@ -74,7 +74,7 @@ const actorSelect = () => `対象：<select id="asel"><option value="all" ${acto
 const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
 
 // 再表示（元に戻す）：画面は開かない。すでに開いている窓へ合図を送るだけ。
-//  ・利用者画面（メイン）：そのセッションの状態へ戻す（地図・ピン・①〜⑦の選択を再現し、AIの返事は記録にある本物の文）
+//  ・メイン画面：そのセッションの状態へ戻す（地図・ピン・①〜⑦の選択を再現し、AIの返事は記録にある本物の文）
 //  ・利用状況の画面：そのセッションの表示に切り替える
 // 届いたか（返事があったか）だけを、ここに通知する。メイン画面は今の表示が置き換わるので、先に確認する。
 let replayTimer = null, replayWait = null;
@@ -89,7 +89,7 @@ function settleReplay() { // 返事がそろった、または待ち時間が過
   if (!replayWait) return;
   const w = replayWait; replayWait = null; clearTimeout(replayTimer);
   const parts = [], missing = [];
-  if (w.wantUser) (w.gotUser ? parts : missing).push(w.gotUser ? "利用者画面（メイン）を元に戻しました" : "利用者画面（メイン）が開いていません（更新前の古い画面なら、リロードしてください）");
+  if (w.wantUser) (w.gotUser ? parts : missing).push(w.gotUser ? "メイン画面を元に戻しました" : "メイン画面が開いていません（更新前の古い画面なら、リロードしてください）");
   if (w.wantReport) (w.gotReport ? parts : missing).push(w.gotReport ? "利用状況の画面に表示しました" : "利用状況の画面が開いていません（更新前の古い画面なら、リロードしてください）");
   if (w.failed) missing.push("メイン画面で元に戻せませんでした（" + w.failed + "）");
   toast([...parts, ...missing].join("／") + "（セッション " + w.sid.slice(0, 8) + "）", missing.length > 0);
@@ -116,7 +116,7 @@ function askRestore(d) { // 確認：メイン画面の今の表示は置き換�
   box.innerHTML = `<div style="background:#fff;border-radius:10px;max-width:460px;width:100%;padding:18px 20px;box-shadow:0 8px 30px rgba(0,0,0,.3)">
     <div style="font-weight:600;margin-bottom:6px">このセッションを元に戻しますか？</div>
     <div class="note" style="margin-bottom:10px">セッション ${esc(d.sid.slice(0, 8))}（${esc(d.by)}／${esc(when)}）${d.reconstructed ? "<br>ログからの復元です。面積・地価などは今の画面の値になります。" : ""}</div>
-    <div style="font-size:13px;margin-bottom:14px">開いている<b>利用者画面（メイン）の今の表示は、このセッションの内容に置き換わります</b>。AIの返事は、記録にある本物の文です（Claudeは呼びません）。戻したあとの操作は、新しい体験として記録されます。</div>
+    <div style="font-size:13px;margin-bottom:14px">開いている<b>メイン画面の今の表示は、このセッションの内容に置き換わります</b>。AIの返事は、記録にある本物の文です（Claudeは呼びません）。戻したあとの操作は、新しい体験として記録されます。</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
       <button class="act" id="rcBoth" style="background:#1d6fb8;border-color:#1d6fb8">メイン画面と利用状況を元に戻す</button>
       <button class="act" id="rcReport" style="background:#fff;color:#1d6fb8;border-color:#1d6fb8">利用状況の画面だけ</button>

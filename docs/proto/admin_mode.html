@@ -80,7 +80,7 @@
 <body>
 <header id="appbar" data-current="admin" data-title="管理画面 ― 試作（コンテンツ：3 AI型）"></header>
 <script src="shell.js"></script>
-<div class="noticebar">左の番号は、利用者の画面の番号と同じです。「設定を変更する」で利用者画面に反映し、右上の「利用者画面」で確かめられます（設定はこのブラウザに保存され、利用者画面が読みます）。AIの返事はダミーです。</div>
+<div class="noticebar">左の番号は、メイン画面の番号と同じです。「設定を変更する」でメイン画面に反映し、右上の「メイン画面」で確かめられます（設定はこのブラウザに保存され、メイン画面が読みます）。AIの返事はダミーです。</div>
 <div class="wrap">
   <main class="admin">
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
@@ -114,7 +114,7 @@
 
 <dialog id="leave"><form method="dialog">
   <p>未確定の入力があります。</p>
-  <p class="hint">OK：入力を捨てて利用者画面へ移動する<br>確定して移動：設定を変更してから移動する<br>キャンセル：移動せず、このまま管理画面で続ける</p>
+  <p class="hint">OK：入力を捨ててメイン画面へ移動する<br>確定して移動：設定を変更してから移動する<br>キャンセル：移動せず、このまま管理画面で続ける</p>
   <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
 </form></dialog>
 <script>
@@ -288,7 +288,7 @@ function renderHelp() {
   document.getElementById("help").innerHTML = `
     <h3>概要</h3>
     <p>AI型コンテンツの設定画面です。利用者は地図に土地のピンを立て、番号の順にボタンを押して相談を進めます。AIは利用者の答えに短く答え、最後に次のボタンを話題として示します。</p>
-    <p>左の番号は、利用者の画面の番号と同じです。設定したら「利用者画面」を開き、同じ番号の所がどう出るかを確かめてください。書き換えは「設定を変更する」を押すまで利用者画面に届きません。このボタンは書き換えがあるときだけ点灯します。押すと、開いている利用者画面は最初から読み直されます。押さずに利用者画面へ移ると、書き換えは捨てられます。</p>
+    <p>左の番号は、メイン画面の番号と同じです。設定したら「メイン画面」を開き、同じ番号の所がどう出るかを確かめてください。書き換えは「設定を変更する」を押すまでメイン画面に届きません。このボタンは書き換えがあるときだけ点灯します。押すと、開いているメイン画面は最初から読み直されます。押さずにメイン画面へ移ると、書き換えは捨てられます。</p>
     <h3>業態モード</h3>
     <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
     <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
@@ -312,8 +312,8 @@ function renderHelp() {
     <p>AIの返事の形、立ち位置、個人情報の扱いです。どの店でも同じで、変えられません。</p>`;
 }
 
-// ---- 利用者画面（index.html）へ連動：設定をこのブラウザに保存し、利用者画面が読む ----
-// 書き換えは下書き。「設定を変更する」で初めて保存し、利用者画面が読む
+// ---- メイン画面（index.html）へ連動：設定をこのブラウザに保存し、メイン画面が読む ----
+// 書き換えは下書き。「設定を変更する」で初めて保存し、メイン画面が読む
 let dirty = false;
 function save() { dirty = true; document.getElementById("checks").innerHTML = ""; lamp(); }
 // 「設定を変更する」は書き換えがあるときだけ点灯
@@ -346,7 +346,7 @@ function commit() {
   const { err, adv } = check();
   const li = a => a.map(t => `<li>${esc(t)}</li>`).join("");
   document.getElementById("checks").innerHTML =
-    (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>利用者画面に反映されます。</div>`)
+    (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>メイン画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
   if (err.length) return false;
   try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText, limit })); } catch (e) {}
@@ -364,7 +364,7 @@ function loadSaved() {
 }
 document.getElementById("commit").onclick = commit;
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
-Shell.beforeGo = key => { // 利用者画面へ行くとき、未確定の下書きがあれば三択を出す（ほかの画面へ行くのは下書きに影響しない）
+Shell.beforeGo = key => { // メイン画面へ行くとき、未確定の下書きがあれば三択を出す（ほかの画面へ行くのは下書きに影響しない）
   if (key === "user" && dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
   return true;
 };

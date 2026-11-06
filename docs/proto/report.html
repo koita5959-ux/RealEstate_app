@@ -34,7 +34,7 @@
   <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 
   <div id="none" class="sheet" style="margin-top:16px" hidden>
-    まだ体験の記録がありません。「利用者画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。
+    まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。
   </div>
 
   <div id="main" hidden>
@@ -70,7 +70,7 @@ function load() {
   try { s = JSON.parse(localStorage.getItem("reSession")); } catch (e) { /* 読めなければ空扱い */ }
   const st = s && s.state;
   $("none").hidden = !!st; $("main").hidden = !st;
-  $("none").textContent = "まだ体験の記録がありません。「利用者画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
+  $("none").textContent = "まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
   if (!st) return;
   $("stamp").textContent = "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに更新されます。別のウインドウで開いたままでも、リロードで最新が見られます。";
   paint(st);

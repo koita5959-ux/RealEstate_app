@@ -18,7 +18,7 @@
   };
 
   const SCREENS = {
-    user:   { label: "利用者画面へ", url: "./",               name: "reUser",     cls: "btn-user" },
+    user:   { label: "メイン画面へ", url: "./",               name: "reUser",     cls: "btn-user" },
     admin:  { label: "管理画面へ",   url: "admin_mode.html",  name: "reAdminWin", cls: "btn-dev" },
     report: { label: "利用状況",     url: "report.html",      name: "reReport",   cls: "btn-user", needsSession: true },
     dev:    { label: "開発利用状況", url: "../../api/admin/", name: "reDevWin",   cls: "btn-dev" },

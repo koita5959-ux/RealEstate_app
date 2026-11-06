@@ -20,6 +20,7 @@
   button { font-size:14px; padding:9px 12px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; margin:4px 4px 0 0; }
   button.primary { background:var(--accent); color:#fff; width:100%; margin-top:10px; }
   button:disabled { opacity:.4; cursor:default; }
+  button.off, button.off:hover { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; opacity:1; }
   .data { width:100%; border-collapse:collapse; font-size:13px; }
   .data td { border-bottom:1px solid var(--line); padding:5px 4px; }
   .data td:first-child { color:var(--sub); width:42%; }
@@ -73,9 +74,9 @@
     <div id="step0">
       <h2>0. 土地のある市区町村</h2>
       <label for="prefName">都道府県</label>
-      <input id="prefName" type="text" value="岐阜県">
+      <input id="prefName" type="text" placeholder="例：岐阜県" autocomplete="off">
       <label for="cityName">市区町村</label>
-      <input id="cityName" type="text" value="岐阜市">
+      <input id="cityName" type="text" placeholder="例：岐阜市" autocomplete="off">
       <button id="openMap" class="primary">地図を開く</button>
       <div id="mapMsg" class="hint"></div>
     </div>
@@ -85,7 +86,7 @@
       <div id="picked" class="hint">まだ指定されていません（岐阜市内）</div>
       <label for="area">面積（㎡）</label>
       <input id="area" type="number" value="120" min="10">
-      <button id="go" class="primary" disabled>評価する</button>
+      <button id="go" class="primary off">評価する</button>
     </div>
     <div id="route" class="route"></div>
     <div id="result"></div>
@@ -142,15 +143,26 @@ function setPin(lat, lng) {
   here = { lat, lng };
   if (pin) pin.setLatLng([lat, lng]); else pin = L.marker([lat, lng]).addTo(map);
   document.getElementById("picked").textContent = `指定: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  document.getElementById("go").disabled = false;
+  refreshGo();
   ev("pin", { lat:+lat.toFixed(4), lng:+lng.toFixed(4) }); // 元に戻す（再表示）で、同じ場所にピンを置けるように
 }
 map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
-document.getElementById("preset").onclick = () => { map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352); };
+const goBtn = document.getElementById("go"), areaInp = document.getElementById("area");
+const refreshGo = () => lamp(goBtn, !!here && Number(areaInp.value) >= 10);
+areaInp.addEventListener("input", refreshGo);
+document.getElementById("preset").onclick = () => {
+  if (!PLACE) { prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden"); } // 地図を開かずに例のピンを使った場合
+  map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352);
+};
 
 // ---- 0. 都道府県・市区町村 → 地図を開く（国土地理院の住所検索で中心を出す） ----
 map.setView([36.2, 137.5], 5); // 開く前は日本全体
-let PLACE = document.getElementById("prefName").value + document.getElementById("cityName").value; // 地図を開かず例のピンを使った場合も、入力欄の既定（岐阜県岐阜市）
+let PLACE = ""; // 都道府県・市区町村は空白で始める（日本地図から）
+// ---- ボタンの点灯／グレー：受け付けられる入力があれば点灯、未入力ならグレー ----
+const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
+const prefInp = document.getElementById("prefName"), cityInp = document.getElementById("cityName"), openBtn = document.getElementById("openMap");
+const refreshOpen = () => lamp(openBtn, !!prefInp.value.trim() && !!cityInp.value.trim());
+[prefInp, cityInp].forEach(i => i.addEventListener("input", refreshOpen)); refreshOpen();
 document.getElementById("openMap").onclick = async () => {
   const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
   const msg = document.getElementById("mapMsg");
@@ -176,6 +188,7 @@ const R = document.getElementById("result");
 const yen = n => Math.round(n).toLocaleString() + "円";
 
 document.getElementById("go").onclick = () => {
+  if (!here || !(Number(document.getElementById("area").value) >= 10)) return; // ピンと面積がそろっていなければ何もしない
   // 進めた体験のあとに「評価する」を押し直したら、新しい体験として分ける（前の体験の保存内容を上書きしない）。巻き戻し・元に戻すの再現中は分けない
   if (!REPLAYING && typeof S !== "undefined" && S && (PATH.length || (S.api || []).length)) SID = newSid();
   PATH.length = 0; AI_HIST.length = 0; renderRoute();
@@ -472,8 +485,12 @@ function inquiryBar() {
       <button id="inqSend" class="primary">この内容で送る</button>
       <button id="inqBack" class="small">相談に戻る</button>`);
     box.scrollIntoView({ block:"start" });
+    const inqOk = () => !!document.getElementById("fName").value.trim() && !!(document.getElementById("fMail").value.trim() || document.getElementById("fTel").value.trim());
+    const refreshInq = () => lamp(document.getElementById("inqSend"), inqOk());
+    ["fName", "fMail", "fTel"].forEach(id => document.getElementById(id).addEventListener("input", refreshInq)); refreshInq();
     document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
+      if (!inqOk()) return; // お名前と、メールか電話のどちらかが必要
       ev("inquiry_send");
       box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
       box.classList.add("done");
@@ -529,6 +546,8 @@ function choices(list, cb, onText, q) {
   if (onText) {
     d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="${list.length ? "リクエストメッセージも送れます" : "ここに書いて送信してください"}"><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
+    const inp = d.querySelector("input.other"), refreshSend = () => lamp(b, !!inp.value.trim() || !!d.querySelector("button.sel"));
+    inp.addEventListener("input", refreshSend); d.addEventListener("click", () => setTimeout(refreshSend, 0)); refreshSend();
     b.onclick = () => {
       if (d.dataset.step) return;
       const t = d.querySelector("input.other").value.trim(), sel = d.querySelector("button.sel");
@@ -589,7 +608,7 @@ const DEMOS = {
   sagiyama: {
     title: "鷺山の旗竿地・空き家（一投目＝接道）",
     steps: [
-      { press:"地図を開く", note:"最初は都道府県と市区町村。既定は岐阜県岐阜市。" },
+      { press:"地図を開く", fill:{ prefName:"岐阜県", cityName:"岐阜市" }, note:"最初は都道府県と市区町村を入れる（空白から始まる）。デモでは岐阜県岐阜市。" },
       { press:"例：鷺山の旗竿地にピンを置く", note:"本番は地図をクリック。デモでは例の場所に置きます。" },
       { press:"評価する", note:"公開データが機械的に出て、①が始まる。" },
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
@@ -619,7 +638,7 @@ if (DEMO) {
     panel.innerHTML = `<b>${DEMO.title}</b>　手順 ${i + 1} / ${DEMO.steps.length}<br>${where}「${st.press}」を押す<br><span>${st.note}</span>`;
     if (!btn) return setTimeout(mark, 400); // 地図を開く（住所検索）のように、次のボタンが遅れて出る場合
     if (st.type) row.querySelector("textarea").value = st.type;
-    if (st.fill) Object.entries(st.fill).forEach(([id, v]) => document.getElementById(id).value = v);
+    if (st.fill) Object.entries(st.fill).forEach(([id, v]) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("input", { bubbles:true })); });
     btn.classList.add("demo-next"); // 赤枠で次に押すボタンを示す
     btn.scrollIntoView({ block:"center", behavior:"smooth" });
     btn.addEventListener("click", () => { i++; setTimeout(mark, 0); }, { once:true });
