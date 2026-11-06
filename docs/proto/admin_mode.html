@@ -91,6 +91,9 @@
     <div id="steps"></div>
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
+    <h2>往復の上限 <span class="who shop">店が変えられる</span></h2>
+    <div class="box"><input id="limit" type="number" min="1" style="width:5em"> 往復まで <span class="hint" id="limitNote"></span></div>
+
     <h2>問い合わせで出す店の一手 <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
 
@@ -139,12 +142,15 @@ const LOC = {
 };
 const FIRST = 4; // 店が書く選択肢は④から
 
-let modeKey = "m3", steps = [], closeText = "";
+let modeKey = "m3", steps = [], closeText = "", limit = null; // limit: null＝初期値（自動）
 function loadMode(k) {
   modeKey = k;
   steps = MODES[k].steps.map(s => ({ topic:s.topic, btns:[...s.btns, "", ""] })); // 初期値＋空白2つ
   closeText = MODES[k].close;
+  limit = null;
 }
+// 初期値：ボタンを書いたステップの数＋2（＋で足したステップも数える）
+const autoLimit = () => steps.filter(s => live(s).length).length + 2;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 const live = s => s.btns.map(b => b.trim()).filter(Boolean);
 const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
@@ -181,13 +187,21 @@ function renderAdmin() {
       const inp = document.createElement("input");
       inp.value = b; inp.placeholder = "（空白）";
       inp.size = Math.max(b.length * 2, 8); // field-sizing が効かないブラウザ向け
-      inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); };
+      inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); if (limit == null) document.getElementById("limit").onchange(); };
       slots.appendChild(inp);
     });
     d.querySelector("button").onclick = () => { s.btns.push(""); renderAdmin(); };
     box.appendChild(d);
   });
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
+  const lm = document.getElementById("limit");
+  const showLimit = () => {
+    lm.value = limit ?? autoLimit();
+    document.getElementById("limitNote").textContent = limit == null ? `（初期値：ボタンのあるステップ ${autoLimit() - 2}＋2）` : "（店が変更）";
+  };
+  showLimit();
+  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : null; save(); };
+  lm.onchange = showLimit;
   const cl = document.getElementById("close");
   cl.value = closeText;
   cl.oninput = () => { closeText = cl.value; resetTry(); };
@@ -195,7 +209,8 @@ function renderAdmin() {
     <li>立ち位置：売り逃げ・詐欺まがいの相談には協力しない</li>
     <li>返事の形：短文／入力に対する回答／問いかけ</li>
     <li>問いかけの答えは、次のステップのボタンになる（誘導）</li>
-    <li>次のステップにボタンがなければ「${END}」で打ち切る</li>
+    <li>店のボタンが尽きたら、AIがボタン候補を出して選択＋メッセージを続ける</li>
+    <li>往復の上限に来たら「${END}」で打ち切る</li>
     <li>利用者が書いた個人情報は、返事で繰り返さない。名前や連絡先を問いで聞かない</li>
     <li>原文は残さない。会話全体の総合判断を毎回更新して残す。統計には札と粗い位置だけ</li>
   </ul>`;
@@ -220,7 +235,9 @@ function renderHelp() {
     <div class="ex">例：（回答）「住む・建て直す」や「建てて貸す」・「売る」などについてお話ししましょう。</div>
     <p>各ステップの下に記入欄が付きます。利用者が書いても、AIは答えた後、次のボタンへ戻します。</p>
     <h3>＋ ステップを足す</h3>
-    <p>次の番号のステップが増えます。ボタンを書けば、会話はそこまで続きます。ボタンが一つも書かれていないステップに来たら、AIは回答の後に次の文で打ち切ります。</p>
+    <p>次の番号のステップが増えます。ボタンを書けば、会話はそこまで店の言葉で進みます。ボタンが書かれていないステップでは、AIがボタン候補を出して続けます。</p>
+    <h3>往復の上限</h3>
+    <p>会話を何往復で終えるかです。初期値は「ボタンを書いたステップの数＋2」で、ステップを足してボタンを書くと増えます。数を書き換えると、その数に固定されます。上限に来たら、AIは回答の後に次の文で打ち切ります。</p>
     <div class="ex">${END}</div>
     <h3>問い合わせで出す店の一手</h3>
     <p>④から下に常に出る「これらの情報をもとにお問い合わせ」に添える一文です。問い合わせると、店が何をしてくれるかを書きます。</p>
@@ -229,12 +246,12 @@ function renderHelp() {
 }
 
 // ---- 利用者画面（index.html）へ連動：設定をこのブラウザに保存し、利用者画面が読む ----
-function save() { try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText })); } catch (e) {} }
+function save() { try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText, limit })); } catch (e) {} }
 function resetTry() { save(); }
 
 function renderAll() { renderAdmin(); renderHelp(); save(); }
 loadMode("m3");
-try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode]) { modeKey = sv.mode; steps = sv.steps; closeText = sv.close; } } catch (e) {}
+try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode]) { modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.limit ?? null; } } catch (e) {}
 renderAll();
 </script>
 </body>
