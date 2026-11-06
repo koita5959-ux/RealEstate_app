@@ -1,0 +1,281 @@
+// 利用状況の集計と、開発者向け管理画面（認証つき）。
+// 記録の読み出し専用に近い。書き込むのは、単価・残高・為替の設定だけ（data/ の中）。
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+
+const JST = (ts) => new Date(new Date(ts).getTime() + 9 * 3600_000).toISOString();
+const dayOf = (ts) => JST(ts).slice(0, 10);
+const IDLE_MS = 30 * 60_000; // 最後の動きから30分で「終了」とみなす
+
+// ---- 記録の読み込み ----
+function readJsonl(dir, prefix) {
+  const out = [];
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.startsWith(prefix + "-") && f.endsWith(".jsonl")).sort();
+  } catch {
+    return out;
+  }
+  for (const f of files) {
+    for (const line of fs.readFileSync(path.join(dir, f), "utf8").split("\n")) {
+      if (!line) continue;
+      try {
+        out.push(JSON.parse(line));
+      } catch {
+        /* 壊れた行は飛ばす */
+      }
+    }
+  }
+  return out;
+}
+function readJson(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+// ---- 単価（いつから有効か付きの履歴）----
+// 単価は USD/100万トークン。cacheRead は未設定なら入力の0.1倍、cacheWrite は1.25倍（仮説。実額と突き合わせて直す）。
+function priceVersions(dir, defaults) {
+  const saved = readJson(path.join(dir, "prices.json"), null);
+  if (saved && Array.isArray(saved.versions) && saved.versions.length) return saved.versions.sort((a, b) => a.from.localeCompare(b.from));
+  return [{ from: "2026-01-01T00:00:00Z", models: Object.entries(defaults).map(([model, p]) => ({ model, input: p.in, output: p.out })) }];
+}
+const versionAt = (ts, vs) => ([...vs].reverse().find((v) => v.from <= ts) || vs[0]);
+const priceFor = (model, v) => {
+  const hits = v.models.filter((m) => model && model.startsWith(m.model));
+  return hits.sort((a, b) => b.model.length - a.model.length)[0] || null;
+};
+function estimate(row, vs) {
+  const p = priceFor(row.model, versionAt(row.ts, vs));
+  if (!p) return row.costUsd ?? null;
+  const cr = p.cacheRead ?? p.input * 0.1, cw = p.cacheWrite ?? p.input * 1.25;
+  return ((row.inputTokens || 0) * p.input + (row.outputTokens || 0) * p.output + (row.cacheRead || 0) * cr + (row.cacheCreate || 0) * cw) / 1e6;
+}
+
+// ---- 統計の小道具 ----
+const sum = (a, f = (x) => x) => a.reduce((s, x) => s + (f(x) || 0), 0);
+const pct = (arr, q) => {
+  if (!arr.length) return null;
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(q * s.length))];
+};
+
+// 書かれた言葉の仮の分類（キーワード）。画面にも規則を出す。
+export const THEME_RULES = [
+  ["費用・値段", /費用|値段|価格|いくら|料金|金額|相場|円|コスト/],
+  ["相続・譲渡・税", /相続|税|贈与|譲渡|名義|遺産/],
+  ["売る", /売却|売る|売り|買取|査定/],
+  ["貸す・運用", /貸す|貸し|賃貸|駐車場|収入|利回り|運用|アパート|テナント/],
+  ["建てる・建て替え", /建て|建築|新築|リフォーム|解体|セットバック|接道|再建築/],
+  ["お隣・境界", /隣|境界|私道|通路|旗竿/],
+  ["このサービス自体への質問", /導入|このアプリ|このサイト|御社|システム|AI|チャット|プラン|契約|機能|使い方/],
+  ["テスト入力", /^(テスト|test|てすと|あ+|こんにちは|hello|hi|\.+|\?+|1+|a+)$/i],
+];
+const themeOf = (t) => (THEME_RULES.find(([, re]) => re.test(t.trim())) || ["その他"])[0];
+
+// ---- 集計本体 ----
+export function summarize(ctx) {
+  const dir = ctx.DATA_DIR;
+  const vs = priceVersions(dir, ctx.PRICES);
+  const settings = { usdJpy: 150, ...readJson(path.join(dir, "settings.json"), {}) };
+  const chat = readJsonl(dir, "log");
+  const events = readJsonl(dir, "events");
+  const balances = readJsonl(dir, "balances").sort((a, b) => a.ts.localeCompare(b.ts));
+
+  // 各往復に推定額を付ける。残高の記録があれば、区間の実額を推定額の割合で割り振って「確定」にする。
+  const turns = chat.map((r) => ({ ...r, est: estimate(r, vs) ?? 0, usd: null, fixed: false }));
+  for (const t of turns) t.usd = t.est;
+  for (let i = 1; i < balances.length; i++) {
+    const [a, b] = [balances[i - 1], balances[i]];
+    const inside = turns.filter((t) => t.ts > a.ts && t.ts <= b.ts);
+    const est = sum(inside, (t) => t.est), spent = a.amount_usd - b.amount_usd;
+    for (const t of inside) {
+      t.usd = est > 0 ? (spent * t.est) / est : t.est;
+      t.fixed = est > 0;
+    }
+  }
+  const okTurns = turns.filter((t) => t.status === "ok");
+
+  // 残高の区間ごとの観察（実額と推定のずれ）
+  const segments = [];
+  for (let i = 1; i < balances.length; i++) {
+    const [a, b] = [balances[i - 1], balances[i]];
+    const inside = turns.filter((t) => t.ts > a.ts && t.ts <= b.ts);
+    const est = sum(inside, (t) => t.est), spent = a.amount_usd - b.amount_usd;
+    segments.push({ from: a.ts, to: b.ts, spent, est, diff: spent - est, ratio: est > 0 ? spent / est : null, rounds: inside.filter((t) => t.status === "ok").length, note: b.note || "" });
+  }
+  const lastBal = balances[balances.length - 1] || null;
+  const sinceLast = lastBal ? turns.filter((t) => t.ts > lastBal.ts) : [];
+  const balanceNow = lastBal ? lastBal.amount_usd - sum(sinceLast, (t) => t.est) : null;
+
+  // セッション（画面を開いてから閉じるまで）
+  const sess = new Map();
+  const S = (sid) => {
+    if (!sess.has(sid)) sess.set(sid, { sid, by: "?", started: null, last: null, rounds: 0, errors: 0, rejected: 0, inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true, maxQ: 0, place: "", branch: "", ended: false, events: 0, first: "" });
+    return sess.get(sid);
+  };
+  const touch = (s, ts) => { if (!s.started || ts < s.started) s.started = ts; if (!s.last || ts > s.last) s.last = ts; };
+  for (const t of turns) {
+    const s = S(t.sid || "no-sid"); touch(s, t.ts); s.by = t.by || s.by;
+    if (t.status === "ok") { s.rounds++; s.inTok += t.inputTokens || 0; s.outTok += t.outputTokens || 0; s.est += t.est; s.usd += t.usd; s.fixed = s.fixed && t.fixed; if (!s.first && t.userText) s.first = t.userText; }
+    else if (t.status === "rejected") s.rejected++; else s.errors++;
+    if (t.meta) { s.maxQ = Math.max(s.maxQ, +t.meta.q || 0); if (t.meta.place) s.place = t.meta.place; if (t.meta.branch) s.branch = t.meta.branch; }
+  }
+  for (const e of events) {
+    const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?";
+    if (e.type === "end") s.ended = true;
+    if (e.type === "map" && e.data?.place) s.place = e.data.place;
+    if (e.type === "choice") s.maxQ = Math.max(s.maxQ, +e.data?.q || 0);
+  }
+  const now = Date.now();
+  const sessions = [...sess.values()].map((s) => ({ ...s, active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+
+  // 日別（日本時間）
+  const dayMap = new Map();
+  for (const t of okTurns) {
+    const d = dayOf(t.ts), k = d + "|" + (t.by || "?");
+    const x = dayMap.get(k) || { day: d, by: t.by || "?", rounds: 0, sessions: new Set(), inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true };
+    x.rounds++; x.sessions.add(t.sid); x.inTok += t.inputTokens || 0; x.outTok += t.outputTokens || 0; x.est += t.est; x.usd += t.usd; x.fixed = x.fixed && t.fixed;
+    dayMap.set(k, x);
+  }
+  const days = [...dayMap.values()].map((x) => ({ ...x, sessions: x.sessions.size })).sort((a, b) => b.day.localeCompare(a.day) || a.by.localeCompare(b.by));
+
+  // 誰の利用か
+  const actors = {};
+  for (const s of sessions) {
+    const a = (actors[s.by] ||= { by: s.by, sessions: 0, withAi: 0, rounds: 0, usd: 0, est: 0 });
+    a.sessions++; if (s.rounds) a.withAi++; a.rounds += s.rounds; a.usd += s.usd; a.est += s.est;
+  }
+
+  // 今日・今月・通算
+  const today = dayOf(new Date().toISOString()), month = today.slice(0, 7);
+  const sumOf = (arr) => ({ rounds: arr.length, est: sum(arr, (t) => t.est), usd: sum(arr, (t) => t.usd) });
+  const totals = { today: sumOf(okTurns.filter((t) => dayOf(t.ts) === today)), month: sumOf(okTurns.filter((t) => dayOf(t.ts).startsWith(month))), all: sumOf(okTurns) };
+  const rej = turns.filter((t) => t.status === "rejected" && dayOf(t.ts) === today);
+  const rejected = {}; for (const t of rej) rejected[t.reason || "?"] = (rejected[t.reason || "?"] || 0) + 1;
+  const errorsToday = turns.filter((t) => t.status === "error" && dayOf(t.ts) === today).length;
+
+  // 費用の目安（販売用）。「相談1件」＝AIとやり取りしたセッション。テスト（visitor 以外）も別に出せるよう by 別に持つ。
+  const perSession = (filter) => {
+    const ss = sessions.filter((s) => s.rounds > 0 && filter(s));
+    const costs = ss.map((s) => s.est), rounds = ss.map((s) => s.rounds);
+    return { n: ss.length, avgUsd: ss.length ? sum(costs) / ss.length : null, p50: pct(costs, 0.5), p90: pct(costs, 0.9), maxUsd: costs.length ? Math.max(...costs) : null,
+      avgRounds: ss.length ? sum(rounds) / ss.length : null, avgIn: ss.length ? sum(ss, (s) => s.inTok) / ss.length : null, avgOut: ss.length ? sum(ss, (s) => s.outTok) / ss.length : null };
+  };
+  const explain = { visitor: perSession((s) => s.by === "visitor"), all: perSession(() => true), usdJpy: settings.usdJpy, model: ctx.MODEL };
+  // 同じトークン量を、ほかのモデルの単価で見積もり直す（品質は同じとは限らない）
+  const vNow = vs[vs.length - 1], base = explain.visitor.n ? explain.visitor : explain.all;
+  explain.models = base.n ? vNow.models.map((m) => ({ model: m.model, perSessionUsd: ((base.avgIn || 0) * m.input + (base.avgOut || 0) * m.output) / 1e6 })) : [];
+
+  // 何を試しているか
+  // 「その段階以上に進んだセッション」を数える（記録が欠けても、後ろの段階に進んだ人は前も通ったとみなす）。
+  // 地図・問い合わせは、通らなくても先へ進める横道なので、実際に押した数をそのまま数える。
+  const chain = ["open", "pin", "evaluate", "q1", "q2", "q3", "q4", "q5"];
+  const stagesOrder = ["open", "map", "pin", "evaluate", "q1", "q2", "q3", "q4", "q5", "inquiry_open", "inquiry_send"];
+  const funnelFor = (by) => {
+    const reach = new Map(), side = { map: new Set(), inquiry_open: new Set(), inquiry_send: new Set() };
+    const up = (sid, i) => reach.set(sid, Math.max(reach.get(sid) ?? -1, i));
+    for (const e of events) {
+      if (by && e.by !== by) continue;
+      if (e.type in side) side[e.type].add(e.sid);
+      const i = e.type === "choice" ? (+e.data?.q >= 1 ? 2 + Math.min(+e.data.q, 5) : 0) : chain.indexOf(e.type);
+      up(e.sid, i >= 0 ? i : 0);
+    }
+    for (const t of turns) { if (by && t.by !== by) continue; if (t.status === "ok") up(t.sid, (t.turn || 1) >= 2 ? 7 : 6); }
+    return stagesOrder.map((k) => {
+      const i = chain.indexOf(k);
+      return { stage: k, sessions: i >= 0 ? [...reach.values()].filter((r) => r >= i).length : side[k].size };
+    });
+  };
+  const bys = [...new Set([...sessions.map((s) => s.by)])];
+  const funnel = { _all: funnelFor(null), ...Object.fromEntries(bys.map((b) => [b, funnelFor(b)])) };
+
+  const tally = (arr, keyf) => { const m = new Map(); for (const x of arr) { const k = keyf(x); if (k) m.set(k, (m.get(k) || 0) + 1); } return [...m.entries()].map(([k, n]) => ({ k, n })).sort((a, b) => b.n - a.n); };
+  const chatMeta = turns.filter((t) => t.meta && t.status === "ok");
+  const purposes = tally(chatMeta.filter((t) => +t.meta.q === 4), (t) => t.meta.press || "（書いた言葉のみ）");
+  const later = tally(chatMeta.filter((t) => +t.meta.q > 4), (t) => `⑤以降：${t.meta.press || "（書いた言葉のみ）"}`);
+  const branches = tally(chatMeta.filter((t) => +t.meta.q === 4), (t) => t.meta.branch);
+  const roads = tally(events.filter((e) => e.type === "choice" && +e.data?.q <= 3), (e) => `${["①", "②", "③"][e.data.q - 1]} ${e.data.press}`);
+  const places = tally(events.filter((e) => e.type === "evaluate"), (e) => e.data?.place); // 評価まで進んだ地域
+  const near = tally(events.filter((e) => e.type === "evaluate"), (e) => e.data?.near);
+  const texts = chatMeta.filter((t) => /書いた言葉：/.test(t.userText || "")).map((t) => ({ ts: t.ts, by: t.by, q: +t.meta.q || 0, text: (t.userText.split("書いた言葉：")[1] || "").trim(), theme: "" }));
+  for (const x of texts) x.theme = themeOf(x.text);
+  const themes = tally(texts, (x) => x.theme);
+  const devices = tally(events.filter((e) => e.type === "open"), (e) => (e.data?.mobile ? "スマホ幅" : "PC幅"));
+  const refs = tally(events.filter((e) => e.type === "open"), (e) => e.data?.ref || "（直接・不明）");
+
+  return {
+    now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.DAILY_USD_CAP, spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
+    totals, rejected, errorsToday, balances, balanceNow, segments, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
+    explain, prices: vs, themeRules: THEME_RULES.map(([n, re]) => ({ name: n, rule: re.source })),
+    tested: { funnel, purposes, later, branches, roads, places, near, texts: texts.slice(-150).reverse(), themes, devices, refs },
+    turns: turns.slice(-200).reverse().map((t) => ({ ts: t.ts, sid: t.sid, by: t.by, status: t.status, reason: t.reason, turn: t.turn, q: t.meta?.q, press: t.meta?.press, inTok: t.inputTokens, outTok: t.outputTokens, est: t.est, usd: t.usd, fixed: t.fixed, ms: t.ms, user: t.userText, reply: t.reply })),
+  };
+}
+
+// 利用者に見せてよい平均値だけ（個々の記録・本文は出さない）。データが少ないうちは null。
+export function publicStats(ctx) {
+  const s = summarize(ctx).explain;
+  const e = s.visitor.n >= 5 ? s.visitor : s.all.n >= 5 ? s.all : null;
+  if (!e) return { ready: false };
+  return { ready: true, sessions: e.n, avgUsd: e.avgUsd, p90Usd: e.p90, avgRounds: e.avgRounds, usdJpy: s.usdJpy, model: s.model };
+}
+
+// ---- 認証（Basic）----
+function passwordOk(req, ctx) {
+  let want = "";
+  try { want = fs.readFileSync(ctx.ADMIN_PASSWORD_FILE, "utf8").trim(); } catch { return false; }
+  if (!want) return false;
+  const h = req.headers.authorization || "";
+  if (!h.startsWith("Basic ")) return false;
+  const given = Buffer.from(h.slice(6), "base64").toString("utf8").split(":").slice(1).join(":");
+  const a = crypto.createHash("sha256").update(given).digest(), b = crypto.createHash("sha256").update(want).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+// 管理系の入口。処理したら true。
+export async function adminHandler(req, res, url, ctx) {
+  if (!url.pathname.startsWith("/api/admin")) return false;
+  const deny = () => { res.writeHead(401, { "WWW-Authenticate": 'Basic realm="RealEstate_app admin", charset="UTF-8"', "Content-Type": "text/plain; charset=utf-8" }); res.end("認証が必要です"); return true; };
+  if (!ctx.adminRate()) { res.writeHead(429); res.end(); return true; }
+  if (!passwordOk(req, ctx)) return deny();
+  const json = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(JSON.stringify(obj)); return true; };
+
+  if (req.method === "GET" && (url.pathname === "/api/admin" || url.pathname === "/api/admin/")) {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" });
+    res.end(fs.readFileSync(new URL("./admin.html", import.meta.url)));
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/api/admin/summary") return json(200, summarize(ctx));
+
+  if (req.method === "POST") {
+    let body;
+    try { body = await ctx.readBody(req); } catch { return json(400, { error: "bad_request" }); }
+    if (url.pathname === "/api/admin/balance") { // 残高の記録（Console の「残高」を見て入れる）
+      const amount = Number(body.amount_usd);
+      if (!Number.isFinite(amount) || amount < 0) return json(400, { error: "bad_amount" });
+      const rec = { ts: new Date().toISOString(), amount_usd: amount, note: String(body.note || "").slice(0, 100) };
+      fs.appendFileSync(path.join(ctx.DATA_DIR, `balances-${rec.ts.slice(0, 4)}.jsonl`), JSON.stringify(rec) + "\n", { mode: 0o600 });
+      return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/admin/settings") {
+      const usdJpy = Number(body.usdJpy);
+      if (!(usdJpy > 50 && usdJpy < 500)) return json(400, { error: "bad_rate" });
+      fs.writeFileSync(path.join(ctx.DATA_DIR, "settings.json"), JSON.stringify({ ...readJson(path.join(ctx.DATA_DIR, "settings.json"), {}), usdJpy }), { mode: 0o600 });
+      return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/admin/prices") { // 保存すると「今から有効な新しい版」になる。過去の往復は当時の単価のまま。
+      const models = (Array.isArray(body.models) ? body.models : []).map((m) => ({ model: String(m.model || "").slice(0, 60), input: Number(m.input), output: Number(m.output), ...(m.cacheRead > 0 ? { cacheRead: Number(m.cacheRead) } : {}) })).filter((m) => m.model && m.input >= 0 && m.output >= 0);
+      if (!models.length) return json(400, { error: "no_models" });
+      const vs = priceVersions(ctx.DATA_DIR, ctx.PRICES);
+      vs.push({ from: new Date().toISOString(), models });
+      fs.writeFileSync(path.join(ctx.DATA_DIR, "prices.json"), JSON.stringify({ versions: vs }, null, 1), { mode: 0o600 });
+      return json(200, { ok: true });
+    }
+  }
+  return json(404, { error: "not_found" });
+}

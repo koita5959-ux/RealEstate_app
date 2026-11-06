@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>利用状況レポート（開発者用）</title>
+<style>
+  :root { --ink:#1f2933; --sub:#667085; --line:#e4e7ec; --bg:#f7f8fa; --card:#fff; --acc:#1d4ed8; --warn:#b42318; --ok:#067647; --bar:#93b4f5; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif; padding-inline:16px; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; padding:14px 0 6px; }
+  h1 { font-size:18px; margin:0; }
+  h2 { font-size:15px; margin:22px 0 8px; }
+  h3 { font-size:13px; margin:14px 0 4px; color:var(--sub); font-weight:600; }
+  .wrap { max-width:1180px; margin:0 auto; padding-bottom:60px; }
+  nav { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); margin:8px 0 14px; }
+  nav button { border:0; background:none; padding:9px 14px; font:inherit; color:var(--sub); cursor:pointer; border-bottom:2px solid transparent; }
+  nav button.on { color:var(--acc); border-bottom-color:var(--acc); font-weight:600; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .card .t { font-size:12px; color:var(--sub); }
+  .card .v { font-size:22px; font-weight:600; }
+  .card .s { font-size:12px; color:var(--sub); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; font-size:13px; }
+  th, td { text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#f2f4f7; color:var(--sub); font-weight:600; white-space:nowrap; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .scroll { overflow-x:auto; }
+  .bar { height:10px; background:var(--bar); border-radius:3px; min-width:1px; }
+  .barbox { display:flex; align-items:center; gap:8px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; background:#eef2f6; color:var(--sub); }
+  .pill.ok { background:#d1fadf; color:var(--ok); } .pill.warn { background:#fee4e2; color:var(--warn); }
+  .note { font-size:12px; color:var(--sub); }
+  .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; }
+  input, select, button.act { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  button.act { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
+  .hide { display:none; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
+  summary { cursor:pointer; }
+  pre { white-space:pre-wrap; margin:6px 0 0; font:inherit; }
+  .warnbox { background:#fff7e6; border:1px solid #f5d28a; border-radius:8px; padding:8px 12px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>利用状況レポート（開発者用）</h1>
+  <span id="state" class="pill"></span>
+  <span class="note" id="upd"></span>
+  <button class="act" id="reload">更新</button>
+  <label class="note"><input type="checkbox" id="auto"> 30秒ごとに自動更新</label>
+</header>
+<div class="note">金額は、Claude が返したトークン数に単価を掛けた<b>推定</b>です。実額は Console の残高が正です（「設定」で残高を記録すると、実額との差が見えます）。</div>
+<nav id="tabs"></nav>
+<main id="main"></main>
+</div>
+<script>
+const BASE = location.pathname.replace(/\/?$/, "/");
+const TABS = [["cost","費用"],["explain","費用の目安（販売用）"],["tested","何を試しているか"],["sessions","セッションとやり取り"],["settings","設定（残高・単価・為替）"]];
+let D = null, tab = (location.hash || "#cost").slice(1);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const usd = (v, d = 4) => v == null ? "—" : "$" + v.toFixed(d);
+const jpy = v => v == null ? "—" : (v * D.config.usdJpy).toLocaleString("ja-JP", { maximumFractionDigits: v * D.config.usdJpy < 10 ? 2 : 0 }) + "円";
+const money = (v, d = 4) => v == null ? "—" : `${usd(v, d)}<span class="note">（${jpy(v)}）</span>`;
+const tm = ts => ts ? new Date(ts).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
+const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
+const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
+const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
+
+function bars(rows, valf, labf, fmt) {
+  const max = Math.max(...rows.map(valf), 1e-9);
+  return `<table>${rows.map(r => `<tr><td style="width:34%">${esc(labf(r))}</td><td><div class="barbox"><div class="bar" style="width:${Math.max(1, valf(r) / max * 100)}%"></div><span class="note">${fmt(r)}</span></div></td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table>`;
+}
+
+function viewCost() {
+  const T = D.totals, C = D.config, cap = C.dailyCap, used = C.spentToday;
+  const rej = Object.entries(D.rejected).map(([k, n]) => `${REASON[k] || k} ${n}回`).join("、") || "なし";
+  const perDay = {};
+  for (const x of D.days) perDay[x.day] = (perDay[x.day] || 0) + x.est;
+  const dayRows = Object.entries(perDay).slice(0, 14).map(([day, est]) => ({ day, est }));
+  const top = [...D.sessions].sort((a, b) => b.est - a.est).filter(s => s.rounds).slice(0, 8);
+  return `
+  <div class="cards">
+    <div class="card"><div class="t">今日（日本時間）</div><div class="v">${jpy(T.today.est)}</div><div class="s">${usd(T.today.est)} ／ ${T.today.rounds}往復</div></div>
+    <div class="card"><div class="t">今月</div><div class="v">${jpy(T.month.est)}</div><div class="s">${usd(T.month.est)} ／ ${T.month.rounds}往復</div></div>
+    <div class="card"><div class="t">通算</div><div class="v">${jpy(T.all.est)}</div><div class="s">${usd(T.all.est)} ／ ${T.all.rounds}往復</div></div>
+    <div class="card"><div class="t">今日の上限に対する使用</div><div class="v">${(used / cap * 100).toFixed(1)}%</div><div class="s">${usd(used, 3)} / ${usd(cap, 2)}（超えると自動で止まる）</div></div>
+    <div class="card"><div class="t">残高の見込み</div><div class="v">${D.balanceNow == null ? "未記録" : usd(D.balanceNow, 2)}</div><div class="s">${D.balanceNow == null ? "「設定」で Console の残高を記録" : jpy(D.balanceNow) + "（最後の記録＋その後の推定）"}</div></div>
+    <div class="card"><div class="t">今日 止まった・失敗</div><div class="v">${Object.values(D.rejected).reduce((a, b) => a + b, 0) + D.errorsToday}</div><div class="s">止まった: ${esc(rej)} ／ エラー ${D.errorsToday}</div></div>
+  </div>
+  <div class="two">
+    <div><h2>日ごとの推定費用（直近14日）</h2>${bars(dayRows, r => r.est, r => r.day, r => `${usd(r.est)}（${jpy(r.est)}）`)}</div>
+    <div><h2>誰の利用か</h2><div class="scroll"><table><tr><th>名前（?by=）</th><th class="n">セッション</th><th class="n">AIと対話</th><th class="n">往復</th><th class="n">推定費用</th></tr>
+      ${D.actors.sort((a, b) => b.est - a.est).map(a => `<tr><td>${esc(a.by)}</td><td class="n">${a.sessions}</td><td class="n">${a.withAi}</td><td class="n">${a.rounds}</td><td class="n">${money(a.est)}</td></tr>`).join("")}</table></div>
+      <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
+  </div>
+  <h2>費用が大きかったセッション</h2>
+  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th></tr>
+  ${top.map(s => `<tr><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
+  <h2>日別の内訳（日本時間・誰の利用か別）</h2>
+  <div class="scroll"><table><tr><th>日</th><th>誰</th><th class="n">セッション</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">金額</th></tr>
+  ${D.days.slice(0, 40).map(x => `<tr><td>${x.day}</td><td>${esc(x.by)}</td><td class="n">${x.sessions}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}</td><td class="n">${num(x.outTok)}</td><td class="n">${money(x.est)}</td><td class="n">${x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">推定のみ</span>'}</td></tr>`).join("")}</table></div>`;
+}
+
+function viewExplain() {
+  const E = D.explain, base = E.visitor.n >= 5 ? E.visitor : E.all, label = E.visitor.n >= 5 ? "一般の訪問者（visitor）" : "全体（テスト含む）";
+  if (!base.n) return `<div class="warnbox">まだ AI と対話したセッションがありません。試してもらうと、ここに費用の目安が出ます。</div>`;
+  const few = base.n < 20 ? `<div class="warnbox">サンプルが ${base.n} 件と少ないので、参考値です（20件を超えると落ち着きます）。</div>` : "";
+  const scen = [50, 100, 300, 1000, 3000];
+  return `${few}
+  <h2>相談1件あたりの費用（${esc(label)}、${base.n}件）</h2>
+  <div class="note">「相談1件」＝ 利用者が画面を開いて AI と対話した 1 セッション。モデル: ${esc(E.model)}</div>
+  <div class="cards" style="margin-top:8px">
+    <div class="card"><div class="t">平均</div><div class="v">${jpy(base.avgUsd)}</div><div class="s">${usd(base.avgUsd)}</div></div>
+    <div class="card"><div class="t">中央値</div><div class="v">${jpy(base.p50)}</div><div class="s">半分の相談はこれ以下</div></div>
+    <div class="card"><div class="t">多めの場合（上位10%）</div><div class="v">${jpy(base.p90)}</div><div class="s">${usd(base.p90)}</div></div>
+    <div class="card"><div class="t">1件あたりの往復数</div><div class="v">${base.avgRounds.toFixed(1)}回</div><div class="s">入力 ${num(base.avgIn)} / 出力 ${num(base.avgOut)} トークン</div></div>
+  </div>
+  <h2>導入後の月額の試算（AI利用分のみ）</h2>
+  <div class="scroll"><table><tr><th>1か月の相談件数</th><th class="n">平均で見ると</th><th class="n">多めで見ると</th></tr>
+  ${scen.map(n => `<tr><td>${n.toLocaleString()}件</td><td class="n">${jpy(base.avgUsd * n)}</td><td class="n">${jpy(base.p90 * n)}</td></tr>`).join("")}</table></div>
+  <div class="note">為替は 1ドル＝${E.usdJpy}円（設定で変更）。サーバー・保守などの費用は含みません。推定値で、実額との差は「設定」の区間比較で確認します。</div>
+  <h2>モデルを変えた場合の目安（同じトークン量で単価だけ置き換えた試算）</h2>
+  <div class="scroll"><table><tr><th>モデル</th><th class="n">相談1件</th><th class="n">月300件</th></tr>
+  ${E.models.map(m => `<tr><td>${esc(m.model)}${m.model === E.model ? ' <span class="pill ok">今の設定</span>' : ""}</td><td class="n">${jpy(m.perSessionUsd)}</td><td class="n">${jpy(m.perSessionUsd * 300)}</td></tr>`).join("")}</table></div>
+  <div class="note">返事の質・長さはモデルで変わるため、実際に試して決める前提の参考値です。</div>`;
+}
+
+function viewTested() {
+  const T = D.tested, bys = Object.keys(T.funnel);
+  const sel = window.fSel && T.funnel[window.fSel] ? window.fSel : "_all";
+  const f = T.funnel[sel], top = Math.max(f[0].sessions, 1);
+  const list = (rows, empty = "まだありません") => rows.length ? `<table>${rows.slice(0, 15).map(r => `<tr><td>${esc(r.k)}</td><td class="n">${r.n}</td></tr>`).join("")}</table>` : `<div class="note">${empty}</div>`;
+  return `
+  <h2>どこまで進んだか（セッション数）</h2>
+  <div class="note">対象: <select id="fsel">${bys.map(b => `<option value="${esc(b)}" ${b === sel ? "selected" : ""}>${b === "_all" ? "全部" : esc(b)}</option>`).join("")}</select>　①〜③は AI を呼ばないため、画面の動きの記録から数えています。</div>
+  ${bars(f, r => r.sessions, r => STAGE[r.stage], r => `${r.sessions}件（${(r.sessions / top * 100).toFixed(0)}%）`)}
+  <div class="two">
+    <div><h2>④で選ばれた相談目的</h2>${list(T.purposes)}<h3>相談の方向（枝）</h3>${list(T.branches)}</div>
+    <div><h2>⑤以降に押されたボタン</h2>${list(T.later)}<h3>①〜③の答え</h3>${list(T.roads)}</div>
+    <div><h2>試された地域（市区町村）</h2>${list(T.places)}<h3>最寄りの標準地</h3>${list(T.near)}</div>
+    <div><h2>画面の幅・来た経路</h2>${list(T.devices)}<h3>参照元</h3>${list(T.refs)}</div>
+  </div>
+  <h2>書かれた言葉の傾向（仮の分類：キーワード）</h2>
+  <div class="two"><div>${list(T.themes, "書かれた言葉はまだありません")}</div>
+  <details><summary class="note">分類の規則を見る（正規表現）</summary>${D.themeRules.map(r => `<div class="note">${esc(r.name)}：${esc(r.rule)}</div>`).join("")}<div class="note">どれにも当たらないものは「その他」。</div></details></div>
+  <h2>書かれた言葉（新しい順・最大150件）</h2>
+  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>段階</th><th>分類</th><th>書かれた言葉</th></tr>
+  ${T.texts.map(x => `<tr><td>${tm(x.ts)}</td><td>${esc(x.by)}</td><td>${"①②③④⑤⑥⑦⑧"[x.q - 1] || x.q}</td><td><span class="pill">${esc(x.theme)}</span></td><td>${esc(x.text)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだありません</td></tr>`}</table></div>`;
+}
+
+function viewSessions() {
+  const st = s => s.active ? '<span class="pill ok">進行中</span>' : s.ended ? '<span class="pill">終了</span>' : '<span class="pill">離脱</span>';
+  return `
+  <h2>セッション（新しい順・最大300件）</h2>
+  <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
+  <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th></tr>
+  ${D.sessions.map(s => `<tr><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td></tr>`).join("") || `<tr><td colspan="10" class="note">まだありません</td></tr>`}</table></div>
+  <h2>最近のやり取り（200件まで・本文つき）</h2>
+  ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}</pre></details>`).join("") || '<div class="note">まだありません</div>'}`;
+}
+
+function viewSettings() {
+  const v = D.prices[D.prices.length - 1];
+  return `
+  <h2>残高の記録（実額との突き合わせ）</h2>
+  <div class="note">Console の「組織のクレジット」の金額を入れてください。記録の間の実際の減少額が、その間の往復へ推定額の割合で割り振られ（確定）、実額と推定の差が下に出ます。ずれは調査データです。</div>
+  <p><input id="balAmt" type="number" step="0.01" min="0" placeholder="例：9.62" style="width:120px"> ドル <input id="balNote" type="text" placeholder="メモ（例：初回確認）" style="width:260px"> <button class="act" id="balSave">記録する</button> <span id="balMsg" class="note"></span></p>
+  <div class="scroll"><table><tr><th>記録した時刻</th><th class="n">残高</th><th>メモ</th></tr>${D.balances.slice().reverse().map(b => `<tr><td>${tm(b.ts)}</td><td class="n">${usd(b.amount_usd, 2)}</td><td>${esc(b.note)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">まだ記録がありません</td></tr>`}</table></div>
+  <h3>区間ごとの実額と推定</h3>
+  <div class="scroll"><table><tr><th>区間</th><th class="n">実際に減った額</th><th class="n">推定</th><th class="n">差</th><th class="n">比（実額÷推定）</th><th class="n">往復</th></tr>${D.segments.map(s => `<tr><td>${tm(s.from)} → ${tm(s.to)}</td><td class="n">${usd(s.spent)}</td><td class="n">${usd(s.est)}</td><td class="n">${usd(s.diff)}</td><td class="n">${s.ratio == null ? "—" : s.ratio.toFixed(2)}</td><td class="n">${s.rounds}</td></tr>`).join("") || `<tr><td colspan="6" class="note">残高を2回以上記録すると出ます</td></tr>`}</table></div>
+  <h2>為替</h2>
+  <p>1ドル = <input id="rate" type="number" min="50" max="500" step="0.1" value="${D.config.usdJpy}" style="width:90px"> 円 <button class="act" id="rateSave">保存</button> <span id="rateMsg" class="note"></span></p>
+  <h2>単価（USD / 100万トークン）</h2>
+  <div class="note">保存すると「今から有効な新しい版」になり、過去の往復は当時の単価のままです。キャッシュ読み出しは未設定なら入力の0.1倍（仮説）。</div>
+  <div class="scroll"><table id="ptable"><tr><th>モデル名（前方一致）</th><th class="n">入力</th><th class="n">出力</th></tr>${v.models.map(m => `<tr><td><input class="pm" value="${esc(m.model)}" style="width:220px"></td><td class="n"><input class="pi" type="number" step="0.01" value="${m.input}" style="width:80px"></td><td class="n"><input class="po" type="number" step="0.01" value="${m.output}" style="width:80px"></td></tr>`).join("")}</table></div>
+  <p><button class="act" id="priceSave">新しい版として保存</button> <span id="priceMsg" class="note"></span> <span class="note">（版の数：${D.prices.length}、最新の有効開始：${tm(v.from)}）</span></p>
+  <h2>現在の設定（読み取り）</h2>
+  <div class="note">モデル ${esc(D.config.model)} ／ 1日の費用上限 ${usd(D.config.dailyCap, 2)} ／ 停止スイッチ：${D.config.disabled ? "停止中" : "稼働中"}（止めるには <code>data/DISABLED</code> というファイルを置く）</div>`;
+}
+
+async function post(path, body) {
+  const r = await fetch(BASE + path, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) });
+  return r.ok;
+}
+function bind() {
+  const $ = id => document.getElementById(id);
+  if ($("fsel")) $("fsel").onchange = e => { window.fSel = e.target.value; render(); };
+  if ($("balSave")) $("balSave").onclick = async () => { const ok = await post("balance", { amount_usd: +$("balAmt").value, note: $("balNote").value }); $("balMsg").textContent = ok ? "記録しました" : "入力を確認してください"; if (ok) load(); };
+  if ($("rateSave")) $("rateSave").onclick = async () => { const ok = await post("settings", { usdJpy: +$("rate").value }); $("rateMsg").textContent = ok ? "保存しました" : "50〜500の数字で入れてください"; if (ok) load(); };
+  if ($("priceSave")) $("priceSave").onclick = async () => {
+    const models = [...document.querySelectorAll("#ptable tr")].slice(1).map(tr => ({ model: tr.querySelector(".pm").value.trim(), input: +tr.querySelector(".pi").value, output: +tr.querySelector(".po").value }));
+    const ok = await post("prices", { models }); $("priceMsg").textContent = ok ? "新しい版として保存しました" : "入力を確認してください"; if (ok) load();
+  };
+}
+function render() {
+  document.getElementById("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${n}</button>`).join("");
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; location.hash = tab; render(); });
+  const st = document.getElementById("state");
+  st.textContent = D.config.disabled ? "停止中" : "稼働中"; st.className = "pill " + (D.config.disabled ? "warn" : "ok");
+  document.getElementById("upd").textContent = "更新 " + new Date().toLocaleTimeString("ja-JP");
+  document.getElementById("main").innerHTML = ({ cost:viewCost, explain:viewExplain, tested:viewTested, sessions:viewSessions, settings:viewSettings }[tab] || viewCost)();
+  bind();
+}
+async function load() {
+  try {
+    const r = await fetch(BASE + "summary", { cache:"no-store" });
+    if (!r.ok) throw new Error(r.status);
+    D = await r.json(); render();
+  } catch (e) { document.getElementById("main").innerHTML = `<div class="warnbox">読み込めませんでした（${esc(e.message)}）。ページを開き直してください。</div>`; }
+}
+document.getElementById("reload").onclick = load;
+let timer = null;
+document.getElementById("auto").onchange = e => { clearInterval(timer); if (e.target.checked) timer = setInterval(load, 30000); };
+load();
+</script>
+</body>
+</html>

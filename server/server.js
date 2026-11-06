@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { adminHandler, publicStats } from "./admin.js";
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -17,6 +18,7 @@ const RATE_PER_MIN = Number(env.RATE_PER_MIN || 12); // 同じ人の1分あた�
 const MAX_INFLIGHT = Number(env.MAX_INFLIGHT || 4); // 同時に処理する数
 const KEY_FILE = env.KEY_FILE || "/run/secrets/anthropic_api_key";
 const DATA_DIR = env.DATA_DIR || "/data";
+const ADMIN_PASSWORD_FILE = env.ADMIN_PASSWORD_FILE || "/run/secrets/admin_password";
 const SYSTEM_PROMPT = fs.readFileSync(new URL("./system.txt", import.meta.url), "utf8").trim();
 
 // 価格（USD / 100万トークン）。推定用。Console の請求額が正。
@@ -97,7 +99,13 @@ function parseBody(body) {
     .map((m) => ({ role: m.role, content: clip(m.content, 2000) }))
     .filter((m) => m.content.trim());
   if (!clean.length || clean[clean.length - 1].role !== "user") return null;
+  const m = body.meta && typeof body.meta === "object" ? body.meta : {};
+  const meta = {}; // 画面から添えられる「何を押したか」。分析用（信頼はしない）
+  for (const k of ["q", "press", "typed", "branch", "place", "near", "road", "intent", "kind"]) {
+    if (m[k] !== undefined) meta[k] = typeof m[k] === "number" || typeof m[k] === "boolean" ? m[k] : clip(m[k], 80);
+  }
   return {
+    meta,
     sid: clip(body.sid, 64) || "no-sid",
     by: clip(body.by, 32) || "visitor",
     context: clip(body.context, 2000),
@@ -122,18 +130,13 @@ async function readBody(req, limit = 32_768) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
+// 拒否の記録は、同じ人からの連打で記録が溢れないよう、1分に1回までにする
+const rejLogged = new Map();
 async function handleChat(req, res) {
   const t0 = Date.now();
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
   const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12); // IP そのものは残さない
   const base = { ts: new Date().toISOString(), who, model: MODEL };
-
-  if (disabled()) return send(res, 503, { error: "disabled" });
-  if (!client) return send(res, 503, { error: "no_key" });
-  if (today() !== spentDate) loadSpent();
-  if (spentUsd >= DAILY_USD_CAP) return send(res, 429, { error: "daily_cap" });
-  if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
-  if (inflight >= MAX_INFLIGHT) return send(res, 429, { error: "busy" });
 
   let input;
   try {
@@ -143,15 +146,26 @@ async function handleChat(req, res) {
   }
   if (!input) return send(res, 400, { error: "bad_request" });
 
-  const system = input.context ? `${SYSTEM_PROMPT}\n\n【画面から渡された状況】\n${input.context}` : SYSTEM_PROMPT;
-  const rec = {
-    ...base,
-    sid: input.sid,
-    by: input.by,
-    turn: input.messages.filter((m) => m.role === "user").length,
-    context: input.context,
-    userText: input.messages[input.messages.length - 1].content,
+  const userText = input.messages[input.messages.length - 1].content;
+  const turn = input.messages.filter((m) => m.role === "user").length;
+  const reject = (code, reason) => {
+    const k = who + reason;
+    if (Date.now() - (rejLogged.get(k) || 0) > 60_000) {
+      rejLogged.set(k, Date.now());
+      if (rejLogged.size > 2000) rejLogged.clear();
+      writeLog({ ...base, sid: input.sid, by: input.by, turn, userText: clip(userText, 200), meta: input.meta, status: "rejected", reason, costUsd: 0 });
+    }
+    return send(res, code, { error: reason });
   };
+  if (disabled()) return reject(503, "disabled");
+  if (!client) return reject(503, "no_key");
+  if (today() !== spentDate) loadSpent();
+  if (spentUsd >= DAILY_USD_CAP) return reject(429, "daily_cap");
+  if (rateLimited(who)) return reject(429, "rate_limited");
+  if (inflight >= MAX_INFLIGHT) return reject(429, "busy");
+
+  const system = input.context ? `${SYSTEM_PROMPT}\n\n【画面から渡された状況】\n${input.context}` : SYSTEM_PROMPT;
+  const rec = { ...base, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
 
   inflight++;
   try {
@@ -172,6 +186,8 @@ async function handleChat(req, res) {
       stopReason: r.stop_reason,
       inputTokens: usage.input_tokens || 0,
       outputTokens: usage.output_tokens || 0,
+      cacheRead: usage.cache_read_input_tokens || 0,
+      cacheCreate: usage.cache_creation_input_tokens || 0,
       costUsd,
       ms: Date.now() - t0,
       reply: text,
@@ -191,6 +207,35 @@ async function handleChat(req, res) {
   }
 }
 
+// ---- 画面の動き（開いた・地図・ピン・押したボタン・閉じた）。AI を呼ばない①〜③も含め、どこまで進んだかを残す ----
+const EVENT_TYPES = new Set(["open", "map", "pin", "evaluate", "choice", "inquiry_open", "inquiry_send", "rewind", "end"]);
+const evHits = new Map();
+async function handleEvent(req, res) {
+  const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
+  const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
+  const now = Date.now();
+  const arr = (evHits.get(who) || []).filter((t) => now - t < 60_000);
+  arr.push(now); evHits.set(who, arr); if (evHits.size > 5000) evHits.clear();
+  if (arr.length > 120) return send(res, 429, { error: "rate_limited" });
+  let b;
+  try { b = await readBody(req, 4096); } catch { return send(res, 400, { error: "bad_request" }); }
+  if (!EVENT_TYPES.has(b.type)) return send(res, 400, { error: "bad_type" });
+  const data = {};
+  if (b.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data).slice(0, 8)) data[clip(k, 20)] = typeof v === "number" || typeof v === "boolean" ? v : clip(v, 80);
+  try {
+    fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, data }) + "\n", { mode: 0o600 });
+  } catch (e) { console.error("event write failed:", e.message); }
+  return send(res, 204, {});
+}
+
+// ---- 管理画面の用意 ----
+const adminHits = [];
+const adminCtx = {
+  DATA_DIR, MODEL, DAILY_USD_CAP, PRICES, ADMIN_PASSWORD_FILE, readBody, disabled,
+  getSpent: () => (today() === spentDate ? spentUsd : 0),
+  adminRate: () => { const n = Date.now(); while (adminHits.length && n - adminHits[0] > 60_000) adminHits.shift(); adminHits.push(n); return adminHits.length <= 120; },
+};
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
@@ -198,6 +243,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, enabled: !disabled(), keyConfigured: !!client, model: MODEL });
     }
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
+    if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
+    if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
+    if (await adminHandler(req, res, url, adminCtx)) return;
     return send(res, 404, { error: "not_found" });
   } catch (e) {
     console.error("unhandled:", e.message);

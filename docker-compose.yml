@@ -22,6 +22,7 @@ services:
       # DISABLED: "1"            # 停止スイッチ（data/DISABLED というファイルでも止まる）
     secrets:
       - anthropic_api_key
+      - admin_password   # 開発者向け管理画面（/api/admin/）の入口。ユーザー名は admin
     volumes:
       - ./data:/data
     mem_limit: 256m
@@ -30,3 +31,5 @@ services:
 secrets:
   anthropic_api_key:
     file: ./secrets/anthropic_api_key.txt
+  admin_password:
+    file: ./secrets/admin_password.txt

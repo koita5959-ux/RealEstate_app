@@ -91,6 +91,10 @@
       <button id="go" class="primary" disabled>評価する</button>
     </div>
     <div id="route" class="route"></div>
+    <details id="report" class="hidden" style="font-size:13px;color:var(--ink)">
+      <summary style="cursor:pointer;font-weight:600">この体験のレポート（通った道・データシート・AIの利用状況）</summary>
+      <div id="reportBody"></div>
+    </details>
     <div id="result"></div>
     <details>
       <summary>事業所設定（プレファレンス・仮）</summary>
@@ -143,13 +147,14 @@ function setPin(lat, lng) {
   if (pin) pin.setLatLng([lat, lng]); else pin = L.marker([lat, lng]).addTo(map);
   document.getElementById("picked").textContent = `指定: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   document.getElementById("go").disabled = false;
+  ev("pin", { lat:+lat.toFixed(2), lng:+lng.toFixed(2) });
 }
 map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
 document.getElementById("preset").onclick = () => { map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352); };
 
 // ---- 0. 都道府県・市区町村 → 地図を開く（国土地理院の住所検索で中心を出す） ----
 map.setView([36.2, 137.5], 5); // 開く前は日本全体
-let PLACE = "";
+let PLACE = document.getElementById("prefName").value + document.getElementById("cityName").value; // 地図を開かず例のピンを使った場合も、入力欄の既定（岐阜県岐阜市）
 document.getElementById("openMap").onclick = async () => {
   const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
   const msg = document.getElementById("mapMsg");
@@ -163,7 +168,7 @@ document.getElementById("openMap").onclick = async () => {
   } catch (e) {}
   if (!at && pref + city === "岐阜県岐阜市") at = [136.7606, 35.4233];
   if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
-  PLACE = pref + city; mapOpen = true;
+  PLACE = pref + city; mapOpen = true; ev("map", { place:PLACE });
   map.setView([at[1], at[0]], 14);
   msg.textContent = PLACE + "の地図を開きました。" + (PLACE === "岐阜県岐阜市" ? "" : "（仮データは岐阜市の分しかありません）");
   document.getElementById("step1").classList.remove("hidden");
@@ -178,6 +183,7 @@ document.getElementById("go").onclick = () => {
   PATH.length = 0; AI_HIST.length = 0; renderRoute();
   const area = Number(document.getElementById("area").value) || 0;
   const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
+  ev("evaluate", { near:near.name, area, place:PLACE });
   S = {
     // 層1: 入力で埋まる / 層2: データで埋まる / 層3: 対話で埋まる
     sheet: {
@@ -210,6 +216,7 @@ document.getElementById("go").onclick = () => {
 const SETBACK = { "鷺山":"この辺りは2005〜09年に、市が狭い道の解消を進めた地区です（岐阜市「鷺山地区 事後評価」）。ただ、全部の道が広がったわけではありません。" };
 
 function firstJudgment() {
+  showReport();
   say("この土地に家を建て直せるかどうかは、値段より先に、一つの決まりで決まります。<br>"
     + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
     + "これは地図からは読めません。この土地は、道にどう接していますか？",
@@ -294,6 +301,38 @@ const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "v
 const AI_URL = "../../api/chat"; // /RealEstate_app/docs/proto/ から /RealEstate_app/api/chat へ
 const AI_FAIL = "<br><small>（AIにつながらなかったため、台本の仮の返事です）</small>";
 let AI_HIST = [], REPLAYING = false;
+// ---- 画面の動きの記録（開いた・地図・押したボタン・閉じた）。本文や個人情報は送らない ----
+const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
+function ev(type, data) {
+  if (AI_OFF || REPLAYING) return;
+  try {
+    const b = JSON.stringify({ sid:SID, by:BY, type, data:data || {} });
+    if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
+    else fetch(EV_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:b, keepalive:true });
+  } catch (e) { /* 記録できなくても画面は止めない */ }
+}
+let PUB = null; // 導入後の費用の目安（平均だけ。個別の記録は出ない）
+if (!AI_OFF) fetch(PUB_URL).then(r => r.json()).then(d => { PUB = d; }).catch(() => {});
+window.addEventListener("pagehide", () => ev("end", { path:PATH.length, rounds:Math.floor(AI_HIST.length / 2) }));
+let reportOpenSent = false;
+const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
+function showReport() {
+  const box = document.getElementById("report"); box.classList.remove("hidden");
+  const body = document.getElementById("reportBody"); body.innerHTML = "";
+  const a = S.api || [], n = a.length, tin = a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout = a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), cost = a.reduce((x, r) => x + (r.costUsd || 0), 0);
+  const u = document.createElement("div"); u.className = "sheet";
+  let h = `<h3>AIの利用状況（このブラウザを開いてから）</h3>`
+    + (n ? `AI（Claude）とのやり取り：<b>${n}往復</b>（入力 ${tin.toLocaleString()}・出力 ${tout.toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yenUsd(cost)}</b>（推定）`
+         : `まだAIとのやり取りはありません（④から先でAIが返事をします）。`);
+  h += `<h3>導入した場合の費用の目安</h3>`;
+  h += PUB && PUB.ready
+    ? `相談1件あたり、平均で<b>約${yenUsd(PUB.avgUsd)}</b>（多めの場合で約${yenUsd(PUB.p90Usd)}）。月300件なら、AI利用分で<b>約${yenUsd(PUB.avgUsd * 300)}</b>（試用${PUB.sessions}件の平均からの推定。サーバー・保守は別）。`
+    : `試用のデータがたまると、ここに「相談1件あたり・月◯件なら」の目安が出ます。`;
+  h += `<div class="hint" style="margin-top:6px">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>`;
+  u.innerHTML = h; body.appendChild(u);
+  showSheet(body);
+}
+ev("open", { mobile: innerWidth < 700, ref: (() => { try { return document.referrer ? new URL(document.referrer).host : ""; } catch (e) { return ""; } })() });
 const plain = h => { const e = document.createElement("div"); e.innerHTML = h; return e.textContent; };
 function nextButtons(n) { // 次のステップnで利用者に出る、店のボタン
   if (n >= LIMIT) return [];
@@ -311,7 +350,7 @@ function aiContext(n, ask) {
   else c += "\n次のボタンは未定です。短い問いで締めてください。";
   return c;
 }
-async function askAI(n, ask, userText) {
+async function askAI(n, ask, userText, meta) {
   AI_HIST.push({ role:"user", content:userText });
   const w = document.createElement("div"); w.className = "ai";
   w.innerHTML = '<span class="tag">AI</span><span class="hint">考えています…</span>';
@@ -319,7 +358,7 @@ async function askAI(n, ask, userText) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 60000);
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), messages:AI_HIST.slice(-20) }) });
+      body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
     AI_HIST.push({ role:"assistant", content:d.text });
@@ -329,7 +368,7 @@ async function askAI(n, ask, userText) {
     AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
-  } finally { clearTimeout(timer); w.remove(); }
+  } finally { clearTimeout(timer); w.remove(); showReport(); }
 }
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
@@ -362,7 +401,7 @@ function goStep(i, lead, real) {
       AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:"（以前の返答）" });
       goStep(i + 1, ans(said)); return;
     }
-    askAI(i + 1, ask, userText).then(r => goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r)); // 答えた後は次のボタンへ戻す
+    askAI(i + 1, ask, userText, { q:4 + i, press:c || "", typed:!!t, branch:BRANCH ? BRANCH.name : "", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:ask ? "聞く" : "答える" }).then(r => goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r)); // 答えた後は次のボタンへ戻す
   }, 4 + i);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
@@ -373,6 +412,7 @@ function inquiryBar() {
   const bar = document.getElementById("inq");
   bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
+    ev("inquiry_open");
     bar.innerHTML = "";
     const box = newRow(); box.classList.add("inqrow");
     document.getElementById("talk").appendChild(box);
@@ -389,6 +429,7 @@ function inquiryBar() {
     box.scrollIntoView({ block:"start" });
     document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
+      ev("inquiry_send");
       box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">送信しました。<br>${PREF.office}から、ご希望の方法で連絡します。<br><small>（試作のため、実際には送られていません）</small></div>`;
       box.classList.add("done");
     };
@@ -428,6 +469,7 @@ function choices(list, cb, onText, q) {
   const d = newRow(q);
   const pick = (b, c, opt, t) => {
     d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, ...(opt ? { opt } : {}), ...(t ? { type:t } : {}) }); renderRoute();
+    ev("choice", { q:+d.dataset.q, press:c, opt:opt || 0, typed:!!t });
     d.classList.add("done"); b.classList.add("chosen");
     [...d.querySelectorAll("button")].forEach(x => { if (x !== b) x.title = "ここから別の道を試す"; });
   };
@@ -470,6 +512,7 @@ function renderRoute() {
     + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
 }
 function rewind(k, c) {
+  ev("rewind", { k });
   document.querySelectorAll(".demo, .demo-badge").forEach(x => x.remove());
   replay(PATH.slice(0, k).concat({ press:c }));
 }
