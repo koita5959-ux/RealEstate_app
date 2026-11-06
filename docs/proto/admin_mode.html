@@ -48,6 +48,8 @@
   #commit { border-style:solid; font-size:17px; padding:calc(7px + 6pt) 11px; }
   #commit.on { background:var(--accent); color:#fff; }
   #commit:disabled { border-color:var(--line); color:var(--sub); background:#f2f4f6; cursor:default; }
+  dialog { border:1px solid var(--line); border-radius:10px; padding:16px 20px; max-width:420px; }
+  dialog p { margin:0 0 10px; font-size:14px; }
   button.small { font-size:12px; padding:3px 8px; }
   .hint { font-size:12px; color:var(--sub); }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
@@ -347,10 +349,11 @@ function commit() {
   document.getElementById("checks").innerHTML =
     (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>利用者画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
-  if (err.length) return;
+  if (err.length) return false;
   try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText, limit })); } catch (e) {}
   dirty = false;
   lamp();
+  return true;
 }
 // 保存済みの設定を読む（なければ総合系の初期値）
 function loadSaved() {
@@ -363,16 +366,24 @@ function loadSaved() {
 document.getElementById("commit").onclick = commit;
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 document.getElementById("toUser").onclick = () => {
-  if (dirty) {
-    if (!confirm("未確定の入力があります。\n\nOK：入力を捨てて利用者画面へ移動する\nキャンセル：移動せず、このまま管理画面で続ける")) return;
-    loadSaved(); renderAdmin(); renderHelp();
-  }
+  if (dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return; }
   window.open("./", "reUser");
+};
+// 未確定のときの三択：OK＝入力を捨てて移動／確定して移動＝設定を変更してから移動（エラーならとどまる）／キャンセル＝とどまる
+document.getElementById("leave").onclose = e => {
+  const v = e.target.returnValue;
+  if (v === "ok") { loadSaved(); renderAdmin(); renderHelp(); window.open("./", "reUser"); }
+  else if (v === "commit") { if (commit()) window.open("./", "reUser"); else document.getElementById("checks").scrollIntoView({ block:"center" }); }
 };
 
 function renderAll() { renderAdmin(); renderHelp(); save(); }
 loadSaved();
 renderAdmin(); renderHelp();
 </script>
+<dialog id="leave"><form method="dialog">
+  <p>未確定の入力があります。</p>
+  <p class="hint">OK：入力を捨てて利用者画面へ移動する<br>確定して移動：設定を変更してから移動する<br>キャンセル：移動せず、このまま管理画面で続ける</p>
+  <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
+</form></dialog>
 </body>
 </html>
