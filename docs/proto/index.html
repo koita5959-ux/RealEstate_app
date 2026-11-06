@@ -260,33 +260,52 @@ function onIntent(c) {
   const s = c.startsWith("住んで") ? "住んでいるなら、建て直しは先の話です。ただ、いつか誰かに渡すときには、今日の接道の話がそのまま値打ちになります。"
     : c.startsWith("空き家") ? "空き家が残っているなら、建て直せるかどうかが、そのまま「解体して売るか」「そのまま貸すか」の分かれ目になります。"
     : "更地なら、接道の答えがそのまま、この土地で何ができるかです。";
+  BRANCH = null;
   inquiryBar(); // 問い合わせのボタンは④から出す
   goStep(0, s);
 }
 // ---- ④から先：管理画面（admin_mode.html）で店が書いた選択肢で進む ----
-// 管理画面の設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
-// AIの返事はダミー：回答の後、次のステップのボタンを話題として示す。ボタンのないステップで打ち切る（3 AI型＝誘導あり）。
-const ADMIN_DEFAULT = { steps:[ { topic:"活かし方", btns:["住む・建て直す","建てて貸す","建てずに貸す（駐車場など）","売る","お隣と合わせる"] },
-                                { topic:"次に知りたいこと", btns:["かかる費用の目安","手順と期間","似た土地の例"] } ],
-                        close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" };
-const ADMIN = (() => { try { return JSON.parse(localStorage.getItem("reAdmin")) || ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
-window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で変えたら読み直す
+// 管理画面で「設定確定」した設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
+// ⑤は④で選んだボタンの枝で出し分ける。⑥から先は共通。店のボタンが尽きたら AI のボタン候補で続け、往復の上限で打ち切る。
+// AIの返事とボタン候補はダミー。
+const ADMIN_DEFAULT = {
+  steps:[ { topic:"活かし方", btns:["住む・建て直す","建てて貸す","建てずに貸す（駐車場など）","売る","お隣と合わせる"], br:[0,0,0,1,1] },
+          { topic:"", branches:[
+            { name:"自分で活かす", kind:"答える", btns:["費用の目安","手順と期間","似た土地の例","収入の見込み"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" },
+            { name:"手放す", kind:"答える", btns:["値段の目安","売り出し方","お隣との話","手元に残る額"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" } ] } ],
+  close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。", limit:null };
+const ADMIN = (() => { try { const a = JSON.parse(localStorage.getItem("reAdmin")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
+window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
 const END = "セッションでお答えできるのは以上です。詳しくは弊社へお問い合わせください。";
+const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
+const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
+const LIMIT = ADMIN.limit ?? ADMIN.steps.filter(hasOf).length + 2; // 往復の上限（④を1往復目と数える）
+const AI_CANDS = ["（AIの候補1）", "（AIの候補2）", "（AIの候補3）"];
+let BRANCH = null; // ④で決まる枝
+function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
   return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
 }
 function goStep(i, lead) {
-  const st = ADMIN.steps[i];
-  const list = st ? st.btns.map(b => b.trim()).filter(Boolean) : [];
-  if (!list.length) { say(lead + "<br>" + END); return; }
-  say(lead + "<br>" + topicsOf(list) + "お話ししましょう。",
-    "渡したもの：一つ前の答えへの回答", `開けた穴：管理画面の${NUM[3 + i]}（${st.topic || "題名なし"}）のボタン`);
-  const ans = said => `<span class="hint">（AIの回答：「${esc(said)}」に、ここまでの土地の条件に合わせて短く答える）</span>`;
-  choices(list, c => {
-    if (i === 0) S.sheet.相談目的 = c;
-    goStep(i + 1, ans(c));
-  }, t => {
+  if (i >= LIMIT) { say(lead + "<br>" + END + (closeNow() ? "<br>" + esc(closeNow()) : "")); return; }
+  const st = i === 1 ? BRANCH : ADMIN.steps[i];
+  let list = liveOf(st), hole;
+  if (list.length) hole = `開けた穴：管理画面の${NUM[3 + i]}${i === 1 ? "（" + (st.name || "枝") + "・" + st.kind + "）" : "（" + (st.topic || "題名なし") + "）"}のボタン`;
+  else { list = AI_CANDS; hole = `開けた穴：店のボタンがないので AI のボタン候補（上限 ${LIMIT} 往復の ${i + 1} 往復目）`; }
+  const ask = i === 1 && st.kind === "聞く";
+  say(lead + "<br>" + (ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
+    "渡したもの：一つ前の答えへの回答", hole);
+  const ans = said => `<span class="hint">（AIの${ask ? "返事：「" + esc(said) + "」が店にとって何を意味するかを正直に返す" : "回答：「" + esc(said) + "」に、ここまでの土地の条件に合わせて短く答える"}）</span>`;
+  const enter = c => {
+    if (i !== 0) return;
+    S.sheet.相談目的 = c;
+    const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === c);
+    BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0]; // 書いた場合の枝はAIが判断（ダミーは枝1）
+    inquiryBar();
+  };
+  choices(list, c => { enter(c); goStep(i + 1, ans(c)); }, t => {
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
+    enter(t);
     goStep(i + 1, ans(t)); // 書いても、答えた後は次のボタンへ戻す
   }, 4 + i);
 }
@@ -296,7 +315,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
 function inquiryBar() {
   const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${ADMIN.close && ADMIN.close.trim() ? `<div class="hint">${esc(ADMIN.close)}</div>` : ""}`;
+  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
     bar.innerHTML = "";
     const box = newRow(); box.classList.add("inqrow");
@@ -375,7 +394,7 @@ function choices(list, cb, onText, q) {
 
 // ---- 通った道（データの経路）と巻き戻し ----
 const PATH = [];
-const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 // 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
 function newRow(q) {
   const d = document.createElement("div"); d.className = "row";
