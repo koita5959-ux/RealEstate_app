@@ -118,6 +118,11 @@
   </aside>
 </div>
 
+<dialog id="leave"><form method="dialog">
+  <p>未確定の入力があります。</p>
+  <p class="hint">OK：入力を捨てて利用者画面へ移動する<br>確定して移動：設定を変更してから移動する<br>キャンセル：移動せず、このまま管理画面で続ける</p>
+  <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
+</form></dialog>
 <script>
 // ---- 業態モード 4＋1（Claude.AI「業態モードの分け方」「AI型の全容と動く形の依頼」11-05）----
 // ④のボタンは二つの枝（1・2）に振り分け、⑤は枝ごとにボタン・種類（答える／聞く）・締めを持つ。⑥から先は枝に関係なく共通。
@@ -380,10 +385,5 @@ function renderAll() { renderAdmin(); renderHelp(); save(); }
 loadSaved();
 renderAdmin(); renderHelp();
 </script>
-<dialog id="leave"><form method="dialog">
-  <p>未確定の入力があります。</p>
-  <p class="hint">OK：入力を捨てて利用者画面へ移動する<br>確定して移動：設定を変更してから移動する<br>キャンセル：移動せず、このまま管理画面で続ける</p>
-  <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
-</form></dialog>
 </body>
 </html>
