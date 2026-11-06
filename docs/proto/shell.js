@@ -42,8 +42,9 @@
   const hasSession = () => { try { return !!localStorage.getItem("reSession"); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける。保存セッションの再表示（?sid=）は、体験用の「利用状況」とは別の窓にする
-  window.name = (current === "report" && /[?&]sid=/.test(location.search)) ? "reReportView" : SCREENS[current].name;
+  window.name = SCREENS[current].name; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
+  const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 
   const h1 = document.createElement("h1"); h1.textContent = bar.dataset.title || "";
   const nav = document.createElement("nav"); nav.className = "gonav"; nav.setAttribute("aria-label", "画面の移動");
@@ -52,12 +53,14 @@
   bar.appendChild(nav);
 
   const Shell = (window.Shell = {
+    channel,
     beforeGo: null, // 画面ごとに差し込める：(key) => false で移動を止める（管理画面の「未確定の下書き」の確認など）
     go(key, ev) {
       const s = SCREENS[key];
       if (s.needsSession && !hasSession()) return false; // グレーのときは何もしない
       if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true;
       if (Shell.beforeGo && Shell.beforeGo(key) === false) return false;
+      if (key === "report" && channel) channel.postMessage({ type: "live" }); // ヘッダーの「利用状況」は、体験中の表示を見に行くボタン
       return window.goScreen(BASE + s.url, s.name, ev);
     },
     refresh() { // セッションの有無で、「利用状況」のグレー表示を切り替える

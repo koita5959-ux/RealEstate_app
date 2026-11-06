@@ -52,11 +52,11 @@
 </div>
 <script>
 const $ = id => document.getElementById(id);
-// この画面は、保存された記録を出すだけ（開くときに計算しない）。
-// ・ふつう：このブラウザのメイン画面が動きのたびに保存した記録（localStorage）
-// ・?sid=…：サーバーに保存されたセッションの再表示（開発利用状況の「再表示」から。認証が必要）
-const SID = new URLSearchParams(location.search).get("sid");
+// この画面は、保存された記録を出すだけ（開くときに計算しない）。開いたまま、次の2つの表示を切り替えられる。
+// ・体験中の表示：このブラウザのメイン画面が動きのたびに保存した記録（localStorage）
+// ・再表示：サーバーに保存されたセッション（開発利用状況の行を押す／?sid=…。認証が必要）
 const V = window.SessionView;
+let replaySid = new URLSearchParams(location.search).get("sid"); // 再表示中のセッション。null なら体験中の表示
 function paint(st) {
   $("route").innerHTML = V.route(st);
   $("usage").innerHTML = V.usage(st);
@@ -64,11 +64,13 @@ function paint(st) {
   $("sheet").innerHTML = V.sheet(st);
 }
 function load() {
-  if (SID) return loadSaved();
+  if (replaySid) return loadSaved();
+  $("clearbox").hidden = false; $("talkbox").hidden = true;
   let s = null;
   try { s = JSON.parse(localStorage.getItem("reSession")); } catch (e) { /* 読めなければ空扱い */ }
   const st = s && s.state;
   $("none").hidden = !!st; $("main").hidden = !st;
+  $("none").textContent = "まだ体験の記録がありません。「利用者画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
   if (!st) return;
   $("stamp").textContent = "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに更新されます。別のウインドウで開いたままでも、リロードで最新が見られます。";
   paint(st);
@@ -76,21 +78,30 @@ function load() {
 async function loadSaved() {
   $("clearbox").hidden = true;
   try {
-    const r = await fetch("../../api/admin/session?sid=" + encodeURIComponent(SID), { cache: "no-store" });
+    const r = await fetch("../../api/admin/session?sid=" + encodeURIComponent(replaySid), { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
     $("none").hidden = true; $("main").hidden = false;
-    $("stamp").innerHTML = "<b>記録の再表示</b>（開発者用）　セッション " + V.esc(SID.slice(0, 8)) + "　利用者名：" + V.esc(d.by) + "　最終保存 " + new Date(d.savedAt).toLocaleString("ja-JP") + (d.reconstructed ? "<br><span class=\"empty\">ログからの復元です。この機能を入れる前のセッションのため、面積・地価・用途地域などは復元できません。</span>" : "");
+    $("stamp").innerHTML = "<b>記録の再表示</b>（開発者用）　セッション " + V.esc(replaySid.slice(0, 8)) + "　利用者名：" + V.esc(d.by) + "　最終保存 " + new Date(d.savedAt).toLocaleString("ja-JP")
+      + (d.reconstructed ? "<br><span class=\"empty\">ログからの復元です。この機能を入れる前のセッションのため、面積・地価・用途地域などは復元できません。</span>" : "")
+      + '<br><button class="quiet" id="toLive" style="margin-top:6px">体験中の表示に戻す</button>';
+    $("toLive").onclick = () => showLive();
     paint(d.state);
     $("talkbox").hidden = !d.turns.length;
     $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①②③④⑤⑥⑦⑧⑨"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
   } catch (e) {
     $("main").hidden = true; $("none").hidden = false;
-    $("none").textContent = "このセッションの記録を読み込めませんでした（" + e.message + "）。記録は、この機能を入れたあとのセッションだけが対象です。";
+    $("none").textContent = "このセッションの記録を読み込めませんでした（" + e.message + "）。";
   }
 }
+function showReplay(sid) { replaySid = sid; try { history.replaceState(null, "", "?sid=" + encodeURIComponent(sid)); } catch (e) { /* 何もしない */ } load(); window.scrollTo(0, 0); }
+function showLive() { replaySid = null; try { history.replaceState(null, "", location.pathname); } catch (e) { /* 何もしない */ } load(); window.scrollTo(0, 0); }
+if (window.Shell && Shell.channel) Shell.channel.onmessage = e => { // 開発利用状況の行を押した／ヘッダーの「利用状況」を押した
+  if (e.data && e.data.type === "replay" && /^[A-Za-z0-9_-]{1,64}$/.test(e.data.sid || "")) { showReplay(e.data.sid); Shell.channel.postMessage({ type: "ack", sid: e.data.sid }); } // 届いたことを開発利用状況へ返す
+  else if (e.data && e.data.type === "live") showLive();
+};
 $("clear").onclick = () => { try { localStorage.removeItem("reSession"); } catch (e) { /* 何もしない */ } load(); };
-if (!SID) window.addEventListener("storage", e => { if (e.key === "reSession") load(); }); // 体験画面で進むと、開いたままのこの画面も更新される
+window.addEventListener("storage", e => { if (e.key === "reSession" && !replaySid) load(); }); // 再表示中は、メイン画面の動きで表示を奪わない // 体験画面で進むと、開いたままのこの画面も更新される
 load();
 </script>
 </body>

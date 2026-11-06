@@ -70,9 +70,26 @@ const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
 const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
 const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
 
-const replayUrl = sid => "../../docs/proto/report.html?sid=" + encodeURIComponent(sid);
-const replayCell = s => s.canReplay ? `<a class="btn-user-link" href="${replayUrl(s.sid)}" onclick="return goScreen(this.href, 'reReportView', event)">再表示</a>` : '<span class="note">—</span>';
-const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、このセッションを再表示します"` : "";
+// 再表示：すでに開いている「利用状況」の窓の中身を切り替えるだけ（画面は開かない）。届いたか（返事があったか）だけをここに表示する
+let replayTimer = null;
+function toast(msg, bad) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.style.cssText = "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 16px;border-radius:8px;font-size:13px;color:#fff;z-index:2000;box-shadow:0 2px 8px rgba(0,0,0,.25)"; document.body.appendChild(t); }
+  t.textContent = msg; t.style.background = bad ? "#b42318" : "#067647"; t.hidden = false;
+  clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 3500);
+}
+if (window.Shell && Shell.channel) Shell.channel.onmessage = e => {
+  if (e.data && e.data.type === "ack") { clearTimeout(replayTimer); toast("「利用状況」の画面に表示しました（セッション " + String(e.data.sid).slice(0, 8) + "）"); }
+};
+function replay(sid) {
+  clearTimeout(replayTimer);
+  if (!(window.Shell && Shell.channel)) { toast("このブラウザでは、画面間の合図が使えません", true); return false; }
+  Shell.channel.postMessage({ type: "replay", sid });
+  replayTimer = setTimeout(() => toast("「利用状況」の画面が開いていません（ヘッダーの「利用状況」から開いてください）", true), 900);
+  return false;
+}
+const replayCell = s => s.canReplay ? `<a class="btn-user-link" href="#" onclick="return replay('${esc(s.sid)}')">再表示</a>` : '<span class="note">—</span>';
+const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、開いている「利用状況」の画面に、このセッションを再表示します"` : "";
 function bars(rows, valf, labf, fmt) {
   const max = Math.max(...rows.map(valf), 1e-9);
   return `<table>${rows.map(r => `<tr><td style="width:34%">${esc(labf(r))}</td><td><div class="barbox"><div class="bar" style="width:${Math.max(1, valf(r) / max * 100)}%"></div><span class="note">${fmt(r)}</span></div></td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table>`;
@@ -102,7 +119,7 @@ function viewCost() {
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>費用が発生したセッション（${top.length}件）</h2>
-  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと再表示します。並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
+  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、開いている「利用状況」の画面に再表示します。並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
@@ -196,9 +213,7 @@ document.addEventListener("click", e => {
   const tr = e.target.closest("tr.replayable");
   if (!tr || e.target.closest("a")) return;
   if (window.getSelection && String(window.getSelection())) return; // 文字を選んでいるときは何もしない
-  const url = replayUrl(tr.dataset.sid);
-  if (e.ctrlKey || e.metaKey || e.shiftKey) window.open(new URL(url, location.href).href, "_blank");
-  else goScreen(url, "reReportView", e);
+  replay(tr.dataset.sid);
 });
 function bind() {
   const $ = id => document.getElementById(id);
