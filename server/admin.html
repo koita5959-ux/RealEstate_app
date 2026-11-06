@@ -53,7 +53,7 @@
   <h1>開発の利用状況（開発者用）</h1>
   <span id="state" class="pill"></span>
   <span class="note" id="upd"></span>
-  <span class="navs"><a class="btn-user" href="../../docs/proto/" target="reUser">利用者画面へ</a><a class="btn-user" href="../../docs/proto/report.html" target="reReport">利用者の利用状況へ</a><a class="btn-dev" href="../../docs/proto/admin_mode.html" target="reAdminWin">管理画面へ</a></span>
+  <span class="navs"><a class="btn-user" href="../../docs/proto/" onclick="return goScreen('../../docs/proto/', 'reUser')">利用者画面へ</a><a class="btn-user" href="../../docs/proto/report.html" onclick="return goScreen('../../docs/proto/report.html', 'reReport')">利用者の利用状況へ</a><a class="btn-dev" href="../../docs/proto/admin_mode.html" onclick="return goScreen('../../docs/proto/admin_mode.html', 'reAdminWin')">管理画面へ</a></span>
   <button class="act" id="reload">更新</button>
   <label class="note"><input type="checkbox" id="auto"> 30秒ごとに自動更新</label>
 </header>
@@ -62,6 +62,19 @@
 <main id="main"></main>
 </div>
 <script>
+window.name = "reDevWin"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
+// ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
+function goScreen(url, name) {
+  const abs = new URL(url, location.href).href;
+  try {
+    const w = window.open("", name);
+    if (!w) return false;
+    if (w.location.href === "about:blank") w.location.href = abs; // 新しく開いたときだけ読み込む
+    w.focus();
+  } catch (e) { window.open(abs, name); }
+  return false;
+}
+
 const BASE = location.pathname.replace(/\/?$/, "/");
 const TABS = [["cost","費用"],["explain","費用の目安（販売用）"],["tested","何を試しているか"],["sessions","セッションとやり取り"],["settings","設定（残高・単価・為替）"]];
 let D = null, tab = (location.hash || "#cost").slice(1);

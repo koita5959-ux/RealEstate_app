@@ -79,8 +79,8 @@
   <div id="map"></div>
   <aside>
     <div class="devbar">
-      <button class="btn-dev" onclick="window.open('admin_mode.html', 'reAdminWin')" title="店の設定（管理画面）">管理画面へ</button>
-      <button class="btn-dev" onclick="window.open('../../api/admin/', 'reDevWin')" title="開発の利用状況（開発者用）">開発の利用状況へ</button>
+      <button class="btn-dev" onclick="goScreen('admin_mode.html', 'reAdminWin')" title="店の設定（管理画面）">管理画面へ</button>
+      <button class="btn-dev" onclick="goScreen('../../api/admin/', 'reDevWin')" title="開発の利用状況（開発者用）">開発の利用状況へ</button>
       <label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label>
     </div>
     <div id="step0">
@@ -101,7 +101,7 @@
       <button id="go" class="primary" disabled>評価する</button>
     </div>
     <div id="route" class="route"></div>
-    <div id="usernav" style="margin-top:12px"><button class="btn-user" onclick="window.open('report.html', 'reReport')" title="あなたの体験の履歴・データシート・AIの利用状況（別画面）">利用者の利用状況を見る（別画面）</button></div>
+    <div id="usernav" style="margin-top:12px"><button class="btn-user" onclick="goScreen('report.html', 'reReport')" title="あなたの体験の履歴・データシート・AIの利用状況（別画面）">利用者の利用状況を見る（別画面）</button></div>
     <div id="result"></div>
     <details>
       <summary>事業所設定（プレファレンス・仮）</summary>
@@ -113,6 +113,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 // ---- 仮データ（実在しない数値） ----
+window.name = "reUser"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
+// ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
+function goScreen(url, name) {
+  const abs = new URL(url, location.href).href;
+  try {
+    const w = window.open("", name);
+    if (!w) return false;
+    if (w.location.href === "about:blank") w.location.href = abs; // 新しく開いたときだけ読み込む
+    w.focus();
+  } catch (e) { window.open(abs, name); }
+  return false;
+}
+
 const POINTS = [
   { name:"岐阜駅前",  lat:35.4095, lng:136.7564, price:300000, zone:"商業地域" },
   { name:"柳ケ瀬",    lat:35.4237, lng:136.7608, price:180000, zone:"商業地域" },

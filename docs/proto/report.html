@@ -35,9 +35,9 @@
   <header>
     <h1>あなたの体験のレポート</h1>
     <div class="nav">
-      <a class="btn-user" href="./" target="reUser">利用者画面へ</a>
-      <a class="btn-dev" href="admin_mode.html" target="reAdminWin">管理画面へ</a>
-      <a class="btn-dev" href="../../api/admin/" target="reDevWin">開発の利用状況へ</a>
+      <a class="btn-user" href="./" onclick="return goScreen('./', 'reUser')">利用者画面へ</a>
+      <a class="btn-dev" href="admin_mode.html" onclick="return goScreen('admin_mode.html', 'reAdminWin')">管理画面へ</a>
+      <a class="btn-dev" href="../../api/admin/" onclick="return goScreen('../../api/admin/', 'reDevWin')">開発の利用状況へ</a>
     </div>
   </header>
   <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
@@ -60,6 +60,19 @@
 </div>
 <script>
 const $ = id => document.getElementById(id);
+window.name = "reReport"; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように
+// ---- 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く ----
+function goScreen(url, name) {
+  const abs = new URL(url, location.href).href;
+  try {
+    const w = window.open("", name);
+    if (!w) return false;
+    if (w.location.href === "about:blank") w.location.href = abs; // 新しく開いたときだけ読み込む
+    w.focus();
+  } catch (e) { window.open(abs, name); }
+  return false;
+}
+
 let PUB = null;
 const jpy = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
 function load() {
