@@ -59,6 +59,7 @@
   button.inq { width:100%; margin-top:18px; border-style:dashed; }
   #inq { border-top:1px solid var(--line); margin-top:16px; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
+  .logline { font-size:12px; color:var(--sub); padding:4px 14px; border-bottom:1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -66,8 +67,9 @@
   <h1>土地の見立て ― 試作</h1>
   <button onclick="window.open('admin_mode.html', 'reAdminWin')" style="font-size:12px;padding:3px 10px;margin:0">管理画面へ</button>
   <label style="font-size:12px;margin:0"><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label>
-  <span class="note">仮データ・AI未接続（台本で動作）。数値は実在しません。</span>
+  <span class="note">①〜③は台本、④からの返事はAI（Claude）です。数値は仮データで実在しません。</span>
 </header>
+<div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
   <aside>
@@ -173,7 +175,7 @@ const R = document.getElementById("result");
 const yen = n => Math.round(n).toLocaleString() + "円";
 
 document.getElementById("go").onclick = () => {
-  PATH.length = 0; renderRoute();
+  PATH.length = 0; AI_HIST.length = 0; renderRoute();
   const area = Number(document.getElementById("area").value) || 0;
   const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
   S = {
@@ -284,19 +286,65 @@ const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(
 const LIMIT = ADMIN.limit ?? ADMIN.steps.filter(hasOf).length + 2; // 往復の上限（④を1往復目と数える）
 const AI_CANDS = ["（AIの候補1）", "（AIの候補2）", "（AIの候補3）"];
 let BRANCH = null; // ④で決まる枝
+// ---- ④から先の返事：サーバー（/api/chat）経由で Claude に作らせる。つながらなければ台本の返事に戻る ----
+const QS = new URLSearchParams(location.search);
+const AI_OFF = QS.has("demo") || QS.get("ai") === "off"; // デモ再生中は呼ばない
+const SID = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36); // ブラウザを開いてから閉じるまで
+const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "visitor"; // ?by=名前 で誰の利用か分ける
+const AI_URL = "../../api/chat"; // /RealEstate_app/docs/proto/ から /RealEstate_app/api/chat へ
+const AI_FAIL = "<br><small>（AIにつながらなかったため、台本の仮の返事です）</small>";
+let AI_HIST = [], REPLAYING = false;
+const plain = h => { const e = document.createElement("div"); e.innerHTML = h; return e.textContent; };
+function nextButtons(n) { // 次のステップnで利用者に出る、店のボタン
+  if (n >= LIMIT) return [];
+  const st = n === 1 ? BRANCH : ADMIN.steps[n];
+  return st ? liveOf(st) : [];
+}
+function aiContext(n, ask) {
+  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
+  let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
+  if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
+  if (ask) c += "\nこの段階は、利用者の答えが店にとって何を意味するかを正直に返してください。";
+  const nb = nextButtons(n);
+  if (n >= LIMIT) c += "\n次のボタンはありません。この返事で締めます。問いかけは付けず、詳しくは弊社へ問い合わせてほしいと一言で添えてください。";
+  else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事の最後の一文は、このボタンのどれかで答えられる問いにしてください。";
+  else c += "\n次のボタンは未定です。短い問いで締めてください。";
+  return c;
+}
+async function askAI(n, ask, userText) {
+  AI_HIST.push({ role:"user", content:userText });
+  const w = document.createElement("div"); w.className = "ai";
+  w.innerHTML = '<span class="tag">AI</span><span class="hint">考えています…</span>';
+  document.getElementById("talk").appendChild(w); w.scrollIntoView({ block:"center" });
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 60000);
+  try {
+    const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
+      body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), messages:AI_HIST.slice(-20) }) });
+    const d = await r.json();
+    if (!r.ok || !d.text) throw new Error(d.error || r.status);
+    AI_HIST.push({ role:"assistant", content:d.text });
+    (S.api = S.api || []).push({ step:n, usage:d.usage, costUsd:d.costUsdEstimate, ms:d.ms }); // 利用者レポート用
+    return esc(d.text).replace(/\n/g, "<br>");
+  } catch (e) {
+    AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
+    S.signals.push("AIにつながらなかった：" + e.message);
+    return null;
+  } finally { clearTimeout(timer); w.remove(); }
+}
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
   return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
 }
-function goStep(i, lead) {
+function goStep(i, lead, real) {
   if (i >= LIMIT) { say(lead + "<br>" + END + (closeNow() ? "<br>" + esc(closeNow()) : "")); return; }
   const st = i === 1 ? BRANCH : ADMIN.steps[i];
   let list = liveOf(st), hole;
   if (list.length) hole = `開けた穴：管理画面の${NUM[3 + i]}${i === 1 ? "（" + (st.name || "枝") + "・" + st.kind + "）" : "（" + (st.topic || "題名なし") + "）"}のボタン`;
   else { list = AI_CANDS; hole = `開けた穴：店のボタンがないので AI のボタン候補（上限 ${LIMIT} 往復の ${i + 1} 往復目）`; }
   const ask = i === 1 && st.kind === "聞く";
-  say(lead + "<br>" + (ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
-    "渡したもの：一つ前の答えへの回答", hole);
+  // AIの返事（real）は、最後の一文が「次のボタンが答えになる問い」なので、台本の導入は足さない
+  say(real ? lead : lead + "<br>" + (ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
+    real ? "渡したもの：一つ前の答えへのClaudeの返事" : "渡したもの：一つ前の答えへの回答（台本）", hole);
   const ans = said => `<span class="hint">（AIの${ask ? "返事：「" + esc(said) + "」が店にとって何を意味するかを正直に返す" : "回答：「" + esc(said) + "」に、ここまでの土地の条件に合わせて短く答える"}）</span>`;
   const enter = c => {
     if (i !== 0) return;
@@ -308,7 +356,13 @@ function goStep(i, lead) {
   choices(list, null, (t, c) => {
     if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
     enter(c || t);
-    goStep(i + 1, ans(c ? c + (t ? "」と「" + t : "") : t)); // 書いても、答えた後は次のボタンへ戻す
+    const said = c ? c + (t ? "」と「" + t : "") : t;
+    const userText = (c ? "選んだボタン：" + c : "") + (c && t ? "\n" : "") + (t ? "書いた言葉：" + t : "");
+    if (REPLAYING || AI_OFF) { // 巻き戻し・デモでは Claude を呼ばない（費用と記録の重複を避ける）
+      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:"（以前の返答）" });
+      goStep(i + 1, ans(said)); return;
+    }
+    askAI(i + 1, ask, userText).then(r => goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r)); // 答えた後は次のボタンへ戻す
   }, 4 + i);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
@@ -420,6 +474,7 @@ function rewind(k, c) {
   replay(PATH.slice(0, k).concat({ press:c }));
 }
 function replay(steps) {
+  REPLAYING = true;
   document.getElementById("go").click();
   for (const st of steps) {
     const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
@@ -432,6 +487,7 @@ function replay(steps) {
     const send = row.querySelector('button[data-c="送信"]');
     if (send && b !== send && !row.classList.contains("done")) { row.querySelector("input.other").value = st.type || ""; send.click(); }
   }
+  REPLAYING = false;
   const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
   (last || document.getElementById("talk").lastElementChild).scrollIntoView({ block:"center" });
 }
