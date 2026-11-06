@@ -99,10 +99,6 @@
     </div>
     <div id="route" class="route"></div>
     <div id="result"></div>
-    <details>
-      <summary>事業所設定（プレファレンス・仮）</summary>
-      <pre id="prefView"></pre>
-    </details>
   </aside>
 </div>
 
@@ -139,7 +135,6 @@ const PREF = {
   },
   tone: "踏み込むが嘘はつかない"
 };
-document.getElementById("prefView").textContent = JSON.stringify(PREF, null, 2);
 
 function distM(a, b) {
   const R = 6371000, toR = x => x * Math.PI / 180;
