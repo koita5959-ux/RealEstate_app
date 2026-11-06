@@ -36,6 +36,7 @@
   .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
   body.design .will { display:block; }
   .row.done button { opacity:.45; }
+  .row button.sel { background:#e6f0fa; border-width:2px; }
   .row.done button.chosen { opacity:1; background:var(--accent); color:#fff; }
   .row.done textarea { display:none; }
   .row.done > button:only-of-type, .row.done .hint { display:none; }
@@ -304,10 +305,10 @@ function goStep(i, lead) {
     BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0]; // 書いた場合の枝はAIが判断（ダミーは枝1）
     inquiryBar();
   };
-  choices(list, c => { enter(c); goStep(i + 1, ans(c)); }, t => {
-    S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
-    enter(t);
-    goStep(i + 1, ans(t)); // 書いても、答えた後は次のボタンへ戻す
+  choices(list, null, (t, c) => {
+    if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
+    enter(c || t);
+    goStep(i + 1, ans(c ? c + (t ? "」と「" + t : "") : t)); // 書いても、答えた後は次のボタンへ戻す
   }, 4 + i);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
@@ -367,7 +368,8 @@ function say(html, gave, hole) {
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
-// onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（④以降）。選ぶか、書いて送信するか、どちらでも進める
+// onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（④以降）。この行ではボタンは選ぶだけで、「送信」がリクエストになる。
+// 送るのは「選択＋書いた言葉」。どちらか片方だけでもよい。onText(t, c)：t＝書いた言葉（なければ空）、c＝選んだボタン（なければ null）
 function choices(list, cb, onText, q) {
   const d = newRow(q);
   const pick = (b, c, opt, t) => {
@@ -378,16 +380,20 @@ function choices(list, cb, onText, q) {
   list.forEach((c, i) => { const b = document.createElement("button"); b.dataset.c = c; b.dataset.opt = i + 1; b.innerHTML = `<span class="opt">${i + 1}</span>`; b.append(c);
     b.onclick = () => {
       if (d.dataset.step) { if (!b.classList.contains("chosen")) rewind(+d.dataset.step, c); return; }
+      if (onText) { const on = !b.classList.contains("sel"); d.querySelectorAll("button.sel").forEach(x => x.classList.remove("sel")); b.classList.toggle("sel", on); return; }
       pick(b, c, i + 1); me(c); cb(c);
     }; d.appendChild(b);
   });
   if (onText) {
-    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="選ぶ代わりに、書いて送ることもできます"><button data-c="送信">送信</button></div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="選んで送る、書いて送る、選んで書き添えて送る、どれでもできます"><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
     b.onclick = () => {
       if (d.dataset.step) return;
-      const t = d.querySelector("input.other").value.trim(); if (!t) return;
-      pick(b, "送信", 0, t); me(t); onText(t);
+      const t = d.querySelector("input.other").value.trim(), sel = d.querySelector("button.sel");
+      if (!t && !sel) return;
+      if (sel) { sel.classList.remove("sel"); pick(sel, sel.dataset.c, +sel.dataset.opt, t); b.classList.add("chosen"); }
+      else pick(b, "送信", 0, t);
+      me(sel ? sel.dataset.c + (t ? "／" + t : "") : t); onText(t, sel ? sel.dataset.c : null);
     };
   }
   document.getElementById("talk").appendChild(d);
@@ -423,6 +429,8 @@ function replay(steps) {
     if (st.type) row.querySelector("input.other").value = st.type;
     const b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
     if (!b) break; b.click();
+    const send = row.querySelector('button[data-c="送信"]');
+    if (send && b !== send && !row.classList.contains("done")) { row.querySelector("input.other").value = st.type || ""; send.click(); }
   }
   const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
   (last || document.getElementById("talk").lastElementChild).scrollIntoView({ block:"center" });
