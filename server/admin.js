@@ -134,7 +134,7 @@ export function summarize(ctx) {
   let saved = new Set();
   try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
   const now = Date.now();
-  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: saved.has(s.sid) || s.rounds > 0 || s.maxQ > 0, active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
   // 日別（日本時間）
   const dayMap = new Map();
@@ -227,6 +227,47 @@ export function publicStats(ctx) {
   return { ready: true, sessions: e.n, avgUsd: e.avgUsd, p90Usd: e.p90, avgRounds: e.avgRounds, usdJpy: s.usdJpy, model: s.model };
 }
 
+// ---- セッションの再表示の部品 ----
+function turnsOf(dir, sid) {
+  return readJsonl(dir, "log").filter((r) => r.sid === sid).map((r) => ({ ts: r.ts, status: r.status, reason: r.reason, q: r.meta?.q, press: r.meta?.press, user: r.userText, reply: r.reply, inTok: r.inputTokens, outTok: r.outputTokens, costUsd: r.costUsd, ms: r.ms }));
+}
+// 保存した記録がない（この機能を入れる前の）セッションを、ログと画面の動きの記録から復元する。復元できない項目（面積・地価など）は空になる。
+function reconstruct(ctx, sid) {
+  const byTs = (a, b) => a.ts.localeCompare(b.ts);
+  const logs = readJsonl(ctx.DATA_DIR, "log").filter((r) => r.sid === sid).sort(byTs);
+  const evs = readJsonl(ctx.DATA_DIR, "events").filter((e) => e.sid === sid).sort(byTs);
+  if (!logs.length && !evs.some((e) => e.type === "choice" || e.type === "evaluate")) return null;
+  const ok = logs.filter((r) => r.status === "ok");
+  const textOf = (r) => ((r.userText || "").split("書いた言葉：")[1] || "").trim();
+  const path_ = evs.filter((e) => e.type === "choice").map((e) => {
+    const q = +e.data?.q || 0;
+    const t = e.data?.typed ? logs.find((r) => +r.meta?.q === q && textOf(r)) : null;
+    return { press: String(e.data?.press || ""), q, opt: +e.data?.opt || 0, type: t ? textOf(t) : "" };
+  });
+  const m = ok.find((r) => r.meta)?.meta || {};
+  const evalEv = evs.find((e) => e.type === "evaluate");
+  const q4 = ok.find((r) => +r.meta?.q === 4);
+  const sheet = {
+    市区町村: m.place || evalEv?.data?.place || null,
+    最寄り標準地: m.near || evalEv?.data?.near || null,
+    接道: m.road || null,
+    持ち主の意向: m.intent || null,
+    事情: ok.map(textOf).filter(Boolean).join(" / ") || null,
+    相談目的: q4 ? q4.meta?.press || null : null,
+  };
+  const ps = ctx.getSnapshot().explain, e = ps.visitor.n >= 5 ? ps.visitor : ps.all.n >= 5 ? ps.all : null;
+  const last = [...logs, ...evs].sort(byTs).pop();
+  return {
+    by: (logs[0] || evs[0]).by || "?", savedAt: last.ts,
+    state: {
+      updated: new Date(last.ts).getTime(), place: sheet.市区町村 || "", near: sheet.最寄り標準地 || "", localKnowledge: "（ログからの復元のため、記録なし）", revised: "",
+      path: path_, sheet, signals: [],
+      usage: { n: ok.length, tin: sum(ok, (r) => r.inputTokens), tout: sum(ok, (r) => r.outputTokens), costUsd: sum(ok, (r) => r.costUsd) },
+      pub: e ? { ready: true, avgUsd: e.avgUsd, p90Usd: e.p90, sessions: e.n, usdJpy: ps.usdJpy } : { ready: false, usdJpy: ps.usdJpy },
+    },
+  };
+}
+
 // ---- 認証（Basic）----
 function passwordOk(req, ctx) {
   let want = "";
@@ -285,13 +326,15 @@ export async function adminHandler(req, res, url, ctx) {
     return json(200, { ...snap, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
   }
 
-  if (req.method === "GET" && url.pathname === "/api/admin/session") { // 保存されたセッションの再表示用（記録＋会話の本文）
+  if (req.method === "GET" && url.pathname === "/api/admin/session") { // セッションの再表示用（記録＋会話の本文）。保存した記録がなければ、ログから復元する
     const sid = url.searchParams.get("sid") || "";
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
+    const turns = turnsOf(ctx.DATA_DIR, sid);
     const rec = readJson(path.join(ctx.DATA_DIR, "sessions", sid + ".json"), null);
-    if (!rec) return json(404, { error: "not_found" });
-    const turns = readJsonl(ctx.DATA_DIR, "log").filter((r) => r.sid === sid).map((r) => ({ ts: r.ts, status: r.status, reason: r.reason, q: r.meta?.q, press: r.meta?.press, user: r.userText, reply: r.reply, inTok: r.inputTokens, outTok: r.outputTokens, costUsd: r.costUsd, ms: r.ms }));
-    return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, turns });
+    if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, turns });
+    const re = reconstruct(ctx, sid);
+    if (!re) return json(404, { error: "not_found" });
+    return json(200, { sid, by: re.by, savedAt: re.savedAt, state: re.state, turns, reconstructed: true });
   }
 
   if (req.method === "POST") {

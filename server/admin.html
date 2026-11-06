@@ -35,6 +35,7 @@
   input, select, button.act { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
   button.act { cursor:pointer; background:var(--acc); color:#fff; border-color:var(--acc); }
   .hide { display:none; }
+  tr.replayable { cursor:pointer; } tr.replayable:hover td { background:#eef4fb; }
   a.btn-user-link { display:inline-block; font-size:12px; padding:2px 9px; border-radius:6px; background:#1d6fb8; color:#fff; text-decoration:none; white-space:nowrap; }
   details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
   summary { cursor:pointer; }
@@ -69,6 +70,9 @@ const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
 const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
 const REASON = { disabled:"停止スイッチ", daily_cap:"1日の費用上限", rate_limited:"回数制限", busy:"同時処理の上限", no_key:"キー未設定" };
 
+const replayUrl = sid => "../../docs/proto/report.html?sid=" + encodeURIComponent(sid);
+const replayCell = s => s.canReplay ? `<a class="btn-user-link" href="${replayUrl(s.sid)}" onclick="return goScreen(this.href, 'reReportView', event)">再表示</a>` : '<span class="note">—</span>';
+const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、このセッションを再表示します"` : "";
 function bars(rows, valf, labf, fmt) {
   const max = Math.max(...rows.map(valf), 1e-9);
   return `<table>${rows.map(r => `<tr><td style="width:34%">${esc(labf(r))}</td><td><div class="barbox"><div class="bar" style="width:${Math.max(1, valf(r) / max * 100)}%"></div><span class="note">${fmt(r)}</span></div></td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table>`;
@@ -97,8 +101,8 @@ function viewCost() {
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>費用が大きかったセッション</h2>
-  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th></tr>
-  ${top.map(s => `<tr><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
+  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
+  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
   <div class="scroll"><table><tr><th>日</th><th>誰</th><th class="n">セッション</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">金額</th></tr>
   ${D.days.slice(0, 40).map(x => `<tr><td>${x.day}</td><td>${esc(x.by)}</td><td class="n">${x.sessions}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}</td><td class="n">${num(x.outTok)}</td><td class="n">${money(x.est)}</td><td class="n">${x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">推定のみ</span>'}</td></tr>`).join("")}</table></div>`;
@@ -158,7 +162,7 @@ function viewSessions() {
   <h2>セッション（新しい順・最大300件）</h2>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
   <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
-  ${D.sessions.map(s => `<tr><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${s.hasState ? `<a class="btn-user-link" href="../../docs/proto/report.html?sid=${encodeURIComponent(s.sid)}" onclick="return goScreen(this.href, 'reReportView', event)">再表示</a>` : '<span class="note">—</span>'}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
+  ${D.sessions.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>最近のやり取り（200件まで・本文つき）</h2>
   ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}</pre></details>`).join("") || '<div class="note">まだありません</div>'}`;
 }
@@ -186,6 +190,14 @@ async function post(path, body) {
   const r = await fetch(BASE + path, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) });
   return r.ok;
 }
+document.addEventListener("click", e => {
+  const tr = e.target.closest("tr.replayable");
+  if (!tr || e.target.closest("a")) return;
+  if (window.getSelection && String(window.getSelection())) return; // 文字を選んでいるときは何もしない
+  const url = replayUrl(tr.dataset.sid);
+  if (e.ctrlKey || e.metaKey || e.shiftKey) window.open(new URL(url, location.href).href, "_blank");
+  else goScreen(url, "reReportView", e);
+});
 function bind() {
   const $ = id => document.getElementById(id);
   if ($("fsel")) $("fsel").onchange = e => { window.fSel = e.target.value; render(); };

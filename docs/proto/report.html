@@ -80,7 +80,7 @@ async function loadSaved() {
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
     $("none").hidden = true; $("main").hidden = false;
-    $("stamp").innerHTML = "<b>記録の再表示</b>（開発者用）　セッション " + V.esc(SID.slice(0, 8)) + "　利用者名：" + V.esc(d.by) + "　最終保存 " + new Date(d.savedAt).toLocaleString("ja-JP");
+    $("stamp").innerHTML = "<b>記録の再表示</b>（開発者用）　セッション " + V.esc(SID.slice(0, 8)) + "　利用者名：" + V.esc(d.by) + "　最終保存 " + new Date(d.savedAt).toLocaleString("ja-JP") + (d.reconstructed ? "<br><span class=\"empty\">ログからの復元です。この機能を入れる前のセッションのため、面積・地価・用途地域などは復元できません。</span>" : "");
     paint(d.state);
     $("talkbox").hidden = !d.turns.length;
     $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①②③④⑤⑥⑦⑧⑨"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
