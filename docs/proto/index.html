@@ -120,6 +120,10 @@ const POINTS = [
   { name:"鷺山",      lat:35.4480, lng:136.7350, price:80000,  zone:"第一種低層住居専用地域" },
   { name:"茜部",      lat:35.3900, lng:136.7500, price:90000,  zone:"第一種住居地域" },
 ];
+// 近く（NEAR_MAX_M 以内）に標準地がなければ「データなし」として扱う（仮データは岐阜市中心部の5地点のみ。遠い標準地の数字を最寄りとして出すと、利用者を混乱させるため）
+const NEAR_MAX_M = 5000;
+const NO_DATA = { name:"データなし", none:true, d:null, price:null, zone:null };
+const NO_DATA_TEXT = "データなし（仮データは岐阜市中心部のみ）";
 // 事業所の土地勘（プレファレンス）
 const PREF = {
   office: "（仮）〇〇不動産",
@@ -226,7 +230,7 @@ document.getElementById("openMap").onclick = async () => {
   if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
   PLACE = pref + city; mapOpen = true; ev("map", { place:PLACE });
   map.setView([at[1], at[0]], 14);
-  msg.textContent = PLACE + "の地図を開きました。" + (PLACE === "岐阜県岐阜市" ? "" : "（仮データは岐阜市の分しかありません）");
+  msg.textContent = PLACE + "の地図を開きました。" + (PLACE === "岐阜県岐阜市" ? "" : "この市区町村の公開データ（標準地価格・用途地域）は、まだ用意していません（仮データは岐阜市中心部のみ）。評価は、データなしで進みます。");
   document.getElementById("step1").classList.remove("hidden");
 };
 
@@ -241,14 +245,15 @@ document.getElementById("go").onclick = () => {
   if (!REPLAYING && typeof S !== "undefined" && S && (PATH.length || (S.api || []).length)) SID = newSid();
   PATH.length = 0; AI_HIST.length = 0; renderRoute();
   const area = Number(document.getElementById("area").value) || 0;
-  const near = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
+  const nearest = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
+  const near = nearest.d <= NEAR_MAX_M ? nearest : NO_DATA;
   ev("evaluate", { near:near.name, area, place:PLACE });
   S = {
     // 層1: 入力で埋まる / 層2: データで埋まる / 層3: 対話で埋まる
     sheet: {
       市区町村: PLACE, 所在: `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}`, 面積: area + "㎡",
-      最寄り標準地: `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: yen(near.price) + "/㎡（仮）",
-      用途地域: near.zone + "（仮）",
+      最寄り標準地: near.none ? NO_DATA_TEXT : `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）",
+      用途地域: near.none ? NO_DATA_TEXT : near.zone + "（仮）",
       形と向き: null, 接道: null, 持ち主の意向: null, 事情: null, 事情の要点: null
     },
     near, area, log: [], signals: [], revised: null, used: []
@@ -256,11 +261,11 @@ document.getElementById("go").onclick = () => {
   R.innerHTML = `
     <h2>2. データ（公開データから機械的に）</h2>
     <table class="data">
-      <tr><td>最寄りの標準地</td><td>${near.name}（約${Math.round(near.d)}m）</td></tr>
-      <tr><td>標準地価格</td><td>${yen(near.price)}/㎡（仮）</td></tr>
-      <tr><td>用途地域</td><td>${near.zone}（仮）</td></tr>
+      <tr><td>最寄りの標準地</td><td>${near.none ? NO_DATA_TEXT : near.name + "（約" + Math.round(near.d) + "m）"}</td></tr>
+      <tr><td>標準地価格</td><td>${near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）"}</td></tr>
+      <tr><td>用途地域</td><td>${near.none ? NO_DATA_TEXT : near.zone + "（仮）"}</td></tr>
       <tr><td>面積</td><td>${area}㎡</td></tr>
-      <tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×面積）</td></tr>
+      ${near.none ? "" : `<tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×面積）</td></tr>`}
     </table>
     <h2>3. AI</h2>
     <div id="talk"></div>
@@ -296,7 +301,7 @@ function onRoad(c) {
       + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
       "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（すれ違えるか、で答えられる）");
     choices(["すれ違える", "すれ違えない", "わからない"], c2 => {
-      S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／前の道は4m未満の可能性（セットバック）", "わからない":"／前の道の幅は不明" }[c2];
+      S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／ただし前の道は4m未満の可能性（建て直し時にセットバックの確認が必要）", "わからない":"／前の道の幅は不明" }[c2];
       if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
       askBuilding(c2 === "すれ違えない" ? "それなら、建て直すときに何㎡残るかを先に確かめる土地です。" : "接道の面では、この土地は素直な土地です。");
     }, null, 2);
@@ -444,10 +449,11 @@ function nextButtons(n) { // 次のステップnで利用者に出る、店の�
 function aiContext(n, ask) {
   const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
+  if (S.near && S.near.none) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   if (ask) c += "\nこの段階は、利用者の答えが店にとって何を意味するかを正直に返してください。";
   const nb = nextButtons(n);
-  if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。聞かれたことへの答えだけを返し、問いかけは付けないでください。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
+  if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。直前の利用者の言葉への答えだけを、2〜3文で返してください。新しい話題（税金・専門家への相談の勧めなど）は持ち出さず、問いかけも付けません。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
   else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事の最後の一文は、このボタンのどれかで答えられる問いにしてください。";
   else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
@@ -731,7 +737,7 @@ function restoreFromSnapshot(d) {
     document.getElementById("area").value = sn.area || 120;
     map.setView([sn.pin.lat, sn.pin.lng], 16); setPin(sn.pin.lat, sn.pin.lng);
     // 状態：保存された記録から作り直す（店の設定には頼らない）
-    const near = POINTS.find(p => p.name === sn.near) || POINTS[3];
+    const near = POINTS.find(p => p.name === sn.near) || NO_DATA;
     PATH.length = 0; for (const p of st.path || []) PATH.push({ press:p.press, q:p.q, ...(p.opt ? { opt:p.opt } : {}), ...(p.type ? { type:p.type } : {}) });
     AI_HIST.length = 0;
     const oks = (d.turns || []).filter(t => t.status === "ok" && t.reply);
@@ -746,9 +752,9 @@ function restoreFromSnapshot(d) {
     R.innerHTML = `
       <h2>2. データ（公開データから機械的に）</h2>
       <table class="data">
-        <tr><td>最寄りの標準地</td><td>${esc(String(sh.最寄り標準地 || near.name))}</td></tr>
-        <tr><td>標準地価格</td><td>${esc(String(sh.標準地価格 || yen(near.price) + "/㎡（仮）"))}</td></tr>
-        <tr><td>用途地域</td><td>${esc(String(sh.用途地域 || near.zone + "（仮）"))}</td></tr>
+        <tr><td>最寄りの標準地</td><td>${esc(String(sh.最寄り標準地 || (near.none ? NO_DATA_TEXT : near.name)))}</td></tr>
+        <tr><td>標準地価格</td><td>${esc(String(sh.標準地価格 || (near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）")))}</td></tr>
+        <tr><td>用途地域</td><td>${esc(String(sh.用途地域 || (near.none ? NO_DATA_TEXT : near.zone + "（仮）")))}</td></tr>
         <tr><td>面積</td><td>${esc(String(sh.面積 || (sn.area || 120) + "㎡"))}</td></tr>
       </table>
       <h2>3. AI</h2>
