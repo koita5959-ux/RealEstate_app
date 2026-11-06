@@ -1,0 +1,12 @@
+# RealEstate_app 試作の公開用。ほかのサイトとは別コンテナ・別ポート。
+# サーバーの Nginx が /RealEstate_app/ をここ（127.0.0.1:8110）へ渡す。
+# API サーバー（server/）は後で同じファイルに api サービスとして足す。
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "127.0.0.1:8110:80"
+    volumes:
+      - ./docs:/usr/share/nginx/html/docs:ro
+      - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
