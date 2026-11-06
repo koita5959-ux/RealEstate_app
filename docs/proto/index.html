@@ -294,11 +294,10 @@ const ADMIN_DEFAULT = {
   close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。", limit:null };
 const ADMIN = (() => { try { const a = JSON.parse(localStorage.getItem("reAdmin")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
 window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
-const END = "セッションでお答えできるのは以上です。詳しくは弊社へお問い合わせください。";
+const END = "AIはここまでです。詳しいご相談はメールをお送りいただければ、担当者が対応します。";
 const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
 const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
 const LIMIT = ADMIN.limit ?? ADMIN.steps.filter(hasOf).length + 2; // 往復の上限（④を1往復目と数える）
-const AI_CANDS = ["（AIの候補1）", "（AIの候補2）", "（AIの候補3）"];
 let BRANCH = null; // ④で決まる枝
 // ---- ④から先の返事：サーバー（/api/chat）経由で Claude に作らせる。つながらなければ台本の返事に戻る ----
 const QS = new URLSearchParams(location.search);
@@ -344,9 +343,9 @@ function aiContext(n, ask) {
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   if (ask) c += "\nこの段階は、利用者の答えが店にとって何を意味するかを正直に返してください。";
   const nb = nextButtons(n);
-  if (n >= LIMIT) c += "\n次のボタンはありません。この返事で締めます。問いかけは付けず、詳しくは弊社へ問い合わせてほしいと一言で添えてください。";
+  if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。聞かれたことへの答えだけを返し、問いかけは付けないでください。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
   else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事の最後の一文は、このボタンのどれかで答えられる問いにしてください。";
-  else c += "\n次のボタンは未定です。短い問いで締めてください。";
+  else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
 }
 async function askAI(n, ask, userText, meta) {
@@ -378,10 +377,10 @@ function goStep(i, lead, real) {
   const st = i === 1 ? BRANCH : ADMIN.steps[i];
   let list = liveOf(st), hole;
   if (list.length) hole = `開けた穴：管理画面の${NUM[3 + i]}${i === 1 ? "（" + (st.name || "枝") + "・" + st.kind + "）" : "（" + (st.topic || "題名なし") + "）"}のボタン`;
-  else { list = AI_CANDS; hole = `開けた穴：店のボタンがないので AI のボタン候補（上限 ${LIMIT} 往復の ${i + 1} 往復目）`; }
+  else { list = []; hole = `開けた穴：店のボタンがないので、書き欄だけでAIと続ける（上限 ${LIMIT} 往復の ${i + 1} 往復目）`; }
   const ask = i === 1 && st.kind === "聞く";
   // AIの返事（real）は、最後の一文が「次のボタンが答えになる問い」なので、台本の導入は足さない
-  say(real ? lead : lead + "<br>" + (ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
+  say(real ? lead : lead + "<br>" + (!list.length ? "続けて、書いてお知らせください。" : ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
     real ? "渡したもの：一つ前の答えへのClaudeの返事" : "渡したもの：一つ前の答えへの回答（台本）", hole);
   const ans = said => `<span class="hint">（AIの${ask ? "返事：「" + esc(said) + "」が店にとって何を意味するかを正直に返す" : "回答：「" + esc(said) + "」に、ここまでの土地の条件に合わせて短く答える"}）</span>`;
   const enter = c => {
@@ -480,7 +479,7 @@ function choices(list, cb, onText, q) {
     }; d.appendChild(b);
   });
   if (onText) {
-    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="リクエストメッセージも送れます"><button data-c="送信">送信</button></div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="${list.length ? "リクエストメッセージも送れます" : "ここに書いて送信してください"}"><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
     b.onclick = () => {
       if (d.dataset.step) return;
