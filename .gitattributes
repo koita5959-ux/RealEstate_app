@@ -1,0 +1,2 @@
+# 改行は LF に固定（Windows 側の保存で CRLF が混ざるのを防ぐ）
+* text=auto eol=lf
