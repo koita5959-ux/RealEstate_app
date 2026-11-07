@@ -11,7 +11,7 @@ import { adminHandler, publicStats, summarize } from "./admin.js";
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
 const MODEL = env.MODEL || "claude-opus-5-5";
-const MAX_TOKENS = Number(env.MAX_TOKENS || 600);
+const MAX_TOKENS = Number(env.MAX_TOKENS || 2000); // Opus 5.5 は考える処理を止められず、その分もここに入る。600では考えるだけで使い切り、返事が空になったことがある（2026-11-07）
 const EFFORT = env.EFFORT || "low"; // 雑談は浅くてよい。深くすると費用と時間が増える
 const DAILY_USD_CAP = Number(env.DAILY_USD_CAP || 2); // 1日の推定費用の上限（超えたら止まる）
 const RATE_PER_MIN = Number(env.RATE_PER_MIN || 12); // 同じ人の1分あたりの上限
