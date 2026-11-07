@@ -177,11 +177,14 @@ function setPin(lat, lng) {
 }
 map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
 const goBtn = document.getElementById("go"), areaInp = document.getElementById("area");
-const refreshGo = () => lamp(goBtn, !!here && Number(areaInp.value) >= 10);
+// 「評価する」は、同じピン・同じ面積ではもう押せない（押し直すと会話が最初からになるため）。ピンを置き直すか面積を変えると点灯する
+let EVAL_AT = "";
+const goKey = () => here ? `${here.lat.toFixed(6)},${here.lng.toFixed(6)}|${Number(areaInp.value) || 0}` : "";
+const refreshGo = () => lamp(goBtn, !!here && Number(areaInp.value) >= 10 && goKey() !== EVAL_AT);
 areaInp.addEventListener("input", refreshGo);
 document.getElementById("preset").onclick = () => {
   // 例のピンは岐阜市にあるので、市区町村の表示も岐阜県岐阜市に合わせる（別の市区町村を選んでいた場合も、ピンと表示が食い違わないように）
-  prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden");
+  prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; OPENED_AT = "岐阜県岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden");
   map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352);
 };
 
@@ -190,6 +193,11 @@ map.setView([36.2, 137.5], 5); // 開く前は日本全体
 let PLACE = ""; // 都道府県・市区町村は空白で始める（日本地図から）
 // ---- ボタンの点灯／グレー：受け付けられる入力があれば点灯、未入力ならグレー ----
 const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
+// グレーのボタンは、人が押しても何も起きない（無効）。画面の中の再現（巻き戻し・元に戻す・デモ）が内部で押す分は通す
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button.off");
+  if (b && e.isTrusted) { e.preventDefault(); e.stopPropagation(); }
+}, true);
 const prefInp = document.getElementById("prefName"), cityInp = document.getElementById("cityName"), openBtn = document.getElementById("openMap");
 // 一覧：カーソルを入れる／押すと開く。都道府県を選ぶと、その都道府県の市区町村だけが候補に出る（連動）
 const PREFS_FALLBACK = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
@@ -199,7 +207,9 @@ const prefList = () => (MUNI ? MUNI.prefs : PREFS_FALLBACK);
 const cityList = () => (MUNI && MUNI.munis[prefInp.value.trim()]) || null; // 都道府県が決まっていなければ null
 const prefOk = () => prefList().includes(prefInp.value.trim());
 const cityOk = () => { const c = cityInp.value.trim(), L = cityList(); return !!c && (L ? L.includes(c) : !MUNI); };
-const refreshOpen = () => lamp(openBtn, prefOk() && cityOk());
+// 「地図を開く」は、開いた市区町村のままではもう押せない。都道府県か市区町村を変えると点灯する
+let OPENED_AT = "";
+const refreshOpen = () => lamp(openBtn, prefOk() && cityOk() && prefInp.value.trim() + cityInp.value.trim() !== OPENED_AT);
 function setupCombo(inp, ul, options, emptyMsg, onPick) {
   let idx = -1, shown = [];
   const hide = () => { ul.hidden = true; inp.setAttribute("aria-expanded", "false"); idx = -1; };
@@ -245,6 +255,7 @@ document.getElementById("openMap").onclick = async () => {
   if (!at && pref + city === "岐阜県岐阜市") at = [136.7606, 35.4233];
   if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
   PLACE = pref + city; mapOpen = true; ev("map", { place:PLACE });
+  OPENED_AT = pref + city; refreshOpen();
   map.setView([at[1], at[0]], 14);
   msg.textContent = openedMsg(PLACE);
   document.getElementById("step1").classList.remove("hidden");
@@ -255,6 +266,7 @@ function showPlace(place) {
   if (!place) return;
   const pref = prefList().find(x => place.startsWith(x));
   prefInp.value = pref || ""; cityInp.value = pref ? place.slice(pref.length) : place;
+  OPENED_AT = prefInp.value.trim() + cityInp.value.trim();
   refreshOpen();
   document.getElementById("mapMsg").textContent = openedMsg(place);
 }
@@ -269,6 +281,7 @@ document.getElementById("go").onclick = () => {
   // 進めた体験のあとに「評価する」を押し直したら、新しい体験として分ける（前の体験の保存内容を上書きしない）。巻き戻し・元に戻すの再現中は分けない
   if (!REPLAYING && typeof S !== "undefined" && S && (PATH.length || (S.api || []).length)) SID = newSid();
   PATH.length = 0; AI_HIST.length = 0; renderRoute();
+  EVAL_AT = goKey(); refreshGo();
   const area = Number(document.getElementById("area").value) || 0;
   const nearest = POINTS.map(p => ({ ...p, d: distM(here, p) })).sort((a, b) => a.d - b.d)[0];
   const near = nearest.d <= NEAR_MAX_M ? nearest : NO_DATA;
@@ -790,6 +803,7 @@ function restoreFromSnapshot(d) {
     if (sn.place) { PLACE = sn.place; showPlace(PLACE); }
     document.getElementById("area").value = sn.area || 120;
     map.setView([sn.pin.lat, sn.pin.lng], 16); setPin(sn.pin.lat, sn.pin.lng);
+    EVAL_AT = goKey(); refreshGo(); // 戻した画面は「評価した後」なので、評価するはグレー
     // 状態：保存された記録から作り直す（店の設定には頼らない）
     const near = POINTS.find(p => p.name === sn.near) || NO_DATA;
     PATH.length = 0; for (const p of st.path || []) PATH.push({ press:p.press, q:p.q, ...(p.opt ? { opt:p.opt } : {}), ...(p.type ? { type:p.type } : {}) });
