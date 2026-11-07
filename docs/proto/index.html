@@ -28,6 +28,7 @@
   .combo-list li { padding:7px 10px; font-size:14px; cursor:pointer; }
   .combo-list li.on, .combo-list li:hover { background:#eef4fb; }
   .combo-list li.none { color:var(--sub); cursor:default; font-size:13px; }
+  body.ai-wait #talk .row.done button:not(.chosen) { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; }
   button.off, button.off:hover { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; opacity:1; }
   .data { width:100%; border-collapse:collapse; font-size:13px; }
   .data td { border-bottom:1px solid var(--line); padding:5px 4px; }
@@ -195,7 +196,7 @@ let PLACE = ""; // 都道府県・市区町村は空白で始める（日本地�
 const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
 // グレーのボタンは、人が押しても何も起きない（無効）。画面の中の再現（巻き戻し・元に戻す・デモ）が内部で押す分は通す
 document.addEventListener("click", e => {
-  const b = e.target.closest && e.target.closest("button.off");
+  const b = e.target.closest && (e.target.closest("button.off") || (document.body.classList.contains("ai-wait") && e.target.closest("#talk .row.done button")));
   if (b && e.isTrusted) { e.preventDefault(); e.stopPropagation(); }
 }, true);
 const prefInp = document.getElementById("prefName"), cityInp = document.getElementById("cityName"), openBtn = document.getElementById("openMap");
@@ -522,6 +523,7 @@ async function askAI(n, ask, userText, meta) {
   w.innerHTML = '<span class="tag">AI</span><span class="hint">考えています…</span>';
   document.getElementById("talk").appendChild(w); w.scrollIntoView({ block:"center" });
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 60000);
+  document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
       body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
@@ -534,7 +536,7 @@ async function askAI(n, ask, userText, meta) {
     AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
-  } finally { clearTimeout(timer); w.remove(); saveSession(); refreshPub(); }
+  } finally { clearTimeout(timer); w.remove(); document.body.classList.remove("ai-wait"); saveSession(); refreshPub(); }
 }
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
