@@ -228,9 +228,18 @@ document.getElementById("openMap").onclick = async () => {
   if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
   PLACE = pref + city; mapOpen = true; ev("map", { place:PLACE });
   map.setView([at[1], at[0]], 14);
-  msg.textContent = PLACE + "の地図を開きました。" + (PLACE === "岐阜県岐阜市" ? "" : "この市区町村の公開データ（標準地価格・用途地域）は、まだ用意していません（仮データは岐阜市中心部のみ）。評価は、データなしで進みます。");
+  msg.textContent = openedMsg(PLACE);
   document.getElementById("step1").classList.remove("hidden");
 };
+const openedMsg = place => place + "の地図を開きました。" + (place === "岐阜県岐阜市" ? "" : "この市区町村の公開データ（標準地価格・用途地域）は、まだ用意していません（仮データは岐阜市中心部のみ）。評価は、データなしで進みます。");
+// 元に戻すとき：保存された「都道府県＋市区町村」を2つの欄に分けて入れ、地図を開いたときの一文も元どおりに出す
+function showPlace(place) {
+  if (!place) return;
+  const pref = prefList().find(x => place.startsWith(x));
+  prefInp.value = pref || ""; cityInp.value = pref ? place.slice(pref.length) : place;
+  refreshOpen();
+  document.getElementById("mapMsg").textContent = openedMsg(place);
+}
 
 // ---- 会話の状態とデータシート ----
 let S = null;
@@ -733,7 +742,7 @@ function restoreFromSnapshot(d) {
   try {
     SID = newSid(); window.__restored = true;
     mapOpen = true; document.getElementById("step1").classList.remove("hidden");
-    if (sn.place) PLACE = sn.place;
+    if (sn.place) { PLACE = sn.place; showPlace(PLACE); }
     document.getElementById("area").value = sn.area || 120;
     map.setView([sn.pin.lat, sn.pin.lng], 16); setPin(sn.pin.lat, sn.pin.lng);
     // 状態：保存された記録から作り直す（店の設定には頼らない）
@@ -805,7 +814,7 @@ function restoreSession(d) {
     SID = newSid(); window.__restored = true;
     RESTORE = { replies: (d.turns || []).filter(t => t.status === "ok" && t.reply).map(t => ({ reply:t.reply, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
     mapOpen = true; document.getElementById("step1").classList.remove("hidden");
-    if (sh.市区町村) PLACE = sh.市区町村;
+    if (sh.市区町村) { PLACE = sh.市区町村; showPlace(PLACE); }
     const a = String(sh.面積 || "").match(/\d+/); if (a) document.getElementById("area").value = a[0];
     const p = pinFrom(d); map.setView([p.lat, p.lng], 16); setPin(p.lat, p.lng);
   } finally { REPLAYING = false; }
