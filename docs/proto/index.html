@@ -374,6 +374,9 @@ const AI_FAIL = "<br><small>（AIにつながらなかったため、簡易の�
 let AI_HIST = [], REPLAYING = false, RESTORE = null;
 // ---- 画面の動きの記録（開いた・地図・押したボタン・閉じた）。本文や個人情報は送らない ----
 const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
+// 開いている「開発利用状況」の窓へ、記録がサーバーに入ったことを知らせる（同じブラウザの中だけ。合図を受けた窓が読み直す）
+const devCh = "BroadcastChannel" in window ? new BroadcastChannel("reDev") : null;
+const pingDev = () => { try { if (devCh) devCh.postMessage({ type:"saved" }); } catch (e) { /* 何もしない */ } };
 function ev(type, data) {
   if (AI_OFF || REPLAYING) return;
   window.__restored = false; // 本物の操作が始まった＝ここから新しい体験として記録する
@@ -381,6 +384,7 @@ function ev(type, data) {
     const b = JSON.stringify({ sid:SID, by:BY, type, data:data || {} });
     if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
     else fetch(EV_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:b, keepalive:true });
+    setTimeout(pingDev, 500); // sendBeacon は届いた時が分からないので、少し待ってから知らせる
   } catch (e) { /* 記録できなくても画面は止めない */ }
 }
 let PUB = null; // 導入後の費用の目安（平均だけ。個別の記録は出ない）
@@ -413,7 +417,7 @@ function snapshotNow() {
   return { talk, pin:{ lat:here.lat, lng:here.lng }, area:S.area, place:PLACE, near:S.near.name };
 }
 function postState(st, extra) {
-  try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st, snapshot:snapshotNow(), ...(extra || {}) }), keepalive:true }).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
+  try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st, snapshot:snapshotNow(), ...(extra || {}) }), keepalive:true }).then(pingDev).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
 }
 function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だけ送る
   if (AI_OFF || REPLAYING || window.__restored) return; // 元に戻した直後は、新しい操作が始まるまで送らない

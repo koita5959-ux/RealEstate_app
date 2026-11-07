@@ -279,7 +279,7 @@ function bind() {
 }
 function render() {
   document.getElementById("tabs").innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? "on" : ""}" data-t="${k}">${n}</button>`).join("");
-  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; location.hash = tab; render(); });
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.t; location.hash = tab; if (stale) { stale = false; load(); } else render(); });
   const st = document.getElementById("state");
   st.textContent = D.config.disabled ? "停止中" : "稼働中"; st.className = "pill " + (D.config.disabled ? "warn" : "ok");
   document.getElementById("upd").textContent = "集計: " + new Date(D.computedAt).toLocaleTimeString("ja-JP") + "（動きがあるたびに更新）";
@@ -295,6 +295,22 @@ async function load() {
 }
 document.getElementById("reload").onclick = load;
 let timer = null;
+// メイン画面で動きがあるたびに読み直す（同じブラウザで開いているメイン画面からの合図）。窓が前に出たときも読み直す。
+// 設定タブで書いている途中・元に戻す確認の途中は、書き換えない（次にタブを移ったときに読み直す）。開いていた「詳しく」は開いたままにする。
+let stale = false, liveTimer = null;
+function liveLoad() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(async () => {
+    const a = document.activeElement;
+    if (tab === "settings" || document.getElementById("rconfirm") || (a && a.closest && a.closest("#main input, #main textarea"))) { stale = true; return; }
+    const opened = new Set([...document.querySelectorAll("#main details[open] > summary")].map(x => x.textContent));
+    stale = false; await load();
+    document.querySelectorAll("#main details > summary").forEach(x => { if (opened.has(x.textContent)) x.parentElement.open = true; });
+  }, 400);
+}
+const devCh = "BroadcastChannel" in window ? new BroadcastChannel("reDev") : null;
+if (devCh) devCh.onmessage = e => { if (e.data && e.data.type === "saved") liveLoad(); };
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") liveLoad(); });
 document.getElementById("auto").onchange = e => { clearInterval(timer); if (e.target.checked) timer = setInterval(load, 30000); };
 load();
 </script>
