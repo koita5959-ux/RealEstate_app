@@ -263,6 +263,7 @@ function cleanSnapshot(x) {
   const talk = (Array.isArray(x.talk) ? x.talk : []).slice(0, 80).map((it) => {
     if (it?.t === "ai") return { t: "ai", html: clip(it.html, 4000), will: clip(it.will, 800) };
     if (it?.t === "me") return { t: "me", text: clip(it.text, 600) };
+    if (it?.t === "inq") return { t: "inq", q: num(it.q) | 0, sent: !!it.sent, way: clip(it.way, 20) }; // お問い合わせは「送ったか」と連絡の希望だけ（お名前・連絡先は受け取らない）
     if (it?.t === "row") return { t: "row", q: num(it.q) | 0, step: it.step == null ? null : num(it.step) | 0, done: !!it.done, hasText: !!it.hasText, buttons: (Array.isArray(it.buttons) ? it.buttons : []).slice(0, 14).map((b) => ({ c: clip(b?.c, 80), opt: num(b?.opt) | 0, chosen: !!b?.chosen })) };
     return null;
   }).filter(Boolean);

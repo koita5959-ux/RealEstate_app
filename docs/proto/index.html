@@ -433,7 +433,8 @@ function snapshotNow() {
       const will = w ? w.innerHTML : ""; if (w) w.remove(); if (tg) tg.remove();
       talk.push({ t:"ai", html:c.innerHTML, will });
     } else if (el.classList.contains("me")) talk.push({ t:"me", text:el.textContent });
-    else if (el.classList.contains("row") && !el.classList.contains("inqrow")) {
+    else if (el.classList.contains("inqrow")) talk.push({ t:"inq", q:+el.dataset.q, sent:el.classList.contains("sent"), way:(el.querySelector("#fWay") || {}).value || "" });
+    else if (el.classList.contains("row")) {
       talk.push({ t:"row", q:+el.dataset.q, step:el.dataset.step === undefined ? null : +el.dataset.step, done:el.classList.contains("done"), hasText:!!el.querySelector(".textline"),
         buttons:[...el.querySelectorAll("button")].map(b => ({ c:b.dataset.c || "", opt:+(b.dataset.opt || 0), chosen:b.classList.contains("chosen") })).filter(b => b.c) });
     }
@@ -563,15 +564,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","
 
 // ---- 問い合わせ（いつでも出せる。記録は画面に出さず、送るときに店へ添える） ----
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
-function inquiryBar() {
-  const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
-  bar.querySelector("button").onclick = () => {
-    ev("inquiry_open");
-    bar.innerHTML = "";
-    const box = newRow(); box.classList.add("inqrow");
-    document.getElementById("talk").appendChild(box);
-    box.insertAdjacentHTML("beforeend", `<b>弊社へのお問い合わせ</b>
+const INQ_FORM = `<b>弊社へのお問い合わせ</b>
       <label>お名前</label><input id="fName" type="text">
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
@@ -581,7 +574,24 @@ function inquiryBar() {
       <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
       <div class="hint">本番では、ここまでの相談の内容が、弊社へ自動で添えられます。</div>
       <button id="inqSend" class="primary">この内容で送る</button>
-      <button id="inqBack" class="small">相談に戻る</button>`);
+      <button id="inqBack" class="small">相談に戻る</button>`;
+// 送ったあと：入力欄はそのまま残し、全部を操作できない状態（グレー）にして、下にお礼の一文を出す
+function inqSentMark(box) {
+  box.querySelectorAll("input, select, textarea, button").forEach(x => { x.disabled = true; });
+  const send = box.querySelector("#inqSend"); if (send) send.classList.add("off");
+  const back = box.querySelector("#inqBack"); if (back) back.remove();
+  box.classList.add("sent");
+  box.insertAdjacentHTML("beforeend", `<div class="sheet" style="margin-top:8px">送信しました。担当者からのご連絡をお待ちください。<br><small>試作のため、実際には送られていません。</small></div>`);
+}
+function inquiryBar() {
+  const bar = document.getElementById("inq");
+  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
+  bar.querySelector("button").onclick = () => {
+    ev("inquiry_open");
+    bar.innerHTML = "";
+    const box = newRow(); box.classList.add("inqrow");
+    document.getElementById("talk").appendChild(box);
+    box.insertAdjacentHTML("beforeend", INQ_FORM);
     box.scrollIntoView({ block:"start" });
     const inqOk = () => !!document.getElementById("fName").value.trim() && !!(document.getElementById("fMail").value.trim() || document.getElementById("fTel").value.trim());
     const refreshInq = () => lamp(document.getElementById("inqSend"), inqOk());
@@ -589,9 +599,8 @@ function inquiryBar() {
     document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
       if (!inqOk()) return; // お名前と、メールか電話のどちらかが必要
-      ev("inquiry_send");
-      box.innerHTML = box.querySelector(".qnum").outerHTML + `<div class="sheet">（試作）送信の操作を確認しました。<br><small>この内容は送られておらず、記録もしていません。本番では、${PREF.office}から、ご希望の方法で連絡します。</small></div>`;
-      box.classList.add("done");
+      inqSentMark(box);
+      ev("inquiry_send"); // 送った状態を記録（お名前・連絡先・伝えたいことの中身は記録しない。連絡の希望だけ）
     };
   };
 }
@@ -828,7 +837,14 @@ function restoreFromSnapshot(d) {
         talk.appendChild(el);
       }
     }
-    if (p4) inquiryBar();
+    let sentBack = false;
+    for (const it of sn.talk) if (it.t === "inq" && it.sent) { // 送ったお問い合わせ：欄はグレーのまま、中身は「記録していません」
+      const box = newRow(it.q); box.classList.add("inqrow"); box.insertAdjacentHTML("beforeend", INQ_FORM);
+      box.querySelectorAll("input, textarea").forEach(x => { x.value = ""; x.placeholder = "（記録していません）"; });
+      const w = box.querySelector("#fWay"); if (w && it.way) w.value = it.way;
+      inqSentMark(box); talk.appendChild(box); sentBack = true;
+    }
+    if (p4 && !sentBack) inquiryBar();
   } finally { REPLAYING = false; }
   talk_banner(d, true);
   saveSession();
