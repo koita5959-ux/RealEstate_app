@@ -72,7 +72,8 @@ function load() {
   $("none").hidden = !!st; $("main").hidden = !st;
   $("none").textContent = "まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
   if (!st) return;
-  $("stamp").textContent = "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに更新されます。別のウインドウで開いたままでも、リロードで最新が見られます。";
+  $("stamp").innerHTML = (st.stage ? "いまの段階：<b>" + V.esc(st.stage) + "</b>" + (st.place ? "（" + V.esc(st.place) + "）" : "") + "<br>" : "")
+    + "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに、この画面も自動で更新されます。";
   paint(st);
 }
 async function loadSaved() {

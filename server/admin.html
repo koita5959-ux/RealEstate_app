@@ -51,9 +51,9 @@
   <span id="state" class="pill"></span>
   <span class="note" id="upd"></span>
   <button class="act" id="reload">更新</button>
-  <label class="note"><input type="checkbox" id="auto"> 30秒ごとに自動更新</label>
+  <span class="note">動きがあると自動で更新します（どのパソコンの動きも、数秒で入ります）</span>
 </div>
-<div class="note">金額は、Claude が返したトークン数に単価を掛けた<b>推定</b>です。実額は Console の残高が正です（「設定」で残高を記録すると、実額との差が見えます）。</div>
+<div class="note"><b>推定</b>＝Claude が返したトークン数に単価を掛けた額（動きのたびに変わる）。<b>実績</b>＝Console に出た日ごとの金額を、その日の往復へ推定の割合で割り振った額（「設定」で Console の数字を入れると確定します）。</div>
 <nav id="tabs"></nav>
 <main id="main"></main>
 </div>
@@ -65,6 +65,12 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const usd = (v, d = 4) => v == null ? "—" : "$" + v.toFixed(d);
 const jpy = v => v == null ? "—" : (v * D.config.usdJpy).toLocaleString("ja-JP", { maximumFractionDigits: v * D.config.usdJpy < 10 ? 2 : 0 }) + "円";
 const money = (v, d = 4) => v == null ? "—" : `${usd(v, d)}<span class="note">（${jpy(v)}）</span>`;
+const NUMQ = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+const stageOf = s => { // どこまで進んだか
+  const base = s.maxQ ? (NUMQ[s.maxQ - 1] || s.maxQ) + "まで" : (["開いた", "地図を開いた", "ピンを置いた", "評価した"][s.reach] || "—");
+  return base + (s.inqSend ? "・問い合わせを押した" : s.inqOpen ? "・問い合わせを開いた" : "");
+};
+const actual = x => x.rounds ? (x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">未確定</span>') : '<span class="note">—</span>';
 const tm = ts => ts ? new Date(ts).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
 const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
 const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
@@ -151,7 +157,7 @@ function viewCost() {
   for (const x of D.days) perDay[x.day] = (perDay[x.day] || 0) + x.est;
   const dayRows = Object.entries(perDay).slice(0, 14).map(([day, est]) => ({ day, est }));
   const costSort = window.costSort || "new"; // 新しい順／費用の大きい順
-  const top = D.sessions.filter(s => s.rounds && actorOk(s)).sort((a, b) => costSort === "cost" ? b.est - a.est : (b.last || "").localeCompare(a.last || "")); // AIを呼んで費用が発生したセッションすべて
+  const top = D.sessions.filter(actorOk).sort((a, b) => costSort === "cost" ? b.est - a.est : (b.last || "").localeCompare(a.last || "")); // 開いた時点からのセッションすべて（AIを呼ぶまでは費用「—」）
   return `
   <div class="cards">
     <div class="card"><div class="t">今日（日本時間）</div><div class="v">${jpy(T.today.est)}</div><div class="s">${usd(T.today.est)} ／ ${T.today.rounds}往復</div></div>
@@ -167,10 +173,14 @@ function viewCost() {
       ${D.actors.sort((a, b) => b.est - a.est).map(a => `<tr><td>${esc(a.by)}</td><td class="n">${a.sessions}</td><td class="n">${a.withAi}</td><td class="n">${a.rounds}</td><td class="n">${money(a.est)}</td></tr>`).join("")}</table></div>
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
-  <h2>費用が発生したセッション（${top.length}件）</h2>
-  <div class="note">AI を呼んで費用がかかったセッションすべて。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
-  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
-  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${esc(s.by)}</td><td class="n">${s.rounds}</td><td class="n">${num(s.inTok)}</td><td class="n">${num(s.outTok)}</td><td class="n">${money(s.est)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td class="note">まだありません</td></tr>`}</table></div>
+  <h2>セッションと費用（${top.length}件・開いた時点から）</h2>
+  <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は④で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
+  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>進んだ所</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">実績</th><th>最初の言葉</th><th>再表示</th></tr>
+  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? "<br><span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td>${esc(s.by)}</td><td>${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="10" class="note">まだありません</td></tr>`}</table></div>
+  <h2>Console との突き合わせ（日ごと・Console の日の区切り：${D.lots.tz === "UTC" ? "UTC＝日本時間9時切り替え" : "日本時間"}）</h2>
+  <div class="note">トークン数は、こちらの記録と Console が同じものを数えているので、ぴったり合うはずです（合わなければ記録の漏れ）。金額は推定なので、ずれは単価の見直し材料です。Console の数字は「設定」で入れます。</div>
+  <div class="scroll"><table><tr><th>日</th><th class="n">往復</th><th class="n">入力（こちら）</th><th class="n">入力（Console）</th><th class="n">出力（こちら）</th><th class="n">出力（Console）</th><th class="n">推定</th><th class="n">実績（Console）</th><th class="n">比（実績÷推定）</th></tr>
+  ${D.lots.days.map(x => { const L = x.console, tk = (a, b) => b == null ? '<span class="note">未入力</span>' : num(b) + (b === a ? ' <span class="pill ok">一致</span>' : ' <span class="pill warn">差 ' + num(b - a) + '</span>'); return `<tr><td>${x.day}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}${x.cacheRead || x.cacheCreate ? `<br><span class="note">キャッシュ 読${num(x.cacheRead)}・書${num(x.cacheCreate)}</span>` : ""}</td><td class="n">${L ? tk(x.inTok, L.inTok) : '<span class="note">—</span>'}</td><td class="n">${num(x.outTok)}</td><td class="n">${L ? tk(x.outTok, L.outTok) : '<span class="note">—</span>'}</td><td class="n">${money(x.est)}</td><td class="n">${L ? money(L.usd) : '<span class="note">未入力</span>'}</td><td class="n">${x.ratio == null ? "—" : x.ratio.toFixed(2)}</td></tr>`; }).join("") || `<tr><td colspan="9" class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
   <div class="scroll"><table><tr><th>日</th><th>誰</th><th class="n">セッション</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">金額</th></tr>
   ${D.days.slice(0, 40).map(x => `<tr><td>${x.day}</td><td>${esc(x.by)}</td><td class="n">${x.sessions}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}</td><td class="n">${num(x.outTok)}</td><td class="n">${money(x.est)}</td><td class="n">${x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">推定のみ</span>'}</td></tr>`).join("")}</table></div>`;
@@ -231,14 +241,20 @@ function viewSessions() {
   <div class="note">${actorSelect()}</div>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
   <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
-  ${D.sessions.filter(actorOk).map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${s.maxQ ? "①②③④⑤⑥⑦⑧"[s.maxQ - 1] || s.maxQ : "—"}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
+  ${D.sessions.filter(actorOk).map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${esc(stageOf(s))}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>最近のやり取り（200件まで・本文つき）</h2>
   ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}</pre></details>`).join("") || '<div class="note">まだありません</div>'}`;
 }
 
 function viewSettings() {
   const v = D.prices[D.prices.length - 1];
+  const days = D.lots.days.map(x => x.day);
   return `
+  <h2>Console の日ごとの数字（実績のもと）</h2>
+  <div class="note">Console の「コスト」「使用量」の画面に出ている、日ごとの金額（必須）と、入力・出力トークン（あれば）を写してください。入れた日は、その日の往復へ推定の割合で割り振られて「確定」になります。金額を空にして保存すると、その日の記録を消します。</div>
+  <p>Console の日の区切り：<select id="lotTz"><option value="UTC" ${D.lots.tz === "UTC" ? "selected" : ""}>UTC（日本時間 9:00 に日が変わる）</option><option value="JST" ${D.lots.tz === "JST" ? "selected" : ""}>日本時間（0:00 に日が変わる）</option></select> <button class="act" id="tzSave">保存</button> <span id="tzMsg" class="note"></span></p>
+  <p><input id="lotDay" type="date" value="${esc(days[0] || "")}" style="width:150px"> 金額 <input id="lotUsd" type="number" step="0.0001" min="0" placeholder="例：0.0610" style="width:110px"> ドル　入力 <input id="lotIn" type="number" min="0" step="1" placeholder="トークン" style="width:110px">　出力 <input id="lotOut" type="number" min="0" step="1" placeholder="トークン" style="width:110px"> <button class="act" id="lotSave">保存</button> <span id="lotMsg" class="note"></span></p>
+  <div class="scroll"><table><tr><th>日</th><th class="n">金額</th><th class="n">入力</th><th class="n">出力</th><th>入れた時刻</th></tr>${D.lots.days.filter(x => x.console).map(x => `<tr><td>${x.day}</td><td class="n">${usd(x.console.usd)}</td><td class="n">${x.console.inTok == null ? "—" : num(x.console.inTok)}</td><td class="n">${x.console.outTok == null ? "—" : num(x.console.outTok)}</td><td>${tm(x.console.ts)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだ入れていません</td></tr>`}</table></div>
   <h2>残高の記録（実額との突き合わせ）</h2>
   <div class="note">Console の「組織のクレジット」の金額を入れてください。記録の間の実際の減少額が、その間の往復へ推定額の割合で割り振られ（確定）、実額と推定の差が下に出ます。ずれは調査データです。</div>
   <p><input id="balAmt" type="number" step="0.01" min="0" placeholder="例：9.62" style="width:120px"> ドル <input id="balNote" type="text" placeholder="メモ（例：初回確認）" style="width:260px"> <button class="act" id="balSave">記録する</button> <span id="balMsg" class="note"></span></p>
@@ -271,6 +287,8 @@ function bind() {
   if ($("csort")) $("csort").onchange = e => { window.costSort = e.target.value; render(); };
   if ($("fsel")) $("fsel").onchange = e => { window.fSel = e.target.value; render(); };
   if ($("balSave")) $("balSave").onclick = async () => { const ok = await post("balance", { amount_usd: +$("balAmt").value, note: $("balNote").value }); $("balMsg").textContent = ok ? "記録しました" : "入力を確認してください"; if (ok) load(); };
+  if ($("tzSave")) $("tzSave").onclick = async () => { const ok = await post("consoletz", { tz: $("lotTz").value }); $("tzMsg").textContent = ok ? "保存しました" : "保存できませんでした"; if (ok) load(); };
+  if ($("lotSave")) $("lotSave").onclick = async () => { const ok = await post("consoleday", { day: $("lotDay").value, usd: $("lotUsd").value, inTok: $("lotIn").value, outTok: $("lotOut").value }); $("lotMsg").textContent = ok ? "保存しました" : "日付と金額を確認してください"; if (ok) load(); };
   if ($("rateSave")) $("rateSave").onclick = async () => { const ok = await post("settings", { usdJpy: +$("rate").value }); $("rateMsg").textContent = ok ? "保存しました" : "50〜500の数字で入れてください"; if (ok) load(); };
   if ($("priceSave")) $("priceSave").onclick = async () => {
     const models = [...document.querySelectorAll("#ptable tr")].slice(1).map(tr => ({ model: tr.querySelector(".pm").value.trim(), input: +tr.querySelector(".pi").value, output: +tr.querySelector(".po").value }));
@@ -294,7 +312,6 @@ async function load() {
   } catch (e) { document.getElementById("main").innerHTML = `<div class="warnbox">読み込めませんでした（${esc(e.message)}）。ページを開き直してください。</div>`; }
 }
 document.getElementById("reload").onclick = load;
-let timer = null;
 // メイン画面で動きがあるたびに読み直す（同じブラウザで開いているメイン画面からの合図）。窓が前に出たときも読み直す。
 // 設定タブで書いている途中・元に戻す確認の途中は、書き換えない（次にタブを移ったときに読み直す）。開いていた「詳しく」は開いたままにする。
 let stale = false, liveTimer = null;
@@ -311,7 +328,17 @@ function liveLoad() {
 const devCh = "BroadcastChannel" in window ? new BroadcastChannel("reDev") : null;
 if (devCh) devCh.onmessage = e => { if (e.data && e.data.type === "saved") liveLoad(); };
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") liveLoad(); });
-document.getElementById("auto").onchange = e => { clearInterval(timer); if (e.target.checked) timer = setInterval(load, 30000); };
+// 別のパソコンの動きも拾うため、数秒ごとにサーバーへ「変わったか」だけを聞く（集計はしない軽い問い合わせ）。窓が隠れている間は聞かない
+let lastSeq = null;
+setInterval(async () => {
+  if (document.visibilityState !== "visible") return;
+  try {
+    const r = await fetch(BASE + "stamp", { cache:"no-store" }); if (!r.ok) return;
+    const { seq } = await r.json();
+    if (lastSeq !== null && seq !== lastSeq) liveLoad();
+    lastSeq = seq;
+  } catch (e) { /* 次の回に聞き直す */ }
+}, 3000);
 load();
 </script>
 </body>

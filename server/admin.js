@@ -98,7 +98,31 @@ export function summarize(ctx) {
       t.fixed = est > 0;
     }
   }
+  // Console の「日ごとの金額」（ロット）：入れた日は、その日の往復へ推定の割合で割り振って「確定」にする（残高の割り振りより優先）。
+  // Console の日の区切りは、設定で UTC（日本時間 9:00 切り替え）か日本時間かを選ぶ。
+  const cons = readJson(path.join(dir, "console-days.json"), {});
+  const lotTz = cons.tz === "JST" ? "JST" : "UTC";
+  const lotDay = (ts) => (lotTz === "UTC" ? new Date(ts).toISOString().slice(0, 10) : dayOf(ts));
+  const lotIn = cons.days && typeof cons.days === "object" ? cons.days : {};
+  for (const [day, L] of Object.entries(lotIn)) {
+    if (!(L && L.usd >= 0)) continue;
+    const inside = turns.filter((t) => lotDay(t.ts) === day);
+    const est = sum(inside, (t) => t.est);
+    for (const t of inside) { t.usd = est > 0 ? (L.usd * t.est) / est : t.est; t.fixed = est > 0; }
+  }
   const okTurns = turns.filter((t) => t.status === "ok");
+  const lotMap = new Map();
+  for (const t of okTurns) {
+    const d = lotDay(t.ts);
+    const x = lotMap.get(d) || { day: d, rounds: 0, inTok: 0, outTok: 0, cacheRead: 0, cacheCreate: 0, est: 0 };
+    x.rounds++; x.inTok += t.inputTokens || 0; x.outTok += t.outputTokens || 0; x.cacheRead += t.cacheRead || 0; x.cacheCreate += t.cacheCreate || 0; x.est += t.est;
+    lotMap.set(d, x);
+  }
+  for (const d of Object.keys(lotIn)) if (!lotMap.has(d)) lotMap.set(d, { day: d, rounds: 0, inTok: 0, outTok: 0, cacheRead: 0, cacheCreate: 0, est: 0 });
+  const lots = { tz: lotTz, days: [...lotMap.values()].sort((a, b) => b.day.localeCompare(a.day)).slice(0, 45).map((x) => {
+    const L = lotIn[x.day] || null;
+    return { ...x, console: L, diff: L ? L.usd - x.est : null, ratio: L && x.est > 0 ? L.usd / x.est : null };
+  }) };
 
   // 残高の区間ごとの観察（実額と推定のずれ）
   const segments = [];
@@ -115,7 +139,7 @@ export function summarize(ctx) {
   // セッション（画面を開いてから閉じるまで）
   const sess = new Map();
   const S = (sid) => {
-    if (!sess.has(sid)) sess.set(sid, { sid, by: "?", started: null, last: null, rounds: 0, errors: 0, rejected: 0, inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true, maxQ: 0, place: "", branch: "", ended: false, events: 0, first: "" });
+    if (!sess.has(sid)) sess.set(sid, { sid, by: "?", started: null, last: null, rounds: 0, errors: 0, rejected: 0, inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true, maxQ: 0, place: "", branch: "", ended: false, events: 0, first: "", reach: -1, inqOpen: false, inqSend: false });
     return sess.get(sid);
   };
   const touch = (s, ts) => { if (!s.started || ts < s.started) s.started = ts; if (!s.last || ts > s.last) s.last = ts; };
@@ -128,13 +152,17 @@ export function summarize(ctx) {
   for (const e of events) {
     const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?";
     if (e.type === "end") s.ended = true;
+    const R = { open: 0, map: 1, pin: 2, evaluate: 3, choice: 3 }; // どこまで進んだか（①以降は maxQ で見る）
+    if (e.type in R) s.reach = Math.max(s.reach, R[e.type]);
+    if (e.type === "inquiry_open") s.inqOpen = true;
+    if (e.type === "inquiry_send") s.inqSend = true;
     if (e.type === "map" && e.data?.place) s.place = e.data.place;
     if (e.type === "choice") s.maxQ = Math.max(s.maxQ, +e.data?.q || 0);
   }
   let saved = new Set();
   try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
   const now = Date.now();
-  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: saved.has(s.sid) || s.rounds > 0 || s.maxQ > 0, active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
   // 日別（日本時間）
   const dayMap = new Map();
@@ -212,7 +240,7 @@ export function summarize(ctx) {
 
   return {
     computedAt: new Date().toISOString(), now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.DAILY_USD_CAP, spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
-    totals, rejected, errorsToday, balances, balanceNow, segments, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
+    totals, rejected, errorsToday, balances, balanceNow, segments, lots, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
     explain, prices: vs, themeRules: THEME_RULES.map(([n, re]) => ({ name: n, rule: re.source })),
     tested: { funnel, purposes, later, branches, roads, places, near, texts: texts.slice(-150).reverse(), themes, devices, refs },
     turns: turns.slice(-200).reverse().map((t) => ({ ts: t.ts, sid: t.sid, by: t.by, status: t.status, reason: t.reason, turn: t.turn, q: t.meta?.q, press: t.meta?.press, inTok: t.inputTokens, outTok: t.outputTokens, est: t.est, usd: t.usd, fixed: t.fixed, ms: t.ms, user: t.userText, reply: t.reply })),
@@ -328,6 +356,9 @@ export async function adminHandler(req, res, url, ctx) {
     return json(200, { ...snap, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
   }
 
+  if (req.method === "GET" && url.pathname === "/api/admin/stamp") { // 開発利用状況が数秒ごとに聞く「新しい動きがあったか」（数字が変わったら読み直す）。集計はしない
+    return json(200, { seq: ctx.getSeq() });
+  }
   if (req.method === "GET" && url.pathname === "/api/admin/session") { // セッションの再表示用（記録＋会話の本文）。保存した記録がなければ、ログから復元する
     const sid = url.searchParams.get("sid") || "";
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
@@ -348,6 +379,29 @@ export async function adminHandler(req, res, url, ctx) {
       const rec = { ts: new Date().toISOString(), amount_usd: amount, note: String(body.note || "").slice(0, 100) };
       fs.appendFileSync(path.join(ctx.DATA_DIR, `balances-${rec.ts.slice(0, 4)}.jsonl`), JSON.stringify(rec) + "\n", { mode: 0o600 });
       ctx.refresh(); // 設定を変えたので、すぐ集計を作り直す
+      return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/admin/consoleday") { // Console の日ごとの金額（ロット）。金額を空で送ると、その日の記録を消す
+      const day = String(body.day || "");
+      if (!/^\d{4}-\d\d-\d\d$/.test(day)) return json(400, { error: "bad_day" });
+      const f = path.join(ctx.DATA_DIR, "console-days.json"), c = readJson(f, {});
+      c.days = c.days && typeof c.days === "object" ? c.days : {};
+      if (body.usd === "" || body.usd == null) delete c.days[day];
+      else {
+        const usd = Number(body.usd), opt = (v) => (v === "" || v == null ? null : Number(v));
+        const inTok = opt(body.inTok), outTok = opt(body.outTok);
+        if (!Number.isFinite(usd) || usd < 0 || [inTok, outTok].some((v) => v != null && !(Number.isFinite(v) && v >= 0))) return json(400, { error: "bad_amount" });
+        c.days[day] = { usd, inTok, outTok, note: String(body.note || "").slice(0, 100), ts: new Date().toISOString() };
+      }
+      fs.writeFileSync(f, JSON.stringify(c, null, 1), { mode: 0o600 });
+      ctx.refresh();
+      return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/admin/consoletz") {
+      const tz = body.tz === "JST" ? "JST" : "UTC";
+      const f = path.join(ctx.DATA_DIR, "console-days.json"), c = readJson(f, {});
+      fs.writeFileSync(f, JSON.stringify({ ...c, tz }, null, 1), { mode: 0o600 });
+      ctx.refresh();
       return json(200, { ok: true });
     }
     if (url.pathname === "/api/admin/settings") {

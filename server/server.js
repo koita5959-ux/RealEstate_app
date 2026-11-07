@@ -46,11 +46,12 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 const logPath = (d = today()) => path.join(DATA_DIR, `log-${d}.jsonl`);
 // ---- 集計の保存：動き（記録の書き込み）があるたびに作り直し、開発の利用状況は保存した集計を返すだけ（開くときに計算しない） ----
-let snap = null, snapTimer = null, snapDay = "";
+let snap = null, snapTimer = null, snapDay = "", changeSeq = 0; // changeSeq：記録が書かれるたびに増える数（開発利用状況が「変わったか」を聞く）
 function rebuild() {
   try { snap = summarize(adminCtx); snapDay = today(); } catch (e) { console.error("summarize failed:", e.message); }
 }
 function touchSnap() { // 連続した動きは1秒にまとめて、1回だけ作り直す
+  changeSeq++;
   if (snapTimer) return;
   snapTimer = setTimeout(() => { snapTimer = null; rebuild(); }, 1000);
 }
@@ -249,7 +250,7 @@ function cleanState(s) {
   for (const [k, v] of Object.entries(s.sheet && typeof s.sheet === "object" ? s.sheet : {}).slice(0, 24)) sheet[clip(k, 24)] = v == null ? null : clip(v, 400);
   const p = s.pub && typeof s.pub === "object" ? s.pub : {};
   return {
-    updated: num(s.updated), place: clip(s.place, 80), near: clip(s.near, 40), localKnowledge: clip(s.localKnowledge, 300), revised: clip(s.revised, 200),
+    updated: num(s.updated), stage: clip(s.stage, 40), place: clip(s.place, 80), near: clip(s.near, 40), localKnowledge: clip(s.localKnowledge, 300), revised: clip(s.revised, 200),
     path: (Array.isArray(s.path) ? s.path : []).slice(0, 40).map((x) => ({ press: clip(x?.press, 80), q: num(x?.q) | 0, opt: num(x?.opt) | 0, type: clip(x?.type, 300) })),
     sheet, signals: (Array.isArray(s.signals) ? s.signals : []).slice(0, 20).map((x) => clip(x, 200)),
     usage: { n: num(s.usage?.n), tin: num(s.usage?.tin), tout: num(s.usage?.tout), costUsd: num(s.usage?.costUsd) },
@@ -298,7 +299,8 @@ const adminCtx = {
   getSpent: () => (today() === spentDate ? spentUsd : 0),
   // 読むとき：反映待ちの動き（1秒のまとめ待ち）があれば先に作り直す。リロードすれば、それまでの動きが必ず入った集計になる
   getSnapshot: () => { if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; rebuild(); } else if (!snap) rebuild(); return snap; },
-  refresh: rebuild,
+  refresh: () => { changeSeq++; rebuild(); },
+  getSeq: () => changeSeq,
   adminRate: () => { const n = Date.now(); while (adminHits.length && n - adminHits[0] > 60_000) adminHits.shift(); adminHits.push(n); return adminHits.length <= 120; },
 };
 

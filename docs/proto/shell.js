@@ -71,7 +71,7 @@
         const a = document.createElement("a");
         a.className = s.cls + (off ? " off" : "");
         a.href = BASE + s.url; a.textContent = s.label;
-        if (off) { a.title = "まだ体験の記録がありません（メイン画面で「評価する」を押すと使えます）"; a.setAttribute("aria-disabled", "true"); }
+        if (off) { a.title = "まだ体験の記録がありません（メイン画面を開くと使えます）"; a.setAttribute("aria-disabled", "true"); }
         a.onclick = e => Shell.go(key, e);
         nav.appendChild(a);
       }

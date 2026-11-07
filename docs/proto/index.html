@@ -377,9 +377,15 @@ const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
 // 開いている「開発利用状況」の窓へ、記録がサーバーに入ったことを知らせる（同じブラウザの中だけ。合図を受けた窓が読み直す）
 const devCh = "BroadcastChannel" in window ? new BroadcastChannel("reDev") : null;
 const pingDev = () => { try { if (devCh) devCh.postMessage({ type:"saved" }); } catch (e) { /* 何もしない */ } };
+// いま、どこまで進んだか（利用状況に出す）。画面を開いた時点から記録する
+let STAGE = "画面を開いた";
+const STAGE_LABEL = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
 function ev(type, data) {
   if (AI_OFF || REPLAYING) return;
   window.__restored = false; // 本物の操作が始まった＝ここから新しい体験として記録する
+  if (type === "choice") STAGE = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"[(+(data && data.q) || 1) - 1] + "に答えた";
+  else if (STAGE_LABEL[type]) STAGE = STAGE_LABEL[type];
+  if (type !== "end") setTimeout(saveSession, 0); // 動きのたびに、利用状況と開発利用状況へ（評価する前の段階も）
   try {
     const b = JSON.stringify({ sid:SID, by:BY, type, data:data || {} });
     if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
@@ -434,17 +440,24 @@ function buildState() {
   const sheet = {};
   for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
   return {
-    updated: Date.now(), place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "",
+    updated: Date.now(), stage: STAGE, place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "",
     path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
     sheet, signals: S.signals.slice(),
     usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
     pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
   };
 }
+function buildPre() {
+  return {
+    updated: Date.now(), stage: STAGE, place: PLACE, near: "", localKnowledge: "", revised: "", path: [],
+    sheet: { 市区町村: PLACE || null, 所在: here ? here.lat.toFixed(4) + ", " + here.lng.toFixed(4) : null }, signals: [],
+    usage: { n:0, tin:0, tout:0, costUsd:0 },
+    pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
+  };
+}
 function saveSession() {
   try {
-    if (typeof S === "undefined" || !S) return;
-    const st = buildState();
+    const st = S ? buildState() : buildPre(); // 評価する前は、場所とどこまで進んだかだけの記録
     localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, state:st }));
     if (window.Shell) Shell.refresh(); // 記録ができたので「利用状況」をグレー解除
     syncSession(st);
@@ -760,6 +773,7 @@ function restoreFromSnapshot(d) {
       api: oks.map((t, i) => ({ step:i + 1, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
     const p4 = PATH.find(x => x.q === 4);
     if (p4 && ADMIN.steps[1] && ADMIN.steps[1].branches) { const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === p4.press); BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0] || null; }
+    STAGE = PATH.length ? (NUM[PATH[PATH.length - 1].q - 1] || "") + "に答えた" : "評価した";
     renderRoute();
     // 画面：データの表と会話欄を、保存された中身から作り直す
     R.innerHTML = `
@@ -824,6 +838,7 @@ function restoreSession(d) {
   } finally { REPLAYING = false; }
   replay((st.path || []).map(x => ({ press:x.press, type:x.type, q:x.q, opt:x.opt })));
   RESTORE = null;
+  STAGE = PATH.length ? (NUM[PATH[PATH.length - 1].q - 1] || "") + "に答えた" : "評価した";
   talk_banner(d, false);
   saveSession();
 }
