@@ -23,6 +23,7 @@ services:
     secrets:
       - anthropic_api_key
       - admin_password   # 開発者向け管理画面（/api/admin/）の入口。ユーザー名は admin
+      - reinfolib_api_key # 不動産情報ライブラリ。空のあいだは見本の値
     volumes:
       - ./data:/data
     mem_limit: 256m
@@ -33,3 +34,5 @@ secrets:
     file: ./secrets/anthropic_api_key.txt
   admin_password:
     file: ./secrets/admin_password.txt
+  reinfolib_api_key:
+    file: ./secrets/reinfolib_api_key.txt

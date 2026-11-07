@@ -33,7 +33,14 @@
   button.off, button.off:hover { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; opacity:1; }
   .data { width:100%; border-collapse:collapse; font-size:13px; }
   .data td { border-bottom:1px solid var(--line); padding:5px 4px; }
+  .data tr.sub th { text-align:left; font-size:12px; color:var(--sub); font-weight:600; padding:10px 4px 3px; border-bottom:1px solid var(--line); }
+  .data td:first-child { white-space:nowrap; color:var(--sub); width:7.5em; vertical-align:top; }
+  .landnote { margin-top:6px; font-size:11px; }
   .data td:first-child { color:var(--sub); width:42%; }
+  details.trace { margin-top:8px; font-size:12px; border-top:1px dashed var(--ai-line); padding-top:4px; line-height:1.5; }
+  details.trace summary { cursor:pointer; color:var(--sub); }
+  details.trace pre { white-space:pre-wrap; word-break:break-all; background:#fff; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:3px 0 8px; max-height:260px; overflow:auto; font-size:11.5px; }
+  details.trace .tw { color:#b4472b; }
   .ai { background:var(--ai); border-left:4px solid var(--ai-line); padding:10px 12px; margin:10px 0 4px; font-size:15px; line-height:1.7; border-radius:4px; }
   .ai .tag { font-size:11px; color:#a0701a; display:block; margin-bottom:2px; }
   .me { text-align:right; margin:8px 0; font-size:14px; }
@@ -153,7 +160,6 @@ const map = L.map("map").setView([35.423, 136.760], 13);
 L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png", {
   attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>', maxZoom: 18
 }).addTo(map);
-POINTS.forEach(p => L.circleMarker([p.lat, p.lng], { radius:6, color:"#888" }).addTo(map).bindTooltip("標準地(仮) " + p.name));
 let pin = null, here = null, mapOpen = false, ADDR = "", addrSeq = 0;
 // ピンの位置の住所（国土地理院の逆ジオコーダー：市区町村コード＋町丁目）。「東京都中央区日本橋茅場町二丁目付近」の形で、座標の前に出す
 async function lookupAddr(lat, lng, xy) {
@@ -249,6 +255,8 @@ document.getElementById("openMap").onclick = async () => {
   const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
   const msg = document.getElementById("mapMsg");
   if (!pref || !city) { msg.textContent = "都道府県と市区町村を入れてください。"; return; }
+  msg.style.color = "";
+  if (!(await admit())) { msg.textContent = "利用数の上限に達しているため、しばらく時間をおいてから操作してください。"; msg.style.color = "#b4472b"; return; }
   msg.textContent = "地図を探しています…";
   let at = null;
   try {
@@ -264,7 +272,18 @@ document.getElementById("openMap").onclick = async () => {
   msg.textContent = openedMsg(PLACE);
   document.getElementById("step1").classList.remove("hidden");
 };
-const openedMsg = place => place + "の地図を開きました。" + (place === "岐阜県岐阜市" ? "" : "この市区町村の公開データ（標準地価格・用途地域）は準備中です。評価は、データなしで進みます。");
+const openedMsg = place => place + "の地図を開きました。";
+// 入口の人数制限：「地図を開く」が最初の操作。同時の人数・1日のセッション数が上限なら、ここで止める（上限は開発利用状況の「設定」）
+// 一度入ったセッションは、開き直しても止めない。再表示・デモの再生は数えない。サーバーにつながらないときは止めない（AIの側にも歯止めがある）
+let ADMITTED = false;
+async function admit() {
+  if (ADMITTED || REPLAYING || QS.has("demo")) return true;
+  try {
+    const r = await fetch("../../api/admit", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY }), signal:AbortSignal.timeout(8000) });
+    if (r.status === 429) return false; // 断った数はサーバーが数える
+  } catch (e) { /* つながらなければ通す */ }
+  return (ADMITTED = true);
+}
 // 元に戻すとき：保存された「都道府県＋市区町村」を2つの欄に分けて入れ、地図を開いたときの一文も元どおりに出す
 function showPlace(place) {
   if (!place) return;
@@ -294,26 +313,84 @@ document.getElementById("go").onclick = () => {
     // 層1: 入力で埋まる / 層2: データで埋まる / 層3: 対話で埋まる
     sheet: {
       市区町村: PLACE, 所在: (ADDR ? ADDR + "（" : "") + `${here.lat.toFixed(4)}, ${here.lng.toFixed(4)}` + (ADDR ? "）" : ""), 面積: area + "㎡",
-      最寄り標準地: near.none ? NO_DATA_TEXT : `${near.name}（約${Math.round(near.d)}m）`, 標準地価格: near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）",
-      用途地域: near.none ? NO_DATA_TEXT : near.zone + "（仮）",
+      公開データ: "取得中", 用途地域: null, "建ぺい率・容積率": null,
+      最寄り標準地: null, 標準地の種類: null, 標準地価格: null, 標準地の変動: null, 標準地の地積と形: null, 標準地の利用現況: null,
+      標準地の周辺: null, 標準地の前面道路: null, 標準地の最寄り駅: null, 標準地の供給処理: null, 標準地の区域と規制: null, 単純計算の目安: null,
       形と向き: null, 接道: null, 持ち主の意向: null, 事情: null, 事情の要点: null
     },
     near, area, log: [], signals: [], revised: null, used: []
   };
   R.innerHTML = `
     <h2>2. データ（公開データから機械的に）</h2>
-    <table class="data">
-      <tr><td>最寄りの標準地</td><td>${near.none ? NO_DATA_TEXT : near.name + "（約" + Math.round(near.d) + "m）"}</td></tr>
-      <tr><td>標準地価格</td><td>${near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）"}</td></tr>
-      <tr><td>用途地域</td><td>${near.none ? NO_DATA_TEXT : near.zone + "（仮）"}</td></tr>
-      <tr><td>面積</td><td>${area}㎡</td></tr>
-      ${near.none ? "" : `<tr><td>単純計算の目安</td><td>${yen(near.price * area)}（標準地価格×面積）</td></tr>`}
-    </table>
+    <div id="landData"></div>
     <h2>3. AI</h2>
     <div id="talk"></div>
     <div id="inq"></div>`;
+  renderData();
+  loadLand(S, here.lat, here.lng);
   firstJudgment();
 };
+
+// ---- 公開データ（国土交通省「不動産情報ライブラリ」をサーバー経由で）----
+// サーバーにキーがない間は、実在しない「見本」の値が返る。値に（見本）と付けて出す
+const LAND_URL = "../../api/land";
+const LAND_NOTE = "このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。";
+// 表の行：［見出し］または［表示名, データシートの項目, 未定のときの文］。値が決まるまでは「未定」
+const DATA_ROWS = [
+  ["この土地（ピンの場所）"],
+  ["所在", "所在"], ["面積", "面積"], ["用途地域", "用途地域"], ["建ぺい率・容積率", "建ぺい率・容積率"],
+  ["道への接し方", "接道", "未定（下の①②で伺います）"], ["形と向き", "形と向き", "未定（現地で確認します）"],
+  ["最寄りの標準地（近くの別の土地の公的な値）"],
+  ["地点", "最寄り標準地"], ["種類", "標準地の種類"], ["価格", "標準地価格"], ["前年から", "標準地の変動"],
+  ["広さ・形", "標準地の地積と形"], ["使われ方", "標準地の利用現況"], ["周りの様子", "標準地の周辺"], ["前の道", "標準地の前面道路"],
+  ["最寄り駅", "標準地の最寄り駅"], ["水道・ガス・下水", "標準地の供給処理"], ["区域・規制", "標準地の区域と規制"],
+  ["目安"],
+  ["単純計算", "単純計算の目安"],
+];
+const LAND_KEYS = new Set(["用途地域", "建ぺい率・容積率", "最寄り標準地", "標準地の種類", "標準地価格", "標準地の変動", "標準地の地積と形", "標準地の利用現況", "標準地の周辺", "標準地の前面道路", "標準地の最寄り駅", "標準地の供給処理", "標準地の区域と規制", "単純計算の目安"]);
+function renderData() {
+  const box = document.getElementById("landData"); if (!box || !S) return;
+  const sh = S.sheet, loading = sh.公開データ === "取得中";
+  const rows = DATA_ROWS.map(r => r.length === 1 ? `<tr class="sub"><th colspan="2">${r[0]}</th></tr>`
+    : `<tr><td>${r[0]}</td><td>${sh[r[1]] ? sh[r[1]] : loading && LAND_KEYS.has(r[1]) ? '<span class="hint">取得中…</span>' : '<span class="hint">' + (r[2] || "未定") + "</span>"}</td></tr>`).join("");
+  const sample = /見本/.test(sh.公開データ || "") ? '<div class="hint" style="color:#b4472b">いまは画面の見え方を確かめるための見本です。（見本）と付いた値は実在しません。</div>' : "";
+  box.innerHTML = `<table class="data">${rows}</table>${sample}<div class="hint landnote">${LAND_NOTE}</div>`;
+}
+async function loadLand(s0, lat, lng) {
+  let r = null;
+  try { const x = await fetch(`${LAND_URL}?lat=${lat}&lng=${lng}`, { signal:AbortSignal.timeout(12000) }); if (x.ok) r = await x.json(); } catch (e) { /* 取れなくても・12秒で届かなくても（混雑）、「未定」のまま体験は止めない */ }
+  if (S !== s0) return; // 待つ間に評価し直した
+  fillLand(S.sheet, r, S.area);
+  renderData(); saveSession();
+}
+function fillLand(sh, r, area) {
+  if (!r) { sh.公開データ = "取得できませんでした"; for (const k of LAND_KEYS) sh[k] = sh[k] || null; return; }
+  const m = r.source === "sample" ? "（見本）" : "", z = r.zone || {}, p = r.point || {}, e = v => v == null || v === "" ? "" : esc(String(v));
+  sh.公開データ = r.source === "sample" ? "見本（実在しない値）" : "国の公開データ（不動産情報ライブラリ）";
+  sh.用途地域 = z.error ? "取得できませんでした" : z.none ? "指定なし（用途地域が決められていない場所）" : e(z.name) + m;
+  sh["建ぺい率・容積率"] = z.name && (z.bcr || z.far) ? `建ぺい率 ${e(z.bcr)}・容積率 ${e(z.far)}` + m : null;
+  if (p.error || p.none) {
+    sh.最寄り標準地 = p.error ? "取得できませんでした" : "近くに標準地がありません";
+    return;
+  }
+  const dist = p.d >= 1000 ? (p.d / 1000).toFixed(1) + "km" : p.d + "m";
+  const yen1 = v => (typeof v === "number" || /^\d+$/.test(String(v)) ? Number(v).toLocaleString() : e(v)).replace(/\((円\/㎡)\)/, "$1").replace(/^([\d,]+)$/, "$1円/㎡");
+  sh.最寄り標準地 = `${e(p.location || p.address)}（ピンから約${dist}）` + m;
+  sh.標準地の種類 = [e(p.kind), e(p.yearName), p.number && "番号 " + e(p.number), p.use && e(p.use)].filter(Boolean).join("・") + m;
+  sh.標準地価格 = p.price ? yen1(p.price) + m : null;
+  const ch = p.change === "" || p.change == null ? null : Number(p.change);
+  sh.標準地の変動 = ch == null || isNaN(ch) ? null : `${ch > 0 ? "+" : ""}${ch}%` + (p.lastPrice !== "" && p.lastPrice != null ? `（前年 ${yen1(p.lastPrice)}）` : "") + m;
+  sh.標準地の地積と形 = [p.cadastral && e(p.cadastral).replace(/\((㎡)\)/, "$1"), p.shape && "間口：奥行き＝" + e(p.shape)].filter(Boolean).join("・") + (p.cadastral || p.shape ? m : "") || null;
+  sh.標準地の利用現況 = [e(p.usage), e(p.building)].filter(Boolean).join("・") + m || null;
+  sh.標準地の周辺 = p.surround ? e(p.surround) + m : null;
+  sh.標準地の前面道路 = p.road ? e(p.road) + (p.side ? "／側道 " + e(p.side) : "") + m : null;
+  sh.標準地の最寄り駅 = p.station ? e(p.station) + (p.stationDist ? "（" + e(p.stationDist) + "）" : "") + m : null;
+  sh.標準地の供給処理 = p.water || p.gas || p.sewer ? `水道 ${e(p.water) || "—"}・ガス ${e(p.gas) || "—"}・下水 ${e(p.sewer) || "—"}` + m : null;
+  sh.標準地の区域と規制 = [e(p.division), e(p.zone), p.bcr && "建ぺい率 " + e(p.bcr), p.far && "容積率 " + e(p.far), e(p.fire), e(p.altitude)].filter(Boolean).join("・") + m || null;
+  const unit = Number(String(p.price || "").replace(/[^\d]/g, ""));
+  sh.単純計算の目安 = unit && area ? `${yen(unit * area)}（標準地の価格×面積。別の土地の値での単純計算で、この土地の値段ではありません）` + m : null;
+  for (const k of Object.keys(sh)) if (sh[k] === m) sh[k] = null;
+}
 
 // ---- 台本（本番ではアプリが組み立てたプロンプトをAIへ送る部分） ----
 // 一投目の型（11-04 合意）：根拠のある決まりを一つ渡し、地図では読めない一点を正直に開ける。
@@ -351,7 +428,7 @@ function onRoad(c) {
     }, 2, TEXT_PH);
   } else if (c.startsWith("道に")) {
     S.sheet.形と向き = "道に面している";
-    S.sheet.接道 = "道に広く面している（客の申告）";
+    S.sheet.接道 = "道に広く面している（お答えより）";
     const local = localNear(S.near) && SETBACK[S.near.name];
     say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
       + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
@@ -370,10 +447,10 @@ function onRoad(c) {
 }
 function onWidth(c) {
   if (c === "2mある") {
-    S.sheet.接道 = "旗竿地・通路2m以上（客の申告）";
+    S.sheet.接道 = "旗竿地・通路2m以上（お答えより）";
     askBuilding("それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
   } else if (c === "2mない・狭い") {
-    S.sheet.接道 = "旗竿地・通路2m未満（客の申告）＝再建築不可の可能性";
+    S.sheet.接道 = "旗竿地・通路2m未満（お答えより）＝再建築不可の可能性";
     const k = localNear(S.near) && PREF.localKnowledge[S.near.name];
     askBuilding("それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
       + (k && k.includes("隣地") ? `<br><small>（${PREF.office}の土地勘：${k}）</small>` : ""));
@@ -484,7 +561,7 @@ function snapshotNow() {
   const talk = [];
   for (const el of document.getElementById("talk").children) {
     if (el.classList.contains("ai")) {
-      const c = el.cloneNode(true); const w = c.querySelector(".will"), tg = c.querySelector(".tag");
+      const c = el.cloneNode(true); c.querySelectorAll(".trace").forEach(x => x.remove()); const w = c.querySelector(".will"), tg = c.querySelector(".tag");
       const will = w ? w.innerHTML : ""; if (w) w.remove(); if (tg) tg.remove();
       talk.push({ t:"ai", html:c.innerHTML, will });
     } else if (el.classList.contains("me")) talk.push({ t:"me", text:el.textContent });
@@ -531,6 +608,7 @@ function buildPre() {
 }
 function saveSession() {
   try {
+    if (S) renderData();
     const st = S ? buildState() : buildPre(); // 評価する前は、場所とどこまで進んだかだけの記録
     localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, state:st }));
     if (window.Shell) Shell.refresh(); // 記録ができたので「利用状況」をグレー解除
@@ -547,8 +625,10 @@ function nextButtons(n) { // 次のステップnで利用者に出る、店の�
 function aiContext(n, ask) {
   const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
-  if (S.near && !S.near.none) c += "\n【注意】標準地価格・用途地域は、試作用の実在しない仮の値です。利用者に価格・相場・用途地域として伝えないでください。";
-  if (S.near && S.near.none) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
+  const src = S.sheet.公開データ || "";
+  if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
+  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。標準地の価格をこの土地の値段として言い切らず、価格の話は「現地を見て弊社が確かめます」につなげてください。";
+  if (!src || /取得できません/.test(src)) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (ADMIN.stance && ADMIN.stance.trim()) { if (ADMIN.name) c += "\n弊社の業態：" + ADMIN.name; c += "\n弊社の受け方：" + ADMIN.stance.trim(); }
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   const axis = n === 0 ? ADMIN.steps[0] && ADMIN.steps[0].topic : n === 1 ? BRANCH && BRANCH.name : ADMIN.steps[n] && ADMIN.steps[n].topic;
@@ -569,6 +649,7 @@ function aiContext(n, ask) {
   return c;
 }
 async function askAI(n, ask, userText, meta) {
+  TRACE = null;
   AI_HIST.push({ role:"user", content:userText });
   saveSession(); // 送った時点の内容（データシートなど）も、返事を待つ間に保存しておく
   const w = document.createElement("div"); w.className = "ai";
@@ -580,6 +661,7 @@ async function askAI(n, ask, userText, meta) {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
       body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
+    TRACE = { sent:d.trace, raw:d.text || "", stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
     const tb = takeBranch(d.text);
     if (!tb.text) throw new Error("empty");
@@ -589,6 +671,8 @@ async function askAI(n, ask, userText, meta) {
     (S.api = S.api || []).push({ step:n, usage:d.usage, costUsd:d.costUsdEstimate, ms:d.ms }); // 利用者レポート用
     return esc(d.text).replace(/\n/g, "<br>");
   } catch (e) {
+    if (!TRACE) TRACE = { err:e.name === "AbortError" ? "60秒で返事が来ず、打ち切りました" : e.message };
+    else if (!TRACE.err) TRACE.err = e.message === "empty" ? "原文から【方向N】を除くと、返事が空でした" : e.message;
     AI_HIST.pop(); // 答えが付かなかった問いは履歴から外す
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
@@ -721,8 +805,31 @@ function showSheet(where) {
 function say(html, gave, hole) {
   const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
   if (gave) d.innerHTML += `<div class="will">${gave}<br>${hole}</div>`;
+  if (TRACE) { addTrace(d, TRACE); TRACE = null; }
   document.getElementById("talk").appendChild(d);
   saveSession();
+}
+// ---- 試験用：AIの返事ごとに「送ったもの（プロンプト）／画面に出した返事／AIの原文」を1組で見せる。切り捨て（あふれ）は赤で出す ----
+// 記録（スナップショット）には入れない。公開時に隠すかは未決（開発用部品の扱い）
+let TRACE = null;
+function addTrace(bubble, t) {
+  const pre = s => `<pre>${esc(String(s ?? ""))}</pre>`, n = v => Number(v || 0).toLocaleString();
+  const shown = (() => { const c = bubble.cloneNode(true); c.querySelectorAll(".tag, .will").forEach(x => x.remove()); return c.innerText || c.textContent; })();
+  const sent = t.sent || {}, cut = sent.cut || {}, warn = [];
+  if (cut.context) warn.push(`画面から渡した説明が ${n(cut.context.from)}字あり、${n(cut.context.to)}字で切り捨てました`);
+  if (cut.dropped) warn.push(`会話が長く、古い ${cut.dropped}件を送っていません（新しい20件まで）`);
+  if (cut.longMsgs) warn.push(`2,000字を超えた発言が ${cut.longMsgs}件あり、2,000字で切り捨てました`);
+  if (t.stop === "max_tokens") warn.push(`AIの回答が長さの上限（${n(sent.maxTokens)}トークン）で途中で切れました`);
+  if (t.err) warn.push("AIにつながりませんでした：" + t.err);
+  const msgs = (sent.messages || []).map(m => `［${m.role === "user" ? "利用者側" : "AI"}］\n${m.content}`).join("\n\n");
+  const x = document.createElement("details"); x.className = "trace";
+  x.innerHTML = `<summary>送信と原文（試験用）${warn.length ? '<span class="tw">　あふれ・異常あり</span>' : ""}</summary>`
+    + (warn.length ? `<div class="tw">${warn.map(esc).join("<br>")}</div>` : "")
+    + `<b>① 送ったもの</b>　<span class="hint">システムの指示 ${n((sent.system || "").length)}字 ＋ 会話 ${(sent.messages || []).length}件${sent.queuedMs ? `　順番待ち ${(sent.queuedMs / 1000).toFixed(1)}秒` : ""}</span>`
+    + (sent.system ? `<div class="hint">システムの指示（共通の決まり＋画面から渡した説明）</div>${pre(sent.system)}<div class="hint">会話</div>${pre(msgs)}` : `<div class="hint">（送ったものは届いていません）</div>`)
+    + `<b>② 画面に出した返事</b>${pre(shown)}`
+    + `<b>③ AIの原文</b>　<span class="hint">${t.stop ? "止まった理由 " + esc(String(t.stop)) : ""}${t.usage ? `　入力 ${n(t.usage.input)}・出力 ${n(t.usage.output)}トークン` : ""}${t.ms ? `　${(t.ms / 1000).toFixed(1)}秒` : ""}</span>${t.raw ? pre(t.raw) : '<div class="hint">（原文なし）</div>'}`;
+  bubble.appendChild(x);
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); saveSession(); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
@@ -909,15 +1016,12 @@ function restoreFromSnapshot(d) {
     // 画面：データの表と会話欄を、保存された中身から作り直す
     R.innerHTML = `
       <h2>2. データ（公開データから機械的に）</h2>
-      <table class="data">
-        <tr><td>最寄りの標準地</td><td>${esc(String(sh.最寄り標準地 || (near.none ? NO_DATA_TEXT : near.name)))}</td></tr>
-        <tr><td>標準地価格</td><td>${esc(String(sh.標準地価格 || (near.none ? NO_DATA_TEXT : yen(near.price) + "/㎡（仮）")))}</td></tr>
-        <tr><td>用途地域</td><td>${esc(String(sh.用途地域 || (near.none ? NO_DATA_TEXT : near.zone + "（仮）")))}</td></tr>
-        <tr><td>面積</td><td>${esc(String(sh.面積 || (sn.area || 120) + "㎡"))}</td></tr>
-      </table>
+      <div id="landData"></div>
       <h2>3. AI</h2>
       <div id="talk"></div>
       <div id="inq"></div>`;
+    if (S.sheet.公開データ === "取得中") S.sheet.公開データ = null; // 取り終わる前に記録された体験
+    renderData();
     const talk = document.getElementById("talk");
     for (const it of sn.talk) {
       if (it.t === "ai") {

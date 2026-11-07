@@ -239,7 +239,7 @@ export function summarize(ctx) {
   const refs = tally(events.filter((e) => e.type === "open"), (e) => e.data?.ref || "（直接・不明）");
 
   return {
-    computedAt: new Date().toISOString(), now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.DAILY_USD_CAP, spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
+    computedAt: new Date().toISOString(), now: new Date().toISOString(), config: { model: ctx.MODEL, dailyCap: ctx.limits().dailyCap, maxInflight: ctx.limits().maxInflight, maxUsers: ctx.limits().maxUsers, dailySessions: ctx.limits().dailySessions, admit: ctx.admitStatus(), limitsHistory: ctx.limits().history.slice(0, 10), spentToday: ctx.getSpent(), disabled: ctx.disabled(), usdJpy: settings.usdJpy },
     totals, rejected, errorsToday, balances, balanceNow, segments, lots, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
     explain, prices: vs, themeRules: THEME_RULES.map(([n, re]) => ({ name: n, rule: re.source })),
     tested: { funnel, purposes, later, branches, roads, places, near, texts: texts.slice(-150).reverse(), themes, devices, refs },
@@ -401,6 +401,17 @@ export async function adminHandler(req, res, url, ctx) {
       const tz = body.tz === "JST" ? "JST" : "UTC";
       const f = path.join(ctx.DATA_DIR, "console-days.json"), c = readJson(f, {});
       fs.writeFileSync(f, JSON.stringify({ ...c, tz }, null, 1), { mode: 0o600 });
+      ctx.refresh();
+      return json(200, { ok: true });
+    }
+    if (url.pathname === "/api/admin/limits") { // 公開テストの歯止め：1日の費用上限・同時に処理するAIの数（打ち間違いに備えて上限の上限を決める）
+      const dailyCap = Math.round(Number(body.dailyCap) * 100) / 100, maxInflight = Math.round(Number(body.maxInflight));
+      const maxUsers = Math.round(Number(body.maxUsers)), dailySessions = Math.round(Number(body.dailySessions));
+      if (!(dailyCap >= 0.1 && dailyCap <= 20)) return json(400, { error: "bad_cap" });
+      if (!(maxInflight >= 1 && maxInflight <= 20)) return json(400, { error: "bad_inflight" });
+      if (!(maxUsers >= 1 && maxUsers <= 100)) return json(400, { error: "bad_users" });
+      if (!(dailySessions >= 1 && dailySessions <= 1000)) return json(400, { error: "bad_daily" });
+      ctx.setLimits({ dailyCap, maxInflight, maxUsers, dailySessions });
       ctx.refresh();
       return json(200, { ok: true });
     }

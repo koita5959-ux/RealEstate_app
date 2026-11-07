@@ -7,18 +7,22 @@ import path from "node:path";
 import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { adminHandler, publicStats, summarize } from "./admin.js";
+import { landSetup } from "./land.js";
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
 const MODEL = env.MODEL || "claude-opus-5-5";
 const MAX_TOKENS = Number(env.MAX_TOKENS || 2000); // Opus 5.5 は考える処理を止められず、その分もここに入る。600では考えるだけで使い切り、返事が空になったことがある（2026-11-07）
 const EFFORT = env.EFFORT || "low"; // 雑談は浅くてよい。深くすると費用と時間が増える
-const DAILY_USD_CAP = Number(env.DAILY_USD_CAP || 2); // 1日の推定費用の上限（超えたら止まる）
+const DAILY_USD_CAP = Number(env.DAILY_USD_CAP || 2); // 1日の推定費用の上限（超えたら止まる）。初期値。開発利用状況の「設定」で変えると data/limits.json が優先
 const RATE_PER_MIN = Number(env.RATE_PER_MIN || 12); // 同じ人の1分あたりの上限
-const MAX_INFLIGHT = Number(env.MAX_INFLIGHT || 4); // 同時に処理する数
+const MAX_INFLIGHT = Number(env.MAX_INFLIGHT || 4); // 同時に処理する数。初期値。data/limits.json が優先
+const QUEUE_WAIT_MS = Number(env.QUEUE_WAIT_MS || 25_000); // 混んでいるとき、空くまで待つ長さ（画面は60秒で諦めるので、その内側）
+const QUEUE_MAX = 50; // 待てる人数。これを超えたら「混み合っています」
 const KEY_FILE = env.KEY_FILE || "/run/secrets/anthropic_api_key";
 const DATA_DIR = env.DATA_DIR || "/data";
 const ADMIN_PASSWORD_FILE = env.ADMIN_PASSWORD_FILE || "/run/secrets/admin_password";
+const LAND_KEY_FILE = env.LAND_KEY_FILE || "/run/secrets/reinfolib_api_key"; // 不動産情報ライブラリ。なければ見本の値
 const SYSTEM_PROMPT = fs.readFileSync(new URL("./system.txt", import.meta.url), "utf8").trim();
 
 // 価格（USD / 100万トークン）。推定用。Console の請求額が正。
@@ -100,11 +104,81 @@ function rateLimited(who) {
 }
 
 let inflight = 0;
+// 上限（1日の費用・同時件数）：開発利用状況から変えられる。再起動なしで、次の問い合わせから効く
+const LIMITS_FILE = () => path.join(DATA_DIR, "limits.json");
+let limitsCache = null, limitsAt = 0;
+function limits() {
+  if (limitsCache && Date.now() - limitsAt < 2000) return limitsCache;
+  let j = {};
+  try { j = JSON.parse(fs.readFileSync(LIMITS_FILE(), "utf8")); } catch { /* まだ変えていない */ }
+  limitsCache = { dailyCap: j.dailyCap > 0 ? j.dailyCap : DAILY_USD_CAP, maxInflight: j.maxInflight >= 1 ? j.maxInflight : MAX_INFLIGHT,
+    maxUsers: j.maxUsers >= 1 ? j.maxUsers : 10, dailySessions: j.dailySessions >= 1 ? j.dailySessions : 50, history: Array.isArray(j.history) ? j.history : [] };
+  limitsAt = Date.now();
+  return limitsCache;
+}
+function setLimits(v) {
+  const cur = limits(), keys = ["dailyCap", "maxInflight", "maxUsers", "dailySessions"];
+  const now = Object.fromEntries(keys.map((k) => [k, v[k]])), before = Object.fromEntries(keys.map((k) => [k, cur[k]]));
+  const history = [{ ts: new Date().toISOString(), ...now, before }, ...cur.history].slice(0, 30);
+  fs.writeFileSync(LIMITS_FILE(), JSON.stringify({ ...now, history }, null, 1), { mode: 0o600 });
+  limitsCache = null;
+  drainQueue();
+}
+// 入口の人数制限（「地図を開く」）：使用中＝最後の動きから ACTIVE_MS 以内のセッション。1日＝その日に入ったセッション
+const ACTIVE_MS = 15 * 60_000;
+const lastSeen = new Map(); // sid → 最後の動き
+let admitDay = today(), admitted = new Set(), deniedToday = { users: 0, daily: 0 };
+function seen(sid) { if (sid && sid !== "no-sid") { lastSeen.set(sid, Date.now()); if (lastSeen.size > 20000) pruneSeen(); } }
+function pruneSeen() { const n = Date.now(); for (const [k, t] of lastSeen) if (n - t > ACTIVE_MS) lastSeen.delete(k); }
+function rollAdmitDay() { if (today() !== admitDay) { admitDay = today(); admitted = new Set(); deniedToday = { users: 0, daily: 0 }; } }
+function activeCount(except) { const n = Date.now(); let c = 0; for (const [k, t] of lastSeen) if (k !== except && n - t <= ACTIVE_MS) c++; return c; }
+function admitStatus() { rollAdmitDay(); return { active: activeCount(), today: admitted.size, denied: deniedToday }; }
+// 起動したとき：今日の記録から、入ったセッションと最後の動きを戻す（再起動で数え直しにならないように）
+function loadAdmits() {
+  try {
+    for (const line of fs.readFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), "utf8").split("\n")) {
+      if (!line) continue;
+      try { const e = JSON.parse(line); const t = Date.parse(e.ts); if (e.sid && Date.now() - t <= ACTIVE_MS) lastSeen.set(e.sid, Math.max(lastSeen.get(e.sid) || 0, t)); if (e.type === "map" && e.sid) admitted.add(e.sid); } catch { /* 壊れた行 */ }
+    }
+  } catch { /* 今日の記録なし */ }
+}
+loadAdmits();
+async function handleAdmit(req, res) {
+  let b;
+  try { b = await readBody(req, 2048); } catch { return send(res, 400, { error: "bad_request" }); }
+  const sid = clip(b.sid, 64);
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return send(res, 400, { error: "bad_sid" });
+  rollAdmitDay();
+  const L = limits();
+  if (!admitted.has(sid)) {
+    if (activeCount(sid) >= L.maxUsers) { deniedToday.users++; touchSnap(); return send(res, 429, { error: "busy_users" }); }
+    if (admitted.size >= L.dailySessions) { deniedToday.daily++; touchSnap(); return send(res, 429, { error: "daily_sessions" }); }
+    admitted.add(sid);
+  }
+  seen(sid);
+  return send(res, 200, { ok: true });
+}
+
+// 混んでいるときは断らずに順番を待たせる（最大 QUEUE_WAIT_MS）。空いたら来た順に通す
+const waiters = [];
+function acquire() {
+  if (inflight < limits().maxInflight && !waiters.length) { inflight++; return Promise.resolve(true); }
+  if (waiters.length >= QUEUE_MAX) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const w = { resolve, t: setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) waiters.splice(i, 1); resolve(false); }, QUEUE_WAIT_MS) };
+    waiters.push(w);
+  });
+}
+function drainQueue() {
+  while (waiters.length && inflight < limits().maxInflight) { const w = waiters.shift(); clearTimeout(w.t); inflight++; w.resolve(true); }
+}
+function release() { inflight--; drainQueue(); }
 
 // ---- 入力の検査 ----
 const clip = (s, n) => String(s ?? "").slice(0, n);
 function parseBody(body) {
-  const messages = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
+  const all = Array.isArray(body.messages) ? body.messages : [];
+  const messages = all.slice(-20);
   const clean = messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .map((m) => ({ role: m.role, content: clip(m.content, 2000) }))
@@ -115,11 +189,17 @@ function parseBody(body) {
   for (const k of ["q", "press", "typed", "branch", "branchBy", "place", "near", "road", "intent", "kind"]) {
     if (m[k] !== undefined) meta[k] = typeof m[k] === "number" || typeof m[k] === "boolean" ? m[k] : clip(m[k], 80);
   }
+  const ctxLen = String(body.context ?? "").length;
+  const cut = { // 切り捨て：試験用の表示で「あふれ」を見えるようにする
+    context: ctxLen > 6000 ? { from: ctxLen, to: 6000 } : null,
+    dropped: Math.max(0, all.length - 20),
+    longMsgs: messages.filter((m) => m && typeof m.content === "string" && m.content.length > 2000).length,
+  };
   return {
-    meta,
+    meta, cut,
     sid: clip(body.sid, 64) || "no-sid",
     by: clip(body.by, 32) || "visitor",
-    context: clip(body.context, 2000),
+    context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
     messages: clean,
   };
 }
@@ -151,12 +231,13 @@ async function handleChat(req, res) {
 
   let input;
   try {
-    input = parseBody(await readBody(req));
+    input = parseBody(await readBody(req, 262_144)); // 会話20往復＋公開データの表。32KBでは長い会話であふれることがある
   } catch (e) {
     return send(res, e.code === 413 ? 413 : 400, { error: "bad_request" });
   }
   if (!input) return send(res, 400, { error: "bad_request" });
 
+  seen(input.sid);
   const userText = input.messages[input.messages.length - 1].content;
   const turn = input.messages.filter((m) => m.role === "user").length;
   const reject = (code, reason) => {
@@ -171,14 +252,15 @@ async function handleChat(req, res) {
   if (disabled()) return reject(503, "disabled");
   if (!client) return reject(503, "no_key");
   if (today() !== spentDate) loadSpent();
-  if (spentUsd >= DAILY_USD_CAP) return reject(429, "daily_cap");
+  if (spentUsd >= limits().dailyCap) return reject(429, "daily_cap");
   if (rateLimited(who)) return reject(429, "rate_limited");
-  if (inflight >= MAX_INFLIGHT) return reject(429, "busy");
 
   const system = input.context ? `${SYSTEM_PROMPT}\n\n【画面から渡された状況】\n${input.context}` : SYSTEM_PROMPT;
   const rec = { ...base, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
 
-  inflight++;
+  const waitFrom = Date.now();
+  if (!(await acquire())) return reject(429, "busy");
+  rec.queuedMs = Date.now() - waitFrom; // 順番待ちした長さ（混み具合の記録）
   try {
     const r = await client.messages.create({
       model: MODEL,
@@ -205,6 +287,7 @@ async function handleChat(req, res) {
     });
     return send(res, 200, {
       text,
+      trace: { system, messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS, queuedMs: rec.queuedMs }, // 試験用：送ったものをそのまま返す（原文は text）
       stopReason: r.stop_reason,
       usage: { input: usage.input_tokens || 0, output: usage.output_tokens || 0 },
       costUsdEstimate: costUsd,
@@ -212,9 +295,9 @@ async function handleChat(req, res) {
     });
   } catch (e) {
     writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
-    return send(res, 502, { error: "upstream", httpStatus: e.status || 0 });
+    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: clip(e.message, 300), trace: { system, messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
   } finally {
-    inflight--;
+    release();
   }
 }
 
@@ -231,6 +314,8 @@ async function handleEvent(req, res) {
   let b;
   try { b = await readBody(req, 4096); } catch { return send(res, 400, { error: "bad_request" }); }
   if (!EVENT_TYPES.has(b.type)) return send(res, 400, { error: "bad_type" });
+  seen(clip(b.sid, 64));
+  if (b.type === "map") { rollAdmitDay(); admitted.add(clip(b.sid, 64)); } // 古い画面（入口の確認を知らない窓）からの入りも、1日の数に入れる
   const data = {};
   if (b.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data).slice(0, 8)) data[clip(k, 20)] = typeof v === "number" || typeof v === "boolean" ? v : clip(v, 80);
   try {
@@ -247,7 +332,7 @@ const num = (v) => (Number.isFinite(+v) ? +v : 0);
 function cleanState(s) {
   s = s && typeof s === "object" ? s : {};
   const sheet = {};
-  for (const [k, v] of Object.entries(s.sheet && typeof s.sheet === "object" ? s.sheet : {}).slice(0, 24)) sheet[clip(k, 24)] = v == null ? null : clip(v, 400);
+  for (const [k, v] of Object.entries(s.sheet && typeof s.sheet === "object" ? s.sheet : {}).slice(0, 40)) sheet[clip(k, 24)] = v == null ? null : clip(v, 400);
   const p = s.pub && typeof s.pub === "object" ? s.pub : {};
   return {
     updated: num(s.updated), stage: clip(s.stage, 40), place: clip(s.place, 80), near: clip(s.near, 40), localKnowledge: clip(s.localKnowledge, 300), revised: clip(s.revised, 200),
@@ -281,6 +366,7 @@ async function handleSession(req, res) {
   try { b = await readBody(req, 262_144); } catch { return send(res, 400, { error: "bad_request" }); }
   const sid = String(b.sid || "");
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return send(res, 400, { error: "bad_sid" });
+  if (!b.reconstructed) seen(sid);
   // 復元したもの（reconstructed）は、元のセッションの時刻を残せる
   const savedAt = b.reconstructed && /^\d{4}-\d\d-\d\dT[\d:.]{8,12}Z$/.test(String(b.savedAt || "")) ? String(b.savedAt) : new Date().toISOString();
   const rec = { sid, by: clip(b.by, 32) || "visitor", savedAt, state: cleanState(b.state), snapshot: cleanSnapshot(b.snapshot), reconstructed: !!b.reconstructed };
@@ -296,7 +382,7 @@ async function handleSession(req, res) {
 // ---- 管理画面の用意 ----
 const adminHits = [];
 const adminCtx = {
-  DATA_DIR, MODEL, DAILY_USD_CAP, PRICES, ADMIN_PASSWORD_FILE, readBody, disabled,
+  DATA_DIR, MODEL, PRICES, ADMIN_PASSWORD_FILE, readBody, disabled, limits, setLimits, admitStatus,
   getSpent: () => (today() === spentDate ? spentUsd : 0),
   // 読むとき：反映待ちの動き（1秒のまとめ待ち）があれば先に作り直す。リロードすれば、それまでの動きが必ず入った集計になる
   getSnapshot: () => { if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; rebuild(); } else if (!snap) rebuild(); return snap; },
@@ -308,6 +394,19 @@ const adminCtx = {
 rebuild(); // 起動時に1回
 setInterval(() => { if (today() !== snapDay) rebuild(); }, 5 * 60_000); // 日が替わったときだけ、日付の集計を作り直す
 
+// ---- 公開データ（不動産情報ライブラリ）：GET /api/land?lat=..&lng=.. ----
+const land = landSetup({ keyFile: LAND_KEY_FILE, dataDir: DATA_DIR });
+const landHits = new Map();
+async function handleLand(req, res, url) {
+  const lat = Number(url.searchParams.get("lat")), lng = Number(url.searchParams.get("lng"));
+  if (!(lat > 20 && lat < 46 && lng > 122 && lng < 154)) return send(res, 400, { error: "bad_position" }); // 日本の範囲だけ
+  const who = String(req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "?");
+  const n = Date.now(), h = (landHits.get(who) || []).filter(t => n - t < 60_000); h.push(n); landHits.set(who, h);
+  if (h.length > 20) return send(res, 429, { error: "rate_limited" });
+  try { return send(res, 200, await land.lookup(lat, lng)); }
+  catch (e) { console.error("land:", e.message); return send(res, 502, { error: "land" }); }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
@@ -317,6 +416,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
+    if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);
+    if (req.method === "GET" && url.pathname === "/api/land") return await handleLand(req, res, url);
     if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
     if (await adminHandler(req, res, url, adminCtx)) return;
     return send(res, 404, { error: "not_found" });
@@ -327,5 +428,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`api listening :${PORT} model=${MODEL} key=${client ? "set" : "missing"} cap=$${DAILY_USD_CAP}/day`);
+  console.log(`api listening :${PORT} model=${MODEL} key=${client ? "set" : "missing"} cap=$${limits().dailyCap}/day inflight=${limits().maxInflight} users=${limits().maxUsers} daily=${limits().dailySessions} land=${land.hasKey ? "api" : "sample"}`);
 });
