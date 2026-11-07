@@ -29,6 +29,7 @@
   .combo-list li.on, .combo-list li:hover { background:#eef4fb; }
   .combo-list li.none { color:var(--sub); cursor:default; font-size:13px; }
   body.ai-wait #talk .row.done button:not(.chosen) { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; }
+  button.lit { background:var(--accent); color:#fff; } /* 押せる状態（受け付け中）は反転して目立たせる */
   button.off, button.off:hover { background:#c3c9d0 !important; color:#fff !important; border-color:#c3c9d0 !important; cursor:not-allowed; opacity:1; }
   .data { width:100%; border-collapse:collapse; font-size:13px; }
   .data td { border-bottom:1px solid var(--line); padding:5px 4px; }
@@ -36,7 +37,7 @@
   .ai { background:var(--ai); border-left:4px solid var(--ai-line); padding:10px 12px; margin:10px 0 4px; font-size:15px; line-height:1.7; border-radius:4px; }
   .ai .tag { font-size:11px; color:#a0701a; display:block; margin-bottom:2px; }
   .me { text-align:right; margin:8px 0; font-size:14px; }
-  .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; }
+  .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; text-align:left; white-space:pre-wrap; } /* 吹き出しは右寄せのまま、中の折り返しは左から */
   .hint { font-size:12px; color:var(--sub); }
   .sheet { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; font-size:13px; }
   .sheet h3 { font-size:13px; margin:8px 0 4px; }
@@ -58,10 +59,12 @@
   .demo span { color:#e6c98f; }
   .demo-badge { display:inline-block; color:#fff; background:#c0392b; border-radius:50%; width:24px; height:24px; text-align:center; line-height:24px; font-size:15px; margin-right:2px; vertical-align:middle; }
   .hidden { display:none; }
-  .textline { display:flex; gap:4px; margin-top:6px; }
+  .textline { display:flex; gap:4px; margin-top:6px; align-items:flex-end; }
   .textline button { margin:0; }
-  input.other[type=text] { flex:1; min-width:0; margin:0; padding:7px; }
-  .row.done input.other, .row.done .textline button:not(.chosen) { display:none; }
+  textarea.other { flex:1; min-width:0; margin:0; padding:7px; }
+  textarea { field-sizing:content; resize:none; overflow:hidden; font-family:inherit; line-height:1.5; min-height:2.6em; } /* 書いた分だけ縦に伸びる（例の文も全部見える） */
+  #fMsg { min-height:5.5em; }
+  .row.done textarea.other, .row.done .textline button:not(.chosen) { display:none; }
   input[type=text], input[type=email], input[type=tel], select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:15px; margin-bottom:4px; }
   button.small { font-size:12px; padding:5px 10px; }
   button.inq { width:100%; margin-top:18px; border-style:dashed; }
@@ -193,7 +196,7 @@ document.getElementById("preset").onclick = () => {
 map.setView([36.2, 137.5], 5); // 開く前は日本全体
 let PLACE = ""; // 都道府県・市区町村は空白で始める（日本地図から）
 // ---- ボタンの点灯／グレー：受け付けられる入力があれば点灯、未入力ならグレー ----
-const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
+const lamp = (btn, ok) => { btn.classList.toggle("off", !ok); btn.classList.toggle("lit", !!ok); btn.setAttribute("aria-disabled", ok ? "false" : "true"); };
 // グレーのボタンは、人が押しても何も起きない（無効）。画面の中の再現（巻き戻し・元に戻す・デモ）が内部で押す分は通す
 document.addEventListener("click", e => {
   const b = e.target.closest && (e.target.closest("button.off") || (document.body.classList.contains("ai-wait") && e.target.closest("#talk .row.done button")));
@@ -324,14 +327,28 @@ function firstJudgment() {
     + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
     + "これは地図からは読めません。この土地は、道にどう接していますか？",
     "渡したもの：住む・活かす・手放す、どの道にも効く決まり（根拠つき）", "開けた穴：道への接し方（持ち主なら見れば分かる）");
-  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], onRoad, null, 1);
+  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], null, (t, c) => {
+    noteText(t, "道への接し方");
+    if (c) return onRoad(c);
+    S.sheet.接道 = "（ボタンは選ばず、書いて答えた）";
+    askBuilding(TEXT_LEAD);
+  }, 1, TEXT_PH);
 }
+// ①②も「選ぶ＋書き欄＋送信」。書いた言葉は事情としてデータシートに残し、③→④の AI に渡る。台本は選んだボタンで進む
+const TEXT_PH = "ボタンに合わなければ、ここに書いて答えられます";
+const TEXT_LEAD = "書いていただいたことは、このあとの見立てに入れます。";
+function noteText(t, about) { if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(about + "について：" + t); }
 function onRoad(c) {
   if (c.startsWith("細い")) {
     S.sheet.形と向き = "旗竿地・奥まっています";
     say("旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
       "渡したもの：2mが何を決めるか（客は幅を知っていても、意味は知らないことが多い）", "開けた穴：通路の幅");
-    choices(["2mある", "2mない・狭い", "測ったことがない"], onWidth, null, 2);
+    choices(["2mある", "2mない・狭い", "測ったことがない"], null, (t, c2) => {
+      noteText(t, "通路の幅");
+      if (c2) return onWidth(c2);
+      S.sheet.接道 = "旗竿地・通路の幅は書いて答えた";
+      askBuilding(TEXT_LEAD);
+    }, 2, TEXT_PH);
   } else if (c.startsWith("道に")) {
     S.sheet.形と向き = "道に面している";
     S.sheet.接道 = "道に広く面している（客の申告）";
@@ -339,11 +356,13 @@ function onRoad(c) {
     say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
       + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
       "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（すれ違えるか、で答えられる）");
-    choices(["すれ違える", "すれ違えない", "わからない"], c2 => {
+    choices(["すれ違える", "すれ違えない", "わからない"], null, (t, c2) => {
+      noteText(t, "前の道の幅");
+      if (!c2) { S.sheet.接道 += "／前の道の幅は書いて答えた"; return askBuilding(TEXT_LEAD); }
       S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／ただし前の道は4m未満の可能性（建て直し時にセットバックの確認が必要）", "わからない":"／前の道の幅は不明" }[c2];
       if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
       askBuilding(c2 === "すれ違えない" ? "それなら、建て直すときに何㎡残るかを先に確かめる土地です。" : "接道の面では、この土地は素直な土地です。");
-    }, null, 2);
+    }, 2, TEXT_PH);
   } else {
     S.signals.push("接し方：客は分からない（現地確認）");
     askBuilding("わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
@@ -630,6 +649,10 @@ function goStep(i, lead, real) {
     });
   }, 4 + i);
 }
+// 書き欄を書いた分だけ伸ばす：CSS の field-sizing が効かないブラウザ向けの予備
+if (!(window.CSS && CSS.supports("field-sizing", "content"))) document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return; t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px";
+});
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 
 // ---- 問い合わせ（いつでも出せる。記録は画面に出さず、送るときに店へ添える） ----
@@ -639,7 +662,7 @@ const INQ_FORM = `<b>弊社へのお問い合わせ</b>
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
       <label>連絡の希望</label><select id="fWay"><option>電話がよい</option><option>メールがよい</option><option>どちらでも</option></select>
-      <input id="fWhen" type="text" placeholder="連絡してよい時間帯（例：平日の夕方）">
+      <textarea id="fWhen" rows="1" placeholder="連絡してよい時間帯（例：平日の夕方）"></textarea>
       <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
       <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
       <div class="hint">本番では、ここまでの相談の内容が、弊社へ自動で添えられます。</div>
@@ -703,9 +726,9 @@ function say(html, gave, hole) {
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); saveSession(); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
-// onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（④以降）。この行ではボタンは選ぶだけで、「送信」がリクエストになる。
+// onText：渡すと、選択肢の下に「書き欄＋送信」を付ける（①から先すべて）。ph：書き欄の例の文（省くと管理画面の「書き欄の例」）この行ではボタンは選ぶだけで、「送信」がリクエストになる。
 // 送るのは「選択＋書いた言葉」。どちらか片方だけでもよい。onText(t, c)：t＝書いた言葉（なければ空）、c＝選んだボタン（なければ null）
-function choices(list, cb, onText, q) {
+function choices(list, cb, onText, q, ph) {
   const d = newRow(q);
   const pick = (b, c, opt, t) => {
     d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, ...(opt ? { opt } : {}), ...(t ? { type:t } : {}) }); renderRoute();
@@ -721,13 +744,13 @@ function choices(list, cb, onText, q) {
     }; d.appendChild(b);
   });
   if (onText) {
-    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="${esc(list.length ? (ADMIN.hint && ADMIN.hint.trim()) || "リクエストメッセージも送れます" : "ここに書いて送信してください")}"><button data-c="送信">送信</button></div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="textline"><textarea class="other" rows="1" placeholder="${esc(ph || (list.length ? (ADMIN.hint && ADMIN.hint.trim()) || "リクエストメッセージも送れます" : "ここに書いて送信してください"))}"></textarea><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
-    const inp = d.querySelector("input.other"), refreshSend = () => lamp(b, !!inp.value.trim() || !!d.querySelector("button.sel"));
+    const inp = d.querySelector(".other"), refreshSend = () => lamp(b, !!inp.value.trim() || !!d.querySelector("button.sel"));
     inp.addEventListener("input", refreshSend); d.addEventListener("click", () => setTimeout(refreshSend, 0)); refreshSend();
     b.onclick = () => {
       if (d.dataset.step) return;
-      const t = d.querySelector("input.other").value.trim(), sel = d.querySelector("button.sel");
+      const t = d.querySelector(".other").value.trim(), sel = d.querySelector("button.sel");
       if (!t && !sel) return;
       if (sel) { sel.classList.remove("sel"); pick(sel, sel.dataset.c, +sel.dataset.opt, t); b.classList.add("chosen"); }
       else pick(b, "送信", 0, t);
@@ -766,14 +789,14 @@ function replay(steps) {
     const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
     if (!row) break;
     REPLAY_BR = st.br != null ? st.br : null;
-    const ta = row.querySelector("textarea");
+    const ta = row.querySelector("textarea:not(.other)");
     if (st.type && ta) { ta.value = st.type; row.querySelector("button").click(); continue; }
-    if (st.type) row.querySelector("input.other").value = st.type;
+    if (st.type) row.querySelector(".other").value = st.type;
     let b = [...row.querySelectorAll("button")].find(x => x.dataset.c === st.press);
     if (!b && st.type) b = row.querySelector('button[data-c="送信"]'); // 当時あったボタン（例：廃止した仮のAI候補）が今はないときは、書いた言葉だけを送信して続ける
     if (!b) break; b.click();
     const send = row.querySelector('button[data-c="送信"]');
-    if (send && b !== send && !row.classList.contains("done")) { row.querySelector("input.other").value = st.type || ""; send.click(); }
+    if (send && b !== send && !row.classList.contains("done")) { row.querySelector(".other").value = st.type || ""; send.click(); }
   }
   REPLAYING = false; REPLAY_BR = null;
   const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
@@ -789,9 +812,11 @@ const DEMOS = {
       { press:"地図を開く", fill:{ prefName:"岐阜県", cityName:"岐阜市" }, note:"最初は都道府県と市区町村を入れる（空白から始まる）。デモでは岐阜県岐阜市。" },
       { press:"例：鷺山の旗竿地にピンを置く", note:"本番は地図をクリック。デモでは例の場所に置きます。" },
       { press:"評価する", note:"公開データが機械的に出て、①が始まる。" },
-      { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
+      { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。①から先は、ボタンは選ぶだけ。合うものがなければ、下の欄に書いて答えてもよい。" },
+      { press:"送信", note:"「送信」で①の答えを送る。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
-      { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。③から先は、ボタンは選ぶだけ。下の欄に書き足してもよい。" },
+      { press:"送信", note:"「送信」で②の答えを送る。" },
+      { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。下の欄に書き足してもよい。" },
       { press:"送信", note:"「送信」で③の答えを送る。" },
       { press:"建てずに貸す（駐車場など）", note:"ここまでがロケーション。④から先は、店が管理画面に書いた選択肢（番号も管理画面と同じ）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
       { press:"送信", note:"「送信」で④の答えを送る。" },

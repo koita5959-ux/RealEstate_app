@@ -38,7 +38,7 @@
   .slots input:placeholder-shown { background:#fbfbfb; border-style:dashed; }
   .slots span.fixedbtn { display:inline-block; min-width:9em; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-size:13px; background:#fff; color:var(--sub); }
   .brbox { border-left:3px solid var(--line); padding:4px 0 4px 10px; margin:8px 0; }
-  .brbox input.closeIn { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-size:13px; }
+  .brbox textarea.closeIn { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-size:13px; }
   .slots select { font-size:12px; margin-left:2px; }
   .branch { font-size:12px; color:var(--sub); margin:6px 0 2px; }
   button { font-size:13px; padding:7px 11px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; margin:4px 4px 0 0; }
@@ -50,7 +50,7 @@
   dialog p { margin:0 0 10px; font-size:14px; }
   button.small { font-size:12px; padding:3px 8px; }
   .hint { font-size:12px; color:var(--sub); }
-  textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
+  textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; field-sizing:content; resize:none; overflow:hidden; font-family:inherit; line-height:1.5; min-height:2.4em; } /* 書いた分だけ縦に伸びる */
   /* 右側 */
   .side h3 { font-size:13px; margin:14px 0 4px; }
   .side h3 .num { font-size:15px; margin-right:2px; }
@@ -63,7 +63,7 @@
   .ai .tag { font-size:11px; color:#a0701a; display:block; }
   .ai .dummy { color:var(--sub); }
   .me { text-align:right; margin:8px 0; font-size:14px; }
-  .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; }
+  .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; text-align:left; white-space:pre-wrap; }
   .row { margin:4px 0 2px; }
   .row .num { margin-right:4px; vertical-align:middle; }
   .row.done button { opacity:.45; pointer-events:none; }
@@ -85,8 +85,8 @@
   <main class="admin">
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="modes"></div>
-    <div class="box"><div class="branch">受け方（選択の前のAIの一言が、お客さんの答えをどう受け止めるか）</div><input id="stance" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px">
-      <div class="branch">書き欄の例（③から先の書き欄に薄く出る文）</div><input id="hint" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px"></div>
+    <div class="box"><div class="branch">受け方（選択の前のAIの一言が、お客さんの答えをどう受け止めるか）</div><textarea id="stance" rows="1"></textarea>
+      <div class="branch">書き欄の例（③から先の書き欄に薄く出る文）</div><textarea id="hint" rows="1"></textarea></div>
 
     <h2>ロケーション <span class="who common">全業態共通・変更なし</span></h2>
     <div id="common"></div>
@@ -242,7 +242,7 @@ function renderAdmin() {
             <select><option${b.kind === "答える" ? " selected" : ""}>答える</option><option${b.kind === "聞く" ? " selected" : ""}>聞く</option></select></div>
           <div class="branch">④で ${from.length ? from.map(t => `「${esc(t)}」`).join("") : "（振り分けられたボタンなし）"} を選んだ人</div>
           <div class="slots"></div><button class="small">＋ 枠を足す</button>
-          <div class="branch">締めの文（この枝の問い合わせに添える）</div><input class="closeIn" value="${esc(b.close)}">`;
+          <div class="branch">締めの文（この枝の問い合わせに添える）</div><textarea class="closeIn" rows="1">${esc(b.close)}</textarea>`;
         e.querySelector(".topic").oninput = ev => { b.name = ev.target.value; save(); };
         e.querySelector("select").onchange = ev => { b.kind = ev.target.value; save(); };
         e.querySelector(".closeIn").oninput = ev => { b.close = ev.target.value; save(); };
