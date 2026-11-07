@@ -85,6 +85,8 @@
   <main class="admin">
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="modes"></div>
+    <div class="box"><div class="branch">受け方（選択の前のAIの一言が、お客さんの答えをどう受け止めるか）</div><input id="stance" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px">
+      <div class="branch">書き欄の例（③から先の書き欄に薄く出る文）</div><input id="hint" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px"></div>
 
     <h2>ロケーション <span class="who common">全業態共通・変更なし</span></h2>
     <div id="common"></div>
@@ -126,25 +128,29 @@ const MODES = {
     s4:{ topic:"いまのお考え", btns:[["すぐ売りたい",0],["いずれ売りたい",0],["相場を知りたい",1],["売るか迷う",1]] },
     s5:[ { name:"売ると決めている", kind:"答える", btns:["売れるまで","手元に残る額","売り出し方","買い手の探し方"], close:"近い条件の買い手の動きと、売り出しの段取りを持って伺います。" },
          { name:"まだ決めていない", kind:"答える", btns:["値段の目安","近くの売れた例","持ち続けたら","売り時はいつ"], close:"近い条件の買い手の動きと、売り出しの段取りを持って伺います。" } ],
-    close:"近い条件の買い手の動きと、売り出しの段取りを持って伺います。" },
+    close:"近い条件の買い手の動きと、売り出しの段取りを持って伺います。",
+    stance:"お客さんの答えを、買い手がまず見る点として受け止める。", hint:"ほかに気になることがあれば一言どうぞ（例：急ぎではない）" },
   m2: { name:"土地を買い取り、形にする店", sub:"開発優先",
     s4:{ topic:"いまのお考え", btns:[["自分で建てる",0],["店と組んで建てる",0],["開発用に売る",1],["お隣と合わせて売る",1]] },
     s5:[ { name:"オーナーになる", kind:"答える", btns:["建てられる物","採算の目安","資金と借入","任せる範囲"], close:"建てられる物と採算を、図面の前の段階から一緒に考えます。" },
          { name:"開発者に売る", kind:"聞く", btns:["隣も空いている","隣も売りたそう","古い家が多い","よくわからない"], close:"ご近所の様子も踏まえ、買い取りの目安をすぐにお出しします。" } ],
-    close:"建てられる物と採算、買い取りの目安、どちらからでもお出しします。" },
+    close:"建てられる物と採算、買い取りの目安、どちらからでもお出しします。",
+    stance:"お客さんの答えを、この土地に何が建つかの条件として受け止める。", hint:"ほかに気になることがあれば一言どうぞ（例：お隣も空いている）" },
   m3: { name:"土地の活かし方から一緒に考える店", sub:"総合系",
     s4:{ topic:"活かし方", btns:[["住む・建て直す",0],["建てて貸す",0],["建てずに貸す（駐車場など）",0],["売る",1],["お隣と合わせる",1]] },
     s5:[ { name:"自分で活かす", kind:"答える", btns:["費用の目安","手順と期間","似た土地の例","収入の見込み"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" },
          { name:"手放す", kind:"答える", btns:["値段の目安","売り出し方","お隣との話","手元に残る額"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" } ],
-    close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" },
+    close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。",
+    stance:"お客さんの答えを、選べる活かし方の幅として受け止め、一つを勧める前に並べて比べる。", hint:"ほかに気になることがあれば一言どうぞ（例：売ることも少し考えている）" },
   m4: { name:"相続や税の相談から始める店", sub:"相続・税",
     s4:{ topic:"いまのご事情", btns:[["受け継いだ",0],["これから受け継ぐ",1],["家族に残したい",1],["生前に渡したい",1]] },
     s5:[ { name:"事後", kind:"答える", btns:["名義の手続き","相続税の申告","売るか持つか","家族で分ける"], close:"名義と土地の評価の整理から、司法書士・税理士と一緒に伺います。" },
          { name:"事前", kind:"答える", btns:["贈与か相続か","税を抑える","分け方を決める","遺言のこと"], close:"名義と土地の評価の整理から、司法書士・税理士と一緒に伺います。" } ],
-    close:"名義と土地の評価の整理から、司法書士・税理士と一緒に伺います。" },
+    close:"名義と土地の評価の整理から、司法書士・税理士と一緒に伺います。",
+    stance:"お客さんの答えを、この土地を誰がどう持つかの話として受け止める。", hint:"ほかに気になることがあれば一言どうぞ（例：兄弟で持っている）" },
   m5: { name:"一から自分で作る店", sub:"＋1",
     s4:{ topic:"", btns:[] },
-    s5:[ { name:"", kind:"答える", btns:[], close:"" }, { name:"", kind:"答える", btns:[], close:"" } ], close:"" }
+    s5:[ { name:"", kind:"答える", btns:[], close:"" }, { name:"", kind:"答える", btns:[], close:"" } ], close:"", stance:"", hint:"" }
 };
 const END = "セッションでお答えできるのは以上です。詳しくは弊社へお問い合わせください。";
 const NUM = "⓪①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -161,7 +167,7 @@ const LOC = {
 const FIRST = 4; // 店が書く選択肢は④から
 
 // steps[0]＝④ {topic, btns, br}、steps[1]＝⑤ {topic, branches:[{name,kind,btns,close}×2]}、steps[2〜]＝⑥〜 {topic, btns}
-let modeKey = "m3", steps = [], closeText = "", limit = null; // limit: null＝初期値（自動）
+let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = null; // limit: null＝初期値（自動）
 function loadMode(k) {
   modeKey = k;
   const m = MODES[k];
@@ -169,7 +175,7 @@ function loadMode(k) {
     { topic:m.s4.topic, btns:[...m.s4.btns.map(b => b[0]), "", ""], br:[...m.s4.btns.map(b => b[1]), 0, 1] }, // 初期値＋空白2つ
     { topic:"", branches:m.s5.map(b => ({ ...b, btns:[...b.btns, "", ""] })) }
   ];
-  closeText = m.close;
+  closeText = m.close; stance = m.stance; hint = m.hint;
   limit = null;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
@@ -264,6 +270,10 @@ function renderAdmin() {
     if (limit != null && limit < n) alert(`上限 ${limit} 往復は、ボタンを設定したステップ（${n}）より少なく、店のボタンを最後まで出せません。`);
     showLimit();
   };
+  const stIn = document.getElementById("stance"), hiIn = document.getElementById("hint");
+  stIn.value = stance; hiIn.value = hint;
+  stIn.oninput = () => { stance = stIn.value; save(); };
+  hiIn.oninput = () => { hint = hiIn.value; save(); };
   const cl = document.getElementById("close");
   cl.value = closeText;
   cl.oninput = () => { closeText = cl.value; resetTry(); };
@@ -292,6 +302,7 @@ function renderHelp() {
     <h3>業態モード</h3>
     <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
     <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
+    <p>「受け方」は、選択の前のAIの一言が、お客さんの答えをどう受け止めるかです。③→④から先、ボタンが出る前の一言すべてに使います。空なら、AIには渡しません。「書き欄の例」は、③から先の書き欄に薄く出る文です。</p>
     <h3><span class="num">⓪</span>〜<span class="num">③</span> ロケーション</h3>
     <p>土地の形に掛かる事実（道への接し方、道の幅、建物）を聞きます。どの業態でも同じで、変えられません。②は①の答えで問いが変わります。</p>
     <h3><span class="num">④</span>〜<span class="num">${last}</span> 選択肢</h3>
@@ -349,7 +360,7 @@ function commit() {
     (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>メイン画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
   if (err.length) return false;
-  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, steps, close:closeText, limit })); } catch (e) {}
+  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, name:MODES[modeKey].name, stance, hint, steps, close:closeText, limit })); } catch (e) {}
   dirty = false;
   lamp();
   return true;
@@ -358,7 +369,10 @@ function commit() {
 function loadSaved() {
   loadMode("m3");
   try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
-    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.limit ?? null; } } catch (e) {}
+    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.limit ?? null;
+    stance = sv.stance ?? MODES[sv.mode].stance; hint = sv.hint ?? MODES[sv.mode].hint;
+    if (sv.stance === undefined) localStorage.setItem("reAdmin", JSON.stringify({ ...sv, name:MODES[sv.mode].name, stance, hint })); // 受け方を持たない古い保存は、初期値を足して保存し直す
+  } } catch (e) {}
   dirty = false;
   lamp();
 }

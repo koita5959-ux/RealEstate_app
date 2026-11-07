@@ -367,16 +367,30 @@ function onWidth(c) {
 function askBuilding(lead) {
   say(lead + "<br>もう一つだけ。今、この土地に建物はありますか？",
     "渡したもの：接道の答えが、この土地にとって何を意味するか", "開けた穴：建物の有無（建て直しが今の話か、先の話かが分かれる）");
-  choices(["住んでいる家がある", "空き家・古い家がある", "何もない（更地）"], onIntent, null, 3);
+  choices(["住んでいる家がある", "空き家・古い家がある", "何もない（更地）"], null, (t, c) => onIntent(c, t), 3); // ③から先は「選ぶ＋書き欄＋送信」
 }
-function onIntent(c) {
-  S.sheet.持ち主の意向 = c;
+// ③→④の一言：AI が③までの答えを受け止めて作る。つながらないとき・巻き戻し・AIなしでは台本の文
+function onIntent(c, t) {
+  S.sheet.持ち主の意向 = c || "（ボタンは選ばず、書いて答えた）";
+  if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
+  c = c || "";
   const s = c.startsWith("住んで") ? "住んでいるなら、建て直しは先の話です。ただ、いつか誰かに渡すときには、今日の接道の話がそのまま値打ちになります。"
     : c.startsWith("空き家") ? "空き家が残っているなら、建て直せるかどうかが、そのまま「解体して売るか」「そのまま貸すか」の分かれ目になります。"
     : "更地なら、接道の答えがそのまま、この土地で何ができるかです。";
   BRANCH = null;
   inquiryBar(); // 問い合わせのボタンは④から出す
-  goStep(0, s);
+  const userText = (c ? "選んだボタン：" + c : "") + (c && t ? "\n" : "") + (t ? "書いた言葉：" + t : "");
+  if (REPLAYING || AI_OFF) { // 元に戻すときは、記録にある③の本物の返事を使う（③の返事がない古い記録は台本）
+    const rp = RESTORE && RESTORE.replies[0] && RESTORE.replies[0].q === 3 ? RESTORE.replies.shift() : null;
+    if (rp) {
+      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:takeBranch(rp.reply).text });
+      (S.api = S.api || []).push({ step:0, usage:rp.usage, costUsd:rp.costUsd, ms:rp.ms });
+      return goStep(0, esc(takeBranch(rp.reply).text).replace(/\n/g, "<br>"), true);
+    }
+    return goStep(0, s);
+  }
+  askAI(0, false, userText, { q:3, press:c, typed:!!t, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:"答える" })
+    .then(r => goStep(0, r ? r : s + AI_FAIL, !!r));
 }
 // ---- ④から先：管理画面（admin_mode.html）で店が書いた選択肢で進む ----
 // 管理画面で「設定確定」した設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
@@ -387,14 +401,22 @@ const ADMIN_DEFAULT = {
           { topic:"", branches:[
             { name:"自分で活かす", kind:"答える", btns:["費用の目安","手順と期間","似た土地の例","収入の見込み"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" },
             { name:"手放す", kind:"答える", btns:["値段の目安","売り出し方","お隣との話","手元に残る額"], close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。" } ] } ],
-  close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。", limit:null };
+  close:"接道の条件で、選べる活かし方を現地で一緒に絞ります。", limit:null,
+  name:"土地の活かし方から一緒に考える店", stance:"お客さんの答えを、選べる活かし方の幅として受け止め、一つを勧める前に並べて比べる。", hint:"ほかに気になることがあれば一言どうぞ（例：売ることも少し考えている）" };
 const ADMIN = (() => { try { const a = JSON.parse(localStorage.getItem("reAdmin")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
+if (ADMIN.stance === undefined && (!ADMIN.mode || ADMIN.mode === "m3")) ["name", "stance", "hint"].forEach(k => { ADMIN[k] = ADMIN_DEFAULT[k]; }); // 受け方を持たない古い保存（総合系）は初期値で補う
 window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
 const END = "AIはここまでです。詳しいご相談はメールをお送りいただければ、担当者が対応します。";
 const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
 const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
 const LIMIT = ADMIN.limit ?? ADMIN.steps.filter(hasOf).length + 2; // 往復の上限（④を1往復目と数える）
-let BRANCH = null; // ④で決まる枝
+let BRANCH = null; // ④で決まる枝（④で書いた言葉があれば、⑤の前の一言と同じ往復で AI が決める）
+let REPLAY_BR = null; // 巻き戻し・元に戻すときに、記録にある枝の番号
+// AIの返事の最後の【方向N】を読み取って消す。idx：0か1（なければ null）
+function takeBranch(text) {
+  const m = String(text || "").match(/\s*【方向([12])】\s*$/);
+  return m ? { text:text.slice(0, m.index).trimEnd(), idx:+m[1] - 1 } : { text:String(text || "").replace(/【方向[12]】/g, "").trim(), idx:null };
+}
 // ---- ④から先の返事：サーバー（/api/chat）経由で Claude に作らせる。つながらなければ台本の返事に戻る ----
 const QS = new URLSearchParams(location.search);
 const AI_OFF = QS.has("demo") || QS.get("ai") === "off"; // デモ再生中は呼ばない
@@ -474,7 +496,7 @@ function buildState() {
   for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
   return {
     updated: Date.now(), stage: STAGE, place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "",
-    path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "" })),
+    path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "", ...(p.br != null ? { br:p.br } : {}) })),
     sheet, signals: S.signals.slice(),
     usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
     pub: PUB && PUB.ready ? { ready:true, avgUsd:PUB.avgUsd, p90Usd:PUB.p90Usd, sessions:PUB.sessions, usdJpy:PUB.usdJpy } : { ready:false, usdJpy:(PUB && PUB.usdJpy) || 150 },
@@ -508,11 +530,22 @@ function aiContext(n, ask) {
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
   if (S.near && !S.near.none) c += "\n【注意】標準地価格・用途地域は、試作用の実在しない仮の値です。利用者に価格・相場・用途地域として伝えないでください。";
   if (S.near && S.near.none) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
+  if (ADMIN.stance && ADMIN.stance.trim()) { if (ADMIN.name) c += "\n弊社の業態：" + ADMIN.name; c += "\n弊社の受け方：" + ADMIN.stance.trim(); }
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
+  const axis = n === 0 ? ADMIN.steps[0] && ADMIN.steps[0].topic : n === 1 ? BRANCH && BRANCH.name : ADMIN.steps[n] && ADMIN.steps[n].topic;
+  if (axis && n < LIMIT) c += "\n次に聞くこと：" + axis;
   if (ask) c += "\nこの段階は、利用者の答えが弊社にとって何を意味するかを正直に返してください。";
+  const UKE = ADMIN.stance && ADMIN.stance.trim() ? "ここまでの答えを弊社の受け方で受け止めて" : "ここまでの答えを受け止めて";
   const nb = nextButtons(n);
-  if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。直前の利用者の言葉への答えだけを、2〜3文で返してください。新しい話題（税金・専門家への相談の勧めなど）は持ち出さず、問いかけも付けません。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
-  else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事の最後の一文は、このボタンのどれかで答えられる問いにしてください。";
+  const brs = n === 1 && !BRANCH && n < LIMIT ? ADMIN.steps[1].branches.map((b, x) => ({ b, x, list:liveOf(b) })).filter(o => o.list.length) : [];
+  if (brs.length) {
+    c += "\n次に利用者へ出るボタンは、相談の方向で変わります。";
+    for (const o of brs) c += `\n方向${o.x + 1}「${o.b.name || "方向" + (o.x + 1)}」：` + o.list.join(" / ");
+    if (BR_BY_BTN != null) c += `\nボタンからは方向${BR_BY_BTN + 1}にあたります。`;
+    c += "\n利用者の書いた言葉を優先して、合う方向を一つ選び、" + UKE + "見立てを一言返してから、その方向のボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。"
+      + "\n返事の最後に、行を分けて【方向1】か【方向2】とだけ書いてください。";
+  } else if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。直前の利用者の言葉への答えだけを、2〜3文で返してください。新しい話題（税金・専門家への相談の勧めなど）は持ち出さず、問いかけも付けません。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
+  else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事は、" + UKE + "、この土地・この相談の見立てを一言で返してから、このボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。";
   else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
 }
@@ -529,6 +562,10 @@ async function askAI(n, ask, userText, meta) {
       body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
+    const tb = takeBranch(d.text);
+    if (!tb.text) throw new Error("empty");
+    if (n === 1 && !BRANCH && meta.branchBy === "ai") setBranch(tb.idx ?? BR_BY_BTN ?? 0, tb.idx != null ? "ai" : "fallback");
+    d.text = tb.text;
     AI_HIST.push({ role:"assistant", content:d.text });
     (S.api = S.api || []).push({ step:n, usage:d.usage, costUsd:d.costUsdEstimate, ms:d.ms }); // 利用者レポート用
     return esc(d.text).replace(/\n/g, "<br>");
@@ -537,6 +574,15 @@ async function askAI(n, ask, userText, meta) {
     S.signals.push("AIにつながらなかった：" + e.message);
     return null;
   } finally { clearTimeout(timer); w.remove(); document.body.classList.remove("ai-wait"); saveSession(); refreshPub(); }
+}
+let BR_BY_BTN = null, BR_PATH = null; // ④のボタンが指す枝／④の「通った道」の記録（決まった枝を残し、巻き戻しで同じ枝に戻す）
+function setBranch(x, by) {
+  const brs = ADMIN.steps[1] && ADMIN.steps[1].branches; if (!brs) return;
+  BRANCH = brs[x] || brs[0];
+  if (BR_PATH) BR_PATH.br = brs.indexOf(BRANCH);
+  S.branchBy = by;
+  inquiryBar(); // 締めの文は枝で変わる
+  renderRoute();
 }
 function closeNow() { return BRANCH && BRANCH.close.trim() ? BRANCH.close : ADMIN.close; }
 function topicsOf(list) {
@@ -553,26 +599,35 @@ function goStep(i, lead, real) {
   say(real ? lead : lead + "<br>" + (!list.length ? "続けて、書いてお知らせください。" : ask ? `改めて伺います。${topicsOf(list)}、当てはまるものはありますか？` : topicsOf(list) + "お話ししましょう。"),
     real ? "渡したもの：一つ前の答えへのAIの返事" : "渡したもの：一つ前の答えへの回答（台本）", hole);
   const ans = said => `<span class="hint">（AIの${ask ? "返事：「" + esc(said) + "」が店にとって何を意味するかを正直に返す" : "回答：「" + esc(said) + "」に、ここまでの土地の条件に合わせて短く答える"}）</span>`;
-  const enter = c => {
-    if (i !== 0) return;
-    S.sheet.相談目的 = c;
-    const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === c);
-    BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0]; // 書いた場合の枝はAIが判断（ダミーは枝1）
-    inquiryBar();
+  const enter = (c, t) => { // ④：ボタンだけなら、ボタンの枝。書いた言葉があれば、枝は AI が⑤の前の一言と同じ往復で決める
+    if (i !== 0) return "";
+    S.sheet.相談目的 = c || esc(t);
+    const s4 = ADMIN.steps[0], j = c ? s4.btns.findIndex(b => b.trim() === c) : -1;
+    BR_BY_BTN = j >= 0 ? s4.br[j] : null; BR_PATH = PATH[PATH.length - 1];
+    BRANCH = null;
+    if (REPLAYING && REPLAY_BR != null) setBranch(REPLAY_BR, "replay");
+    else if (!t) setBranch(BR_BY_BTN ?? 0, "button");
+    else return "ai";
+    return "button";
   };
   choices(list, null, (t, c) => {
     if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
-    enter(c || t);
+    const by = enter(c, t);
     const said = c ? c + (t ? "」と「" + t : "") : t;
     const userText = (c ? "選んだボタン：" + c : "") + (c && t ? "\n" : "") + (t ? "書いた言葉：" + t : "");
     if (REPLAYING || AI_OFF) { // 巻き戻し・デモ・元に戻すでは Claude を呼ばない（費用と記録の重複を避ける）
       const rp = RESTORE && RESTORE.replies.shift(); // 元に戻すときは、記録にある本物の返事を順に使う
-      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:rp ? rp.reply : "（以前の返答）" });
-      if (rp) { (S.api = S.api || []).push({ step:i + 1, usage:rp.usage, costUsd:rp.costUsd, ms:rp.ms }); goStep(i + 1, esc(rp.reply).replace(/\n/g, "<br>"), true); }
+      const tb = takeBranch(rp ? rp.reply : "");
+      if (i === 0 && !BRANCH) setBranch(tb.idx ?? BR_BY_BTN ?? 0, tb.idx != null ? "ai" : "fallback");
+      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:rp ? tb.text : "（以前の返答）" });
+      if (rp) { (S.api = S.api || []).push({ step:i + 1, usage:rp.usage, costUsd:rp.costUsd, ms:rp.ms }); goStep(i + 1, esc(tb.text).replace(/\n/g, "<br>"), true); }
       else goStep(i + 1, ans(said));
       return;
     }
-    askAI(i + 1, ask, userText, { q:4 + i, press:c || "", typed:!!t, branch:BRANCH ? BRANCH.name : "", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:ask ? "聞く" : "答える" }).then(r => goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r)); // 答えた後は次のボタンへ戻す
+    askAI(i + 1, ask, userText, { q:4 + i, press:c || "", typed:!!t, branch:BRANCH ? BRANCH.name : "", branchBy:i === 0 ? by : "", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:ask ? "聞く" : "答える" }).then(r => {
+      if (i === 0 && !BRANCH) setBranch(BR_BY_BTN ?? 0, "fallback"); // AIにつながらなかったときは、ボタンの枝（なければ枝1）
+      goStep(i + 1, r ? r : ans(said) + AI_FAIL, !!r); // 答えた後は次のボタンへ戻す
+    });
   }, 4 + i);
 }
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
@@ -666,7 +721,7 @@ function choices(list, cb, onText, q) {
     }; d.appendChild(b);
   });
   if (onText) {
-    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="${list.length ? "リクエストメッセージも送れます" : "ここに書いて送信してください"}"><button data-c="送信">送信</button></div>`);
+    d.insertAdjacentHTML("beforeend", `<div class="textline"><input class="other" type="text" placeholder="${esc(list.length ? (ADMIN.hint && ADMIN.hint.trim()) || "リクエストメッセージも送れます" : "ここに書いて送信してください")}"><button data-c="送信">送信</button></div>`);
     const b = d.querySelector('button[data-c="送信"]');
     const inp = d.querySelector("input.other"), refreshSend = () => lamp(b, !!inp.value.trim() || !!d.querySelector("button.sel"));
     inp.addEventListener("input", refreshSend); d.addEventListener("click", () => setTimeout(refreshSend, 0)); refreshSend();
@@ -710,6 +765,7 @@ function replay(steps) {
   for (const st of steps) {
     const row = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
     if (!row) break;
+    REPLAY_BR = st.br != null ? st.br : null;
     const ta = row.querySelector("textarea");
     if (st.type && ta) { ta.value = st.type; row.querySelector("button").click(); continue; }
     if (st.type) row.querySelector("input.other").value = st.type;
@@ -719,7 +775,7 @@ function replay(steps) {
     const send = row.querySelector('button[data-c="送信"]');
     if (send && b !== send && !row.classList.contains("done")) { row.querySelector("input.other").value = st.type || ""; send.click(); }
   }
-  REPLAYING = false;
+  REPLAYING = false; REPLAY_BR = null;
   const last = [...document.querySelectorAll("#talk .row:not(.done)")].pop();
   (last || document.getElementById("talk").lastElementChild).scrollIntoView({ block:"center" });
 }
@@ -735,9 +791,12 @@ const DEMOS = {
       { press:"評価する", note:"公開データが機械的に出て、①が始まる。" },
       { press:"細い通路の奥にある（旗竿地）", note:"一投目は値段でも店でもなく、接道の決まり。客は見れば答えられる。" },
       { press:"2mない・狭い", note:"ここで初めて店の土地勘（隣と合わせる）が出る。客の答えが呼び出したので、売り込みに見えない。" },
-      { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。" },
+      { press:"空き家・古い家がある", note:"建物の有無で、接道の話が客の今に戻る。③から先は、ボタンは選ぶだけ。下の欄に書き足してもよい。" },
+      { press:"送信", note:"「送信」で③の答えを送る。" },
       { press:"建てずに貸す（駐車場など）", note:"ここまでがロケーション。④から先は、店が管理画面に書いた選択肢（番号も管理画面と同じ）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
-      { press:"かかる費用の目安", note:"⑤。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
+      { press:"送信", note:"「送信」で④の答えを送る。" },
+      { press:"費用の目安", note:"⑤。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
+      { press:"送信", note:"「送信」で⑤の答えを送る。" },
       { press:"これらの情報をもとにお問い合わせ", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
       { fill:{ fName:"岐阜 太郎", fTel:"058-000-0000", fWhen:"平日の夕方" }, press:"この内容で送る", note:"相談の記録は画面に出さず、送るときに店へ添える。" },
     ]
@@ -808,15 +867,18 @@ function restoreFromSnapshot(d) {
     EVAL_AT = goKey(); refreshGo(); // 戻した画面は「評価した後」なので、評価するはグレー
     // 状態：保存された記録から作り直す（店の設定には頼らない）
     const near = POINTS.find(p => p.name === sn.near) || NO_DATA;
-    PATH.length = 0; for (const p of st.path || []) PATH.push({ press:p.press, q:p.q, ...(p.opt ? { opt:p.opt } : {}), ...(p.type ? { type:p.type } : {}) });
+    PATH.length = 0; for (const p of st.path || []) PATH.push({ press:p.press, q:p.q, ...(p.opt ? { opt:p.opt } : {}), ...(p.type ? { type:p.type } : {}), ...(p.br != null ? { br:p.br } : {}) });
     AI_HIST.length = 0;
     const oks = (d.turns || []).filter(t => t.status === "ok" && t.reply);
-    for (const t of oks) AI_HIST.push({ role:"user", content:t.user || "" }, { role:"assistant", content:t.reply });
+    for (const t of oks) AI_HIST.push({ role:"user", content:t.user || "" }, { role:"assistant", content:takeBranch(t.reply).text });
     const sheet = {}; for (const [k, v] of Object.entries(sh)) sheet[k] = v == null || v === "" ? null : esc(String(v));
     S = { sheet, near, area:sn.area || 120, log:[], signals:(st.signals || []).slice(), revised:st.revised || null, used:[],
       api: oks.map((t, i) => ({ step:i + 1, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
     const p4 = PATH.find(x => x.q === 4);
-    if (p4 && ADMIN.steps[1] && ADMIN.steps[1].branches) { const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === p4.press); BRANCH = ADMIN.steps[1].branches[j >= 0 ? s4.br[j] : 0] || null; }
+    if (p4 && ADMIN.steps[1] && ADMIN.steps[1].branches) { // 枝：記録にある番号 → ④の返事の【方向N】 → ④のボタン の順
+      const s4 = ADMIN.steps[0], j = s4.btns.findIndex(b => b.trim() === p4.press), t4 = oks.find(t => t.q === 4);
+      const x = p4.br != null ? p4.br : t4 && takeBranch(t4.reply).idx != null ? takeBranch(t4.reply).idx : j >= 0 ? s4.br[j] : 0;
+      BRANCH = ADMIN.steps[1].branches[x] || null; }
     STAGE = PATH.length ? (NUM[PATH[PATH.length - 1].q - 1] || "") + "に答えた" : "評価した";
     renderRoute();
     // 画面：データの表と会話欄を、保存された中身から作り直す
@@ -881,13 +943,13 @@ function restoreSession(d) {
   REPLAYING = true;
   try {
     SID = newSid(); window.__restored = true;
-    RESTORE = { replies: (d.turns || []).filter(t => t.status === "ok" && t.reply).map(t => ({ reply:t.reply, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
+    RESTORE = { replies: (d.turns || []).filter(t => t.status === "ok" && t.reply).map(t => ({ q:t.q, reply:t.reply, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
     mapOpen = true; document.getElementById("step1").classList.remove("hidden");
     if (sh.市区町村) { PLACE = sh.市区町村; showPlace(PLACE); }
     const a = String(sh.面積 || "").match(/\d+/); if (a) document.getElementById("area").value = a[0];
     const p = pinFrom(d); map.setView([p.lat, p.lng], 16); setPin(p.lat, p.lng);
   } finally { REPLAYING = false; }
-  replay((st.path || []).map(x => ({ press:x.press, type:x.type, q:x.q, opt:x.opt })));
+  replay((st.path || []).map(x => ({ press:x.press, type:x.type, q:x.q, opt:x.opt, br:x.br })));
   RESTORE = null;
   STAGE = PATH.length ? (NUM[PATH[PATH.length - 1].q - 1] || "") + "に答えた" : "評価した";
   talk_banner(d, false);

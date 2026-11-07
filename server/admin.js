@@ -243,7 +243,7 @@ export function summarize(ctx) {
     totals, rejected, errorsToday, balances, balanceNow, segments, lots, sessions: sessions.slice(0, 300), days: days.slice(0, 120), actors: Object.values(actors),
     explain, prices: vs, themeRules: THEME_RULES.map(([n, re]) => ({ name: n, rule: re.source })),
     tested: { funnel, purposes, later, branches, roads, places, near, texts: texts.slice(-150).reverse(), themes, devices, refs },
-    turns: turns.slice(-200).reverse().map((t) => ({ ts: t.ts, sid: t.sid, by: t.by, status: t.status, reason: t.reason, turn: t.turn, q: t.meta?.q, press: t.meta?.press, inTok: t.inputTokens, outTok: t.outputTokens, est: t.est, usd: t.usd, fixed: t.fixed, ms: t.ms, user: t.userText, reply: t.reply })),
+    turns: turns.slice(-200).reverse().map((t) => ({ ts: t.ts, sid: t.sid, by: t.by, status: t.status, reason: t.reason, turn: t.turn, q: t.meta?.q, press: t.meta?.press, typed: t.meta?.typed, branchBy: t.meta?.branchBy, inTok: t.inputTokens, outTok: t.outputTokens, est: t.est, usd: t.usd, fixed: t.fixed, ms: t.ms, user: t.userText, reply: t.reply })),
   };
 }
 

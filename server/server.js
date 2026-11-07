@@ -112,7 +112,7 @@ function parseBody(body) {
   if (!clean.length || clean[clean.length - 1].role !== "user") return null;
   const m = body.meta && typeof body.meta === "object" ? body.meta : {};
   const meta = {}; // 画面から添えられる「何を押したか」。分析用（信頼はしない）
-  for (const k of ["q", "press", "typed", "branch", "place", "near", "road", "intent", "kind"]) {
+  for (const k of ["q", "press", "typed", "branch", "branchBy", "place", "near", "road", "intent", "kind"]) {
     if (m[k] !== undefined) meta[k] = typeof m[k] === "number" || typeof m[k] === "boolean" ? m[k] : clip(m[k], 80);
   }
   return {
@@ -251,7 +251,7 @@ function cleanState(s) {
   const p = s.pub && typeof s.pub === "object" ? s.pub : {};
   return {
     updated: num(s.updated), stage: clip(s.stage, 40), place: clip(s.place, 80), near: clip(s.near, 40), localKnowledge: clip(s.localKnowledge, 300), revised: clip(s.revised, 200),
-    path: (Array.isArray(s.path) ? s.path : []).slice(0, 40).map((x) => ({ press: clip(x?.press, 80), q: num(x?.q) | 0, opt: num(x?.opt) | 0, type: clip(x?.type, 300) })),
+    path: (Array.isArray(s.path) ? s.path : []).slice(0, 40).map((x) => ({ press: clip(x?.press, 80), q: num(x?.q) | 0, opt: num(x?.opt) | 0, type: clip(x?.type, 300), ...(x?.br === 0 || x?.br === 1 ? { br: x.br } : {}) })),
     sheet, signals: (Array.isArray(s.signals) ? s.signals : []).slice(0, 20).map((x) => clip(x, 200)),
     usage: { n: num(s.usage?.n), tin: num(s.usage?.tin), tout: num(s.usage?.tout), costUsd: num(s.usage?.costUsd) },
     pub: p.ready ? { ready: true, avgUsd: num(p.avgUsd), p90Usd: num(p.p90Usd), sessions: num(p.sessions), usdJpy: num(p.usdJpy) || 150 } : { ready: false, usdJpy: num(p.usdJpy) || 150 },
