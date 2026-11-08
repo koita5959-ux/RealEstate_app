@@ -160,7 +160,7 @@ const LOC = {
   1: { title:"道への接し方", btns:["道に広く面している","細い通路の奥にある（旗竿地）","わからない"] },
   2: { title:"道の幅", branches:[
         { when:"①で「細い通路の奥」", title:"通路の幅", btns:["2mある","2mない・狭い","測ったことがない"] },
-        { when:"①で「道に広く面している」", title:"前の道", btns:["すれ違える","すれ違えない","わからない"] } ],
+        { when:"①で「道に広く面している」", title:"前の道", note:"※道幅だけで判定します（一方通行などは問いません）", btns:["4m以上ありそう","4mはなさそう","わからない"] } ],
        skip:"①で「わからない」なら②は飛ばして③へ" },
   3: { title:"建物", btns:["住んでいる家がある","空き家・古い家がある","何もない（更地）"] }
 };
@@ -220,7 +220,7 @@ function renderAdmin() {
     + [1, 2, 3].map(n => {
       const s = LOC[n];
       const body = s.branches
-        ? s.branches.map(b => `<div class="branch">${b.when} → ${b.title}</div><div class="slots">${fixedBtns(b.btns)}</div>`).join("") + `<div class="branch">${s.skip}</div>`
+        ? s.branches.map(b => `<div class="branch">${b.when} → ${b.title}</div>${b.note ? `<div class="hint">${b.note}</div>` : ""}<div class="slots">${fixedBtns(b.btns)}</div>`).join("") + `<div class="branch">${s.skip}</div>`
         : `<div class="slots">${fixedBtns(s.btns)}</div>`;
       return `<div class="box lock"><div class="head"><span class="num">${NUM[n]}</span><span class="title">${s.title}</span></div>${body}</div>`;
     }).join("");

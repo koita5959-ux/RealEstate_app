@@ -12,6 +12,7 @@
   body { display:flex; flex-direction:column; height:100vh; }
   .wrap { display:grid; grid-template-columns: 1fr 440px; flex:1; min-height:0; }
   #map { height:100%; }
+  #map.aim, #map.aim.leaflet-grab { cursor:crosshair; } /* 地図を開いた後、マウスが1秒止まったら十字（ここにピンを置ける）。動かす・ドラッグで掌に戻る */
   aside { overflow-y:auto; padding:14px 16px 40px; background:#fff; border-left:1px solid var(--line); }
   @media (max-width:820px){ body{ display:block; height:auto; } .wrap{ grid-template-columns:1fr; height:auto; } #map{ height:45vh; } aside{ border-left:none; } }
   h2 { font-size:14px; margin:18px 0 8px; color:var(--sub); }
@@ -46,16 +47,18 @@
   .me { text-align:right; margin:8px 0; font-size:14px; }
   .me span { background:#e6f0fa; padding:6px 10px; border-radius:12px; display:inline-block; text-align:left; white-space:pre-wrap; } /* 吹き出しは右寄せのまま、中の折り返しは左から */
   .hint { font-size:12px; color:var(--sub); }
+  .rownote { margin:0 0 4px; }
   .sheet { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; font-size:13px; }
   .sheet h3 { font-size:13px; margin:8px 0 4px; }
   .empty { color:#b4472b; }
   .will { display:none; font-size:12px; color:#6b4fa0; border-top:1px dotted #6b4fa0; margin-top:6px; padding-top:4px; }
   body.design .will { display:block; }
-  .row.done button { opacity:.45; }
+  .row.done button { opacity:.45; cursor:default; }
+  .row.done.retry button { cursor:pointer; }
   .row button.sel { background:#b9d5f0; border-width:2px; }
   .row.done button.chosen { opacity:1; background:var(--accent); color:#fff; }
   .row.done textarea { display:none; }
-  .row.done > button:only-of-type, .row.done .hint { display:none; }
+  .row.done > button:only-of-type, .row.done .hint:not(.rownote) { display:none; } /* 判定の決まりの注記は、答えた後も残す */
   .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-top:12px; line-height:1.7; }
   .route:empty { display:none; }
   .qnum { display:inline-block; font-size:20px; color:#c0392b; margin-right:6px; vertical-align:middle; }
@@ -168,13 +171,25 @@ async function lookupAddr(lat, lng, xy) {
     const r = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lng}`);
     const j = await r.json(), x = j && j.results;
     if (!x || my !== addrSeq) return;
-    const c = MUNI && MUNI.codes && MUNI.codes[x.muniCd];
+    const c = MUNI && MUNI.codes && (MUNI.codes[x.muniCd] || MUNI.codes[String(+x.muniCd)]); // 地理院は「03211」、一覧は「3211」（0で始まる北海道〜栃木県）
     const a = (c ? c[0] + c[1].replace(" ", "") : "") + (x.lv01Nm && x.lv01Nm !== "－" ? x.lv01Nm : "");
     if (!a) return;
     ADDR = a + "付近";
     document.getElementById("picked").textContent = `${ADDR}　指定: ${xy}`;
+    if (c && !REPLAYING) followPin(c[0], c[1]);
     if (S && S.sheet && !REPLAYING) { S.sheet.所在 = `${ADDR}（${xy}）`; saveSession(); }
   } catch (e) { /* 住所が引けなくても、座標で進める */ }
+}
+// ピンが選んだ市区町村の外にあれば、欄をピンの場所に合わせる（ピンが一番正確な場所。地図をずらして隣の市に置くのは自然な動き）
+// 政令市は、「名古屋市」を選んでいて区の中に置いたなら同じ扱い。区まで選んでいて別の区なら、その区に合わせる。一覧にない名前（旧市町村など）なら変えない
+function followPin(pref, city) {
+  const selP = prefInp.value.trim(), selC = cityInp.value.trim();
+  if (pref === selP && (city === selC || city.split(" ")[0] === selC)) return;
+  if (!(MUNI && (MUNI.munis[pref] || []).includes(city))) return;
+  prefInp.value = pref; cityInp.value = city; PREF_AT = pref;
+  PLACE = OPENED_AT = pref + city; refreshOpen(); // 地図はもう開いているので、「地図を開く」はグレーのまま
+  document.getElementById("mapMsg").textContent = `ピンの場所に合わせて、${pref}${city}にしました。`;
+  saveSession();
 }
 function setPin(lat, lng) {
   here = { lat, lng };
@@ -186,6 +201,13 @@ function setPin(lat, lng) {
   ev("pin", { lat:+lat.toFixed(4), lng:+lng.toFixed(4) }); // 元に戻す（再表示）で、同じ場所にピンを置けるように
 }
 map.on("click", e => { if (mapOpen) setPin(e.latlng.lat, e.latlng.lng); });
+// カーソル：止まって1秒で十字、動かす・ドラッグ・拡大縮小・地図の外へ出ると掌に戻す。地図を開く前（ピンを置けない）は掌のまま
+{
+  const box = document.getElementById("map"); let aimT = 0;
+  const unaim = () => { clearTimeout(aimT); box.classList.remove("aim"); };
+  box.addEventListener("mousemove", e => { unaim(); if (mapOpen && !e.buttons) aimT = setTimeout(() => box.classList.add("aim"), 1000); });
+  map.on("dragstart zoomstart", unaim); box.addEventListener("mouseleave", unaim); // 押しただけ（ピンを置くクリック）では戻さない
+}
 const goBtn = document.getElementById("go"), areaInp = document.getElementById("area");
 // 「評価する」は、同じピン・同じ面積ではもう押せない（押し直すと会話が最初からになるため）。ピンを置き直すか面積を変えると点灯する
 let EVAL_AT = "";
@@ -194,7 +216,7 @@ const refreshGo = () => lamp(goBtn, !!here && Number(areaInp.value) >= 10 && goK
 areaInp.addEventListener("input", refreshGo);
 document.getElementById("preset").onclick = () => {
   // 例のピンは岐阜市にあるので、市区町村の表示も岐阜県岐阜市に合わせる（別の市区町村を選んでいた場合も、ピンと表示が食い違わないように）
-  prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; OPENED_AT = "岐阜県岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden");
+  prefInp.value = "岐阜県"; cityInp.value = "岐阜市"; PREF_AT = "岐阜県"; OPENED_AT = "岐阜県岐阜市"; refreshOpen(); PLACE = "岐阜県岐阜市"; mapOpen = true; document.getElementById("step1").classList.remove("hidden");
   map.setView([35.4482, 136.7352], 16); setPin(35.4482, 136.7352);
 };
 
@@ -221,23 +243,25 @@ const cityOk = () => { const c = cityInp.value.trim(), L = cityList(); return !!
 let OPENED_AT = "";
 const refreshOpen = () => lamp(openBtn, prefOk() && cityOk() && prefInp.value.trim() + cityInp.value.trim() !== OPENED_AT);
 function setupCombo(inp, ul, options, emptyMsg, onPick) {
-  let idx = -1, shown = [];
+  let idx = -1, shown = [], hideT = 0;
   const hide = () => { ul.hidden = true; inp.setAttribute("aria-expanded", "false"); idx = -1; };
   const mark = () => [...ul.querySelectorAll("li[data-v]")].forEach((li, i) => { li.classList.toggle("on", i === idx); if (i === idx) li.scrollIntoView({ block:"nearest" }); });
-  const show = () => {
+  // 押したとき（focus・click）は全部の候補を出し、今の値に色を付ける。絞り込むのは文字を打ったときだけ（入っている値で絞ると、ほかを選べなくなるため）
+  const show = typing => {
     if (document.activeElement !== inp) return; // 入力欄にカーソルがあるときだけ開く（デモ・再現で値が入っても開かない）
-    const all = options(), q = inp.value.trim();
+    clearTimeout(hideT); // 外れてすぐ押し直したとき、閉じる予約で開いた一覧が消えないように
+    const all = options(), q = typing === true ? inp.value.trim() : "", cur0 = inp.value.trim();
     shown = all ? (q ? all.filter(x => x.includes(q)) : all) : [];
     ul.innerHTML = "";
     if (!all) { const li = document.createElement("li"); li.className = "none"; li.textContent = emptyMsg; ul.appendChild(li); }
     else if (!shown.length) { const li = document.createElement("li"); li.className = "none"; li.textContent = "候補がありません"; ul.appendChild(li); }
     else for (const v of shown) { const li = document.createElement("li"); li.dataset.v = v; li.textContent = v; li.setAttribute("role", "option"); ul.appendChild(li); }
     ul.hidden = false; inp.setAttribute("aria-expanded", "true"); idx = -1;
-    const cur = ul.querySelector(`li[data-v="${CSS.escape(q)}"]`); if (cur) { idx = [...ul.querySelectorAll("li[data-v]")].indexOf(cur); mark(); }
+    const cur = ul.querySelector(`li[data-v="${CSS.escape(cur0)}"]`); if (cur) { idx = [...ul.querySelectorAll("li[data-v]")].indexOf(cur); mark(); }
   };
   const pick = v => { inp.value = v; hide(); inp.dispatchEvent(new Event("change", { bubbles:true })); if (onPick) onPick(); };
-  inp.addEventListener("focus", show); inp.addEventListener("click", show); inp.addEventListener("input", show);
-  inp.addEventListener("blur", () => setTimeout(hide, 120));
+  inp.addEventListener("focus", () => show()); inp.addEventListener("click", () => show()); inp.addEventListener("input", () => show(true));
+  inp.addEventListener("blur", () => { hideT = setTimeout(hide, 120); });
   inp.addEventListener("keydown", e => {
     const n = ul.querySelectorAll("li[data-v]").length;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (ul.hidden) show(); else if (n) { idx = (idx + (e.key === "ArrowDown" ? 1 : -1) + n) % n; mark(); } }
@@ -246,10 +270,13 @@ function setupCombo(inp, ul, options, emptyMsg, onPick) {
   });
   ul.addEventListener("mousedown", e => { e.preventDefault(); const li = e.target.closest("li[data-v]"); if (li) pick(li.dataset.v); }); // 入力欄からカーソルが外れる前に選ぶ
 }
-setupCombo(prefInp, document.getElementById("prefList"), prefList, "", () => { if (!cityOk()) cityInp.value = ""; refreshOpen(); setTimeout(() => cityInp.focus(), 0); }); // 都道府県を選んだら、続けて市区町村へ
+// 都道府県が変わったら、市区町村は空にする（同じ都道府県を選び直したときは残す）
+let PREF_AT = "";
+const prefChanged = () => { const v = prefInp.value.trim(); if (v !== PREF_AT) { if (PREF_AT || !cityOk()) cityInp.value = ""; PREF_AT = v; } };
+setupCombo(prefInp, document.getElementById("prefList"), prefList, "", () => { prefChanged(); refreshOpen(); setTimeout(() => cityInp.focus(), 0); }); // 都道府県を選んだら、続けて市区町村へ
 setupCombo(cityInp, document.getElementById("cityList"), cityList, "先に都道府県を選んでください", refreshOpen);
 [prefInp, cityInp].forEach(i => { i.addEventListener("input", refreshOpen); i.addEventListener("change", refreshOpen); });
-prefInp.addEventListener("input", () => { if (cityInp.value && !cityOk()) { /* 都道府県を書き換えたとき、合わなくなった市区町村はそのまま残し、点灯だけ消える */ } });
+prefInp.addEventListener("change", () => { prefChanged(); refreshOpen(); }); // 打って確定したときも同じ
 refreshOpen();
 document.getElementById("openMap").onclick = async () => {
   const pref = document.getElementById("prefName").value.trim(), city = document.getElementById("cityName").value.trim();
@@ -266,8 +293,10 @@ document.getElementById("openMap").onclick = async () => {
   } catch (e) {}
   if (!at && pref + city === "岐阜県岐阜市") at = [136.7606, 35.4233];
   if (!at) { msg.textContent = `「${pref}${city}」が見つかりませんでした。表記を確かめてください。`; return; }
+  // 別の市区町村で開き直したら、前に置いたピンは消す（「評価する」はグレーに戻る。面積は残す）
+  if (PLACE && PLACE !== pref + city && pin) { map.removeLayer(pin); pin = null; here = null; ADDR = ""; document.getElementById("picked").textContent = "まだ指定されていません"; refreshGo(); }
   PLACE = pref + city; mapOpen = true; ev("map", { place:PLACE });
-  OPENED_AT = pref + city; refreshOpen();
+  OPENED_AT = pref + city; PREF_AT = pref; refreshOpen();
   map.setView([at[1], at[0]], 14);
   msg.textContent = openedMsg(PLACE);
   document.getElementById("step1").classList.remove("hidden");
@@ -277,6 +306,7 @@ const openedMsg = place => place + "の地図を開きました。";
 // 一度入ったセッションは、開き直しても止めない。再表示・デモの再生は数えない。サーバーにつながらないときは止めない（AIの側にも歯止めがある）
 let ADMITTED = false;
 async function admit() {
+  return (ADMITTED = true); // 【一時停止 2026-11-08 ユーザー指示】入口の人数制限を止めている（テストで上限に達したため）。戻すときはこの行を消す
   if (ADMITTED || REPLAYING || QS.has("demo")) return true;
   try {
     const r = await fetch("../../api/admit", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY }), signal:AbortSignal.timeout(8000) });
@@ -289,7 +319,7 @@ function showPlace(place) {
   if (!place) return;
   const pref = prefList().find(x => place.startsWith(x));
   prefInp.value = pref || ""; cityInp.value = pref ? place.slice(pref.length) : place;
-  OPENED_AT = prefInp.value.trim() + cityInp.value.trim();
+  OPENED_AT = prefInp.value.trim() + cityInp.value.trim(); PREF_AT = prefInp.value.trim();
   refreshOpen();
   document.getElementById("mapMsg").textContent = openedMsg(place);
 }
@@ -406,7 +436,7 @@ function firstJudgment() {
     "渡したもの：住む・活かす・手放す、どの道にも効く決まり（根拠つき）", "開けた穴：道への接し方（持ち主なら見れば分かる）");
   choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], null, (t, c) => {
     noteText(t, "道への接し方");
-    if (c) return onRoad(c);
+    if (c) return onRoad(c, t);
     S.sheet.接道 = "（ボタンは選ばず、書いて答えた）";
     askBuilding(TEXT_LEAD);
   }, 1, TEXT_PH);
@@ -414,15 +444,17 @@ function firstJudgment() {
 // ①②も「選ぶ＋書き欄＋送信」。書いた言葉は事情としてデータシートに残し、③→④の AI に渡る。台本は選んだボタンで進む
 const TEXT_PH = "ボタンに合わなければ、ここに書いて答えられます";
 const TEXT_LEAD = "書いていただいたことは、このあとの見立てに入れます。";
+// ボタンを選んだうえで書いた言葉もあるとき：台本は中身に触れられないので、受け止めた一言を先に置く（無視されたように見えないように）
+const ack = t => t ? "書いていただいたことも、このあとの見立てに入れます。<br>" : "";
 function noteText(t, about) { if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(about + "について：" + t); }
-function onRoad(c) {
+function onRoad(c, t0) {
   if (c.startsWith("細い")) {
     S.sheet.形と向き = "旗竿地・奥まっています";
-    say("旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
+    say(ack(t0) + "旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
       "渡したもの：2mが何を決めるか（客は幅を知っていても、意味は知らないことが多い）", "開けた穴：通路の幅");
     choices(["2mある", "2mない・狭い", "測ったことがない"], null, (t, c2) => {
       noteText(t, "通路の幅");
-      if (c2) return onWidth(c2);
+      if (c2) return onWidth(c2, t);
       S.sheet.接道 = "旗竿地・通路の幅は書いて答えた";
       askBuilding(TEXT_LEAD);
     }, 2, TEXT_PH);
@@ -430,34 +462,36 @@ function onRoad(c) {
     S.sheet.形と向き = "道に面している";
     S.sheet.接道 = "道に広く面している（お答えより）";
     const local = localNear(S.near) && SETBACK[S.near.name];
-    say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
-      + (local ? "<br>" + local : "") + "<br>前の道は、車同士がすれ違えますか？",
-      "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（すれ違えるか、で答えられる）");
-    choices(["すれ違える", "すれ違えない", "わからない"], null, (t, c2) => {
+    say(ack(t0) + "それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
+      + (local ? "<br>" + local : "") + "<br>前の道の幅は、4mくらいありますか？（車2台が並べるくらい）",
+      "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（4mあるか、車2台が並べるかで答えられる）");
+    choices(["4m以上ありそう", "4mはなさそう", "わからない"], null, (t, c2) => {
       noteText(t, "前の道の幅");
       if (!c2) { S.sheet.接道 += "／前の道の幅は書いて答えた"; return askBuilding(TEXT_LEAD); }
-      S.sheet.接道 += { "すれ違える":"／前の道は広い", "すれ違えない":"／ただし前の道は4m未満の可能性（建て直し時にセットバックの確認が必要）", "わからない":"／前の道の幅は不明" }[c2];
+      S.sheet.接道 += { "4m以上ありそう":"／前の道は広い", "4mはなさそう":"／ただし前の道は4m未満の可能性（建て直し時にセットバックの確認が必要）", "わからない":"／前の道の幅は不明" }[c2];
       if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
-      askBuilding(c2 === "すれ違えない" ? "それなら、建て直すときに何㎡残るかを先に確かめる土地です。" : "接道の面では、この土地は素直な土地です。");
+      askBuilding(ack(t) + ({ "4mはなさそう":"それなら、建て直すときに何㎡残るかを先に確かめる土地です。", "わからない":"わからなくて当然です。担当が現地を一度見れば、すぐ分かる所です。" }[c2] || "接道の面では、この土地は素直な土地です。"));
     }, 2, TEXT_PH);
+    // ボタンの上に、判定の決まりを一文（一方通行・すれ違いなどで迷わないように）
+    [...document.querySelectorAll("#talk .row")].pop().querySelector(".qnum").insertAdjacentHTML("afterend", '<div class="hint rownote">※道幅だけで判定します（一方通行などは問いません）</div>');
   } else {
     S.signals.push("接し方：客は分からない（現地確認）");
-    askBuilding("わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
+    askBuilding(ack(t0) + "わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
   }
 }
-function onWidth(c) {
+function onWidth(c, t) {
   if (c === "2mある") {
     S.sheet.接道 = "旗竿地・通路2m以上（お答えより）";
-    askBuilding("それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
+    askBuilding(ack(t) + "それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
   } else if (c === "2mない・狭い") {
     S.sheet.接道 = "旗竿地・通路2m未満（お答えより）＝再建築不可の可能性";
     const k = localNear(S.near) && PREF.localKnowledge[S.near.name];
-    askBuilding("それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
+    askBuilding(ack(t) + "それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
       + (k && k.includes("隣地") ? `<br><small>（${PREF.office}の土地勘：${k}）</small>` : ""));
   } else {
     S.sheet.接道 = "旗竿地・通路の幅は不明";
     S.signals.push("通路の幅：客は測ったことがない（現地確認）");
-    askBuilding("測ったことがない方がほとんどです。メジャー一本で分かりますし、担当が見に行くこともできます。");
+    askBuilding(ack(t) + "測ったことがない方がほとんどです。メジャー一本で分かりますし、担当が見に行くこともできます。");
   }
 }
 function askBuilding(lead) {
@@ -838,14 +872,15 @@ function me(t) { const d = document.createElement("div"); d.className = "me"; d.
 function choices(list, cb, onText, q, ph) {
   const d = newRow(q);
   const pick = (b, c, opt, t) => {
+    d._snap = beforeAnswer(); document.querySelectorAll("#talk .row.retry").forEach(x => x.classList.remove("retry"));
+    if (list.length && !REPLAYING) d.classList.add("retry"); // 選び直せるのは、ボタンのある行の、最後に答えた行だけ
     d.dataset.step = PATH.length; PATH.push({ press:c, q:+d.dataset.q, ...(opt ? { opt } : {}), ...(t ? { type:t } : {}) }); renderRoute();
     ev("choice", { q:+d.dataset.q, press:c, opt:opt || 0, typed:!!t });
     d.classList.add("done"); b.classList.add("chosen");
-    [...d.querySelectorAll("button")].forEach(x => { if (x !== b) x.title = "ここから別の道を試す"; });
   };
   list.forEach((c, i) => { const b = document.createElement("button"); b.dataset.c = c; b.dataset.opt = i + 1; b.innerHTML = `<span class="opt">${i + 1}</span>`; b.append(c);
     b.onclick = () => {
-      if (d.dataset.step) { if (!b.classList.contains("chosen")) rewind(+d.dataset.step, c); return; }
+      if (d.dataset.step) { if (d.classList.contains("retry") && reopen(d)) b.click(); return; } // 開き直したら、押したボタンを選んだ状態にする
       if (onText) { const on = !b.classList.contains("sel"); d.querySelectorAll("button.sel").forEach(x => x.classList.remove("sel")); b.classList.toggle("sel", on); return; }
       pick(b, c, i + 1); me(c); cb(c);
     }; d.appendChild(b);
@@ -867,6 +902,33 @@ function choices(list, cb, onText, q, ph) {
   document.getElementById("talk").appendChild(d);
 }
 
+// ---- 選び直し：最後に答えた行は、次の段階に答える前なら、ボタンを押して答える前の状態に戻せる ----
+// 戻すと、その下（自分の吹き出し・AIの返事・次の段階）は消える。元のボタンを押し直しても同じ。送信で改めて進む（③から先はAIを呼び直す）
+// ボタンのない段階（＋2回の書き欄だけ）は選び直しなし（「さっきの件を訂正します」と書けば1回分を使う）。それより前の行は確定
+const TALK_KEYS = ["形と向き", "接道", "持ち主の意向", "事情", "事情の要点", "相談目的"]; // 会話で埋まる項目（公開データの項目は戻さない）
+function beforeAnswer() {
+  return { sheet: Object.fromEntries(TALK_KEYS.map(k => [k, S.sheet[k] ?? null])), signals: S.signals.length, hist: AI_HIST.length,
+    branch: BRANCH, byBtn: BR_BY_BTN, brPath: BR_PATH, branchBy: S.branchBy, revised: S.revised };
+}
+function reopen(d) {
+  if (document.body.classList.contains("ai-wait") || !d._snap) return false;
+  if ([...document.querySelectorAll("#talk .inqrow")].some(x => d.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING)) return false; // 問い合わせへ進んだあとは戻さない
+  const sn = d._snap, last = PATH[PATH.length - 1] || {};
+  ev("rewind", { k:PATH.length - 1, retry:true, q:+d.dataset.q, press:last.press || "", typed:!!last.type }); // サーバーが受け付ける種類のまま、選び直しの印を付ける
+  while (d.nextSibling) d.nextSibling.remove(); // 自分の吹き出し・AIの返事・次の段階
+  TALK_KEYS.forEach(k => { S.sheet[k] = sn.sheet[k]; });
+  S.signals.length = sn.signals; AI_HIST.length = sn.hist; // 使ったAIの費用（S.api）は実際にかかったので残す
+  const brChanged = BRANCH !== sn.branch;
+  BRANCH = sn.branch; BR_BY_BTN = sn.byBtn; BR_PATH = sn.brPath; S.branchBy = sn.branchBy; S.revised = sn.revised;
+  if (brChanged) inquiryBar();
+  PATH.pop(); delete d.dataset.step; d._snap = null;
+  STAGE = PATH.length ? NUM[PATH[PATH.length - 1].q - 1] + "に答えた" : "評価した";
+  d.classList.remove("done", "retry"); d.querySelectorAll("button.chosen, button.sel").forEach(x => x.classList.remove("chosen", "sel"));
+  const ta = d.querySelector(".other"); if (ta) { ta.value = last.type || ""; ta.dispatchEvent(new Event("input", { bubbles:true })); }
+  renderData(); renderRoute();
+  return true;
+}
+
 // ---- 通った道（データの経路）と巻き戻し ----
 const PATH = [];
 const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -881,7 +943,7 @@ function newRow(q) {
 function renderRoute() {
   const r = document.getElementById("route");
   r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => NUM[p.q - 1] + (p.opt ? `の${p.opt} ${p.press}${p.type ? "：" + esc(p.type) : ""}` : `「${esc(p.type)}」`)).join(" → ")
-    + '<div class="hint">薄いボタンを押すと、その場所から別の道を試せます。</div>' : "";
+ : "";
   saveSession();
 }
 function rewind(k, c) {
