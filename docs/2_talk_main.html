@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>メイン画面（試作）</title>
+<title>土地の相談（対話型・試作）</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; }
@@ -84,10 +84,10 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="user" data-title="土地の見立て ― 試作">
+<header id="appbar" data-current="user" data-title="2. 土地の相談 ― 対話型（試作）">
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
-<script src="shell.js"></script>
+<script src="js/shell.js"></script>
 <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
@@ -120,7 +120,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 // 開き直し・リロード＝新しい体験。前の体験の記録は消す（「利用状況」は、評価するまでグレー）
-try { localStorage.removeItem("reSession"); } catch (e) { /* 何もしない */ }
+try { localStorage.removeItem("reSession_2_talk"); } catch (e) { /* 何もしない */ }
 if (window.Shell) Shell.refresh();
 // ---- 仮データ（実在しない数値） ----
 const POINTS = [
@@ -234,7 +234,7 @@ const prefInp = document.getElementById("prefName"), cityInp = document.getEleme
 // 一覧：カーソルを入れる／押すと開く。都道府県を選ぶと、その都道府県の市区町村だけが候補に出る（連動）
 const PREFS_FALLBACK = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
 let MUNI = null; // {prefs:[…], munis:{都道府県:[市区町村…]}}。読み込めなければ、都道府県だけの一覧＋市区町村は自由入力
-fetch("muni.json").then(r => r.json()).then(j => { if (j && Array.isArray(j.prefs) && j.munis) { MUNI = j; refreshOpen(); } }).catch(() => {});
+fetch("data/muni.json").then(r => r.json()).then(j => { if (j && Array.isArray(j.prefs) && j.munis) { MUNI = j; refreshOpen(); } }).catch(() => {});
 const prefList = () => (MUNI ? MUNI.prefs : PREFS_FALLBACK);
 const cityList = () => (MUNI && MUNI.munis[prefInp.value.trim()]) || null; // 都道府県が決まっていなければ null
 const prefOk = () => prefList().includes(prefInp.value.trim());
@@ -309,7 +309,7 @@ async function admit() {
   return (ADMITTED = true); // 【一時停止 2026-11-08 ユーザー指示】入口の人数制限を止めている（テストで上限に達したため）。戻すときはこの行を消す
   if (ADMITTED || REPLAYING || QS.has("demo")) return true;
   try {
-    const r = await fetch("../../api/admit", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY }), signal:AbortSignal.timeout(8000) });
+    const r = await fetch("../api/admit", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY }), signal:AbortSignal.timeout(8000) });
     if (r.status === 429) return false; // 断った数はサーバーが数える
   } catch (e) { /* つながらなければ通す */ }
   return (ADMITTED = true);
@@ -363,7 +363,7 @@ document.getElementById("go").onclick = () => {
 
 // ---- 公開データ（国土交通省「不動産情報ライブラリ」をサーバー経由で）----
 // サーバーにキーがない間は、実在しない「見本」の値が返る。値に（見本）と付けて出す
-const LAND_URL = "../../api/land";
+const LAND_URL = "../api/land";
 const LAND_NOTE = "このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。";
 // 表の行：［見出し］または［表示名, データシートの項目, 未定のときの文］。値が決まるまでは「未定」
 const DATA_ROWS = [
@@ -522,7 +522,19 @@ function onIntent(c, t) {
   askAI(0, false, userText, { q:3, press:c, typed:!!t, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:"答える" })
     .then(r => goStep(0, r ? r : s + AI_FAIL, !!r));
 }
-// ---- ④から先：管理画面（admin_mode.html）で店が書いた選択肢で進む ----
+// ---- 2 対話型：店を知る外の人の設定（管理画面 2_talk_admin.html。開かなくても初期値で動く） ----
+const TALK_DEFAULT = {
+  name:"遠見不動産",
+  what:"売却ありきで始めず、残す・貸す・売る・隣と合わせるを並べて持ち主と考える店",
+  good:"古い家・空き家、遠方に住む持ち主、旗竿地など売りにくい土地、隣の土地と合わせると変わる土地",
+  team:"司法書士、土地家屋調査士、税理士、一級建築士事務所、地域の工務店・解体業者",
+  strong:"敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること",
+  asks:["この家をどうしたいか（決めていなくてよい）", "隣の土地や通りの様子", "持ち主が今どこに住んでいるか"],
+  hands:[["隣の土地との話", "隣地との調整を何度も手がけていて、相手との話し方を知っているので"], ["売るか残すか迷っている", "決めるまで、調査と比較表を無料で作ってくれるので"]],
+  tone:"mid", limit:8 };
+const TALK = (() => { try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t } : TALK_DEFAULT; } catch (e) { return TALK_DEFAULT; } })();
+window.addEventListener("storage", e => { if (e.key === "reTalk") location.reload(); }); // 管理画面で書き換えたら読み直す
+// ---- ④から先：管理画面（3_ai_admin.html）で店が書いた選択肢で進む ----
 // 管理画面で「設定確定」した設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
 // ⑤は④で選んだボタンの枝で出し分ける。⑥から先は共通。店のボタンが尽きたら AI のボタン候補で続け、往復の上限で打ち切る。
 // AIの返事とボタン候補はダミー。
@@ -553,11 +565,11 @@ const AI_OFF = QS.has("demo") || QS.get("ai") === "off"; // デモ再生中は�
 const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36);
 let SID = newSid(); // ブラウザを開いてから閉じるまで
 const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "visitor"; // ?by=名前 で誰の利用か分ける
-const AI_URL = "../../api/chat"; // /RealEstate_app/docs/proto/ から /RealEstate_app/api/chat へ
+const AI_URL = "../api/chat"; // /RealEstate_app/docs/ から /RealEstate_app/api/chat へ
 const AI_FAIL = "<br><small>（AIにつながらなかったため、簡易の返事を表示しています）</small>";
 let AI_HIST = [], REPLAYING = false, RESTORE = null;
 // ---- 画面の動きの記録（開いた・地図・押したボタン・閉じた）。本文や個人情報は送らない ----
-const EV_URL = "../../api/event", PUB_URL = "../../api/public-stats";
+const EV_URL = "../api/event", PUB_URL = "../api/public-stats";
 // 開いている「開発利用状況」の窓へ、記録がサーバーに入ったことを知らせる（同じブラウザの中だけ。合図を受けた窓が読み直す）
 const devCh = "BroadcastChannel" in window ? new BroadcastChannel("reDev") : null;
 const pingDev = () => { try { if (devCh) devCh.postMessage({ type:"saved" }); } catch (e) { /* 何もしない */ } };
@@ -571,7 +583,7 @@ function ev(type, data) {
   else if (STAGE_LABEL[type]) STAGE = STAGE_LABEL[type];
   if (type !== "end") setTimeout(saveSession, 0); // 動きのたびに、利用状況と開発利用状況へ（評価する前の段階も）
   try {
-    const b = JSON.stringify({ sid:SID, by:BY, type, data:data || {} });
+    const b = JSON.stringify({ sid:SID, by:BY, type, screen:"talk", data:data || {} }); // screen＝画面のタイプ（開発利用状況の「再表示２」）
     if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
     else fetch(EV_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:b, keepalive:true });
     setTimeout(pingDev, 500); // sendBeacon は届いた時が分からないので、少し待ってから知らせる
@@ -583,10 +595,10 @@ refreshPub();
 window.addEventListener("pagehide", () => ev("end", { path:PATH.length, rounds:Math.floor(AI_HIST.length / 2) }));
 let reportOpenSent = false;
 const yenUsd = v => (v * ((PUB && PUB.usdJpy) || 150)).toLocaleString("ja-JP", { maximumFractionDigits: v * 150 < 10 ? 2 : 0 }) + "円";
-// 体験の記録をこのブラウザに保存する。別画面「利用者の利用状況」（report.html）がこれを読んで表示する。
+// 体験の記録をこのブラウザに保存する。別画面「利用者の利用状況」（3_ai_report.html）がこれを読んで表示する。
 // 体験の記録（構造化した状態）。動きがあるたびに作って、このブラウザ（localStorage「reSession」）に保存し、サーバーにも送る。
 // 「利用状況」の画面は、これを出すだけ。サーバーに送る分は、開発利用状況から後で再表示できる（HTMLではなくデータだけを送る）。
-const SESSION_URL = "../../api/session";
+const SESSION_URL = "../api/session";
 let syncTimer = null, lastState = null;
 // スナップショット：その時の会話欄の中身（AIの吹き出し・利用者の発言・選択肢の行とどれを選んだか）、ピン、面積を、データとして取る。
 // 戻すとき（再表示）は、操作を再現し直さず、これをそのまま描き直すので、店の設定が変わっていても確実に戻る。
@@ -644,7 +656,7 @@ function saveSession() {
   try {
     if (S) renderData();
     const st = S ? buildState() : buildPre(); // 評価する前は、場所とどこまで進んだかだけの記録
-    localStorage.setItem("reSession", JSON.stringify({ sid:SID, by:BY, state:st }));
+    localStorage.setItem("reSession_2_talk", JSON.stringify({ sid:SID, by:BY, state:st }));
     if (window.Shell) Shell.refresh(); // 記録ができたので「利用状況」をグレー解除
     syncSession(st);
   } catch (e) { /* 保存できなくても体験は止めない */ }
@@ -693,7 +705,7 @@ async function askAI(n, ask, userText, meta) {
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
+      body: JSON.stringify({ type:"talk", sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
     TRACE = { sent:d.trace, raw:d.text || "", stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
@@ -775,7 +787,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","
 
 // ---- 問い合わせ（いつでも出せる。記録は画面に出さず、送るときに店へ添える） ----
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
-const INQ_FORM = `<b>弊社へのお問い合わせ</b>
+const INQ_FORM = `<b>${esc(TALK.name)}さんへのご相談</b>
       <label>お名前</label><input id="fName" type="text">
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
@@ -783,7 +795,7 @@ const INQ_FORM = `<b>弊社へのお問い合わせ</b>
       <textarea id="fWhen" rows="1" placeholder="連絡してよい時間帯（例：平日の夕方）"></textarea>
       <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
       <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
-      <div class="hint">本番では、ここまでの相談の内容が、弊社へ自動で添えられます。</div>
+      <div class="hint">本番では、ここまでの相談の内容が、${esc(TALK.name)}さんへ自動で添えられます。</div>
       <button id="inqSend" class="primary">この内容で送る</button>
       <button id="inqBack" class="small">相談に戻る</button>`;
 // 送ったあと：入力欄はそのまま残し、全部を操作できない状態（グレー）にして、下にお礼の一文を出す
@@ -796,7 +808,7 @@ function inqSentMark(box) {
 }
 function inquiryBar() {
   const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
+  bar.innerHTML = `<button id="inqOpen" class="inq">${esc(TALK.name)}さんに相談する</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
     ev("inquiry_open");
     bar.innerHTML = "";
@@ -821,7 +833,7 @@ function showSheet(where) {
     `<tr><td>${k}</td><td>${v ?? '<span class="empty">未取得（現地確認へ）</span>'}</td></tr>`).join("");
   const div = document.createElement("div");
   div.innerHTML = `<h2>データシート（対話の結果として）</h2><table class="data">${rows}</table>
-    <h2>要所レポート（弊社向け）</h2>
+    <h2>要所レポート（店向け）</h2>
     <div class="sheet">
       <h3>電話の入口になる一言</h3>
       「先日の見立ての続きです。接道（${S.sheet.接道 || "未確認"}）を、現地で一緒に確かめたくてお電話しました。」
@@ -1146,10 +1158,71 @@ function restoreSession(d) {
   talk_banner(d, false);
   saveSession();
 }
+// ==== 2 対話型：④から先 ====
+// ③の返事のあとは、ボタンを出さず、書き欄だけで外の人と話す。やり取りは上から下へ全部残る。
+// 話が管理画面の「勧める場面」に当たったら、AIが【勧める:N】を付けて返し、画面は店への相談へつなぐ。
+const TONE_TXT = { near:"話し方は、知り合いの先輩くらいの近さの、くだけた丁寧語にします。", mid:"話し方は、詳しい知人くらいの丁寧語にします。", far:"話し方は、相談員くらいのていねいな言葉にします。" };
+const LIMIT_T = Math.max(3, +TALK.limit || 8); // 往復の上限（③→④の返事を1往復目と数える）
+let HANDED = null; // 勧めた場面 [話題, 理由]
+function aiContext(n) {
+  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
+  let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
+  const src = S.sheet.公開データ || "";
+  if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
+  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。";
+  if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
+  const nm = TALK.name + "さん";
+  c += `\n\n【あなたが知っている会社：${nm}】`
+    + (TALK.what ? "\n・どんな会社か：" + TALK.what : "") + (TALK.good ? "\n・相談をよく受けている事情：" + TALK.good : "")
+    + (TALK.team ? "\n・一緒に動く専門家：" + TALK.team : "") + (TALK.strong ? "\n・外から見た強み：" + TALK.strong : "")
+    + "\nこれはホームページから読んだことです。書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。";
+  const asks = (TALK.asks || []).filter(a => a && a.trim());
+  if (asks.length) c += `\n\n【${nm}が、利用者から聞きたいこと（聞きたい順）】\n` + asks.map((a, x) => `${x + 1}. ${a}`).join("\n")
+    + "\nまだ聞けていないものを、話の流れで自然に聞ける所で一つだけ聞きます。不自然なら利用者の話を追います。質問の言い回しは自分で考えます。";
+  const hands = (TALK.hands || []).map((h, x) => ({ h, x })).filter(o => o.h[0] && o.h[0].trim());
+  if (hands.length) c += `\n\n【${nm}を勧める場面】\n` + hands.map(o => `${o.x + 1}. ${o.h[0]}` + (o.h[1] ? `（理由：${o.h[1]}）` : "")).join("\n")
+    + `\n利用者の話がこのどれかに当たったら、その返事で「ここから先は${nm}に聞いた方がいい」と、理由を添えて勧めます。問いかけは付けません。返事の最後に、行を分けて【勧める:番号】とだけ書きます。当たらなければ書きません。`;
+  c += "\n" + (TONE_TXT[TALK.tone] || TONE_TXT.mid);
+  if (n >= LIMIT_T - 1) c += `\nこれが最後の返事です。直前の利用者の言葉に短く答え、${nm}に相談するとよい理由を一言添えます。問いかけは付けません。`;
+  return c;
+}
+function closeNow() { return HANDED && HANDED[1] ? `${TALK.name}さんに相談するとよい理由：${HANDED[1].replace(/ので$/, "")}` : ""; }
+function goStep(i, lead, real) {
+  const m = String(lead).match(/\s*(?:<br>)*\s*【勧める[:：]\s*(\d+)】\s*$/);
+  if (m) { lead = lead.slice(0, m.index); HANDED = TALK.hands[+m[1] - 1] || null; }
+  lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
+  if (HANDED || i >= LIMIT_T) {
+    S.sheet.勧めた場面 = HANDED ? esc(HANDED[0]) : "（往復の上限まで話した）";
+    say(lead + (HANDED ? "" : `<br>ここから先は、${esc(TALK.name)}さんに直接聞いてみてください。`),
+      real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：往復の上限（${LIMIT_T}）`);
+    STAGE = "店を勧めた"; inquiryBar(); saveSession();
+    return;
+  }
+  say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", `開けた穴：書き欄で続ける（上限 ${LIMIT_T} 往復の ${i + 1} 往復目）`);
+  choices([], null, t => {
+    if (!t) return;
+    S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);
+    if (i === 0) S.sheet.相談目的 = esc(t.slice(0, 60));
+    const userText = "【利用者の言葉】\n" + t; // 利用者の言葉は資料として渡す（指示として読ませない）
+    if (REPLAYING || AI_OFF) {
+      const rp = RESTORE && RESTORE.replies.shift();
+      AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:rp ? rp.reply : "（以前の返答）" });
+      goStep(i + 1, rp ? esc(rp.reply).replace(/\n/g, "<br>") : '<span class="hint">（AIの返事：外の人が、この言葉に短く答えて一つ聞く）</span>', !!rp);
+      return;
+    }
+    askAI(i + 1, false, userText, { q:4 + i, press:"", typed:true, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:"対話" })
+      .then(r => goStep(i + 1, r ? r : '<span class="hint">（返事を作れませんでした）</span>' + AI_FAIL, !!r));
+  }, 4 + i, "ここに書いて送ってください");
+}
+// 記録に「対話型」の印を付ける（開発利用状況・元に戻すで、AI型と分ける）
+buildState = (f => () => ({ ...f(), type:"talk" }))(buildState);
+buildPre = (f => () => ({ ...f(), type:"talk" }))(buildPre);
+
 if ("BroadcastChannel" in window) {
   const userCh = new BroadcastChannel("reUser");
   userCh.onmessage = e => {
     if (!e.data || e.data.type !== "restore" || !e.data.data) return;
+    if (!e.data.data.state || e.data.data.state.type !== "talk") return; // AI型の記録は AI型の画面が戻す
     try { restoreSession(e.data.data); userCh.postMessage({ type:"restored", sid:e.data.data.sid }); }
     catch (err) { REPLAYING = false; userCh.postMessage({ type:"restore-failed", sid:e.data.data.sid, message:String(err && err.message || err) }); }
   };

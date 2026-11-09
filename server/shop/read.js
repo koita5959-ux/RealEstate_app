@@ -1,0 +1,100 @@
+// URLから店を判断する A「読む」（APIなし）。
+// トップと「会社概要」などを一段だけたどり、決まった形のもの（免許番号・電話・住所）を拾う。
+// 使い方（試験）：node server/shop/read.js <CSV> <出力JSON>
+import fs from 'fs';
+import { pathToFileURL } from 'url';
+
+const UA = 'Mozilla/5.0 (RealEstate_app siteread; +https://taskboard.asuscomm.com/RealEstate_app/)';
+const PROFILE_WORDS = /会社概要|会社案内|会社情報|企業情報|事務所概要|事務所案内|店舗情報|店舗案内|アクセス|プロフィール|運営会社|運営者|私たちについて|当社について|company|profile|about|access|outline|gaiyou|gaiyo/i;
+const TEXT_MAX = 8000;
+
+async function get(url) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 15000);
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'ja' }, redirect: 'follow', signal: ac.signal });
+    const buf = Buffer.from(await r.arrayBuffer());
+    const ct = r.headers.get('content-type') || '';
+    let cs = (ct.match(/charset=([\w-]+)/i) || [])[1];
+    if (!cs) cs = (buf.toString('latin1', 0, 4000).match(/charset=["']?([\w-]+)/i) || [])[1] || 'utf-8';
+    let html;
+    try { html = new TextDecoder(cs.toLowerCase().replace('x-sjis', 'shift_jis')).decode(buf); }
+    catch { html = buf.toString('utf8'); }
+    return { ok: r.ok, status: r.status, url: r.url, html };
+  } catch (e) {
+    return { ok: false, status: 0, url, error: String(e.name === 'AbortError' ? 'timeout' : e.message || e) };
+  } finally { clearTimeout(t); }
+}
+
+const decode = s => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&copy;/g, '©');
+
+function parse(html, base) {
+  const title = decode(((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').trim());
+  const desc = decode((html.match(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)/i)
+    || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description/i) || [])[1] || '');
+  const links = [];
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    try {
+      const u = new URL(decode(m[1]), base);
+      if (!/^https?:$/.test(u.protocol)) continue;
+      const label = decode(m[2].replace(/<img[^>]*alt=["']([^"']*)["'][^>]*>/gi, ' $1 ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+      links.push({ url: u.href, label });
+    } catch {}
+  }
+  const text = decode(html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  return { title, desc, links, text };
+}
+
+// 決まった形のものを拾う
+function pick(text) {
+  const t = text.replace(/[（]/g, '(').replace(/[）]/g, ')').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const lic = [...new Set((t.match(/(国土交通大臣|[^\s、。:：]{2,4}?[都道府県]知事)\s*(?:免許)?\s*\(\s*\d+\s*\)\s*第?\s*[\d-]+\s*号?/g) || []).map(s => s.replace(/\s+/g, '')))];
+  const tel = [...new Set(t.match(/0\d{1,4}-\d{1,4}-\d{3,4}/g) || [])].slice(0, 5);
+  const addr = [...new Set((t.match(/〒?\s?\d{3}-\d{4}\s*[^\s]{2,4}?[都道府県][^\s]{2,40}/g) || []).map(s => s.trim()))].slice(0, 3);
+  const reg = [...new Set((t.match(/(税理士|司法書士|行政書士|弁護士|土地家屋調査士)[^。]{0,20}?登録番号\s*[^\s\d]{0,6}\s*第?\s*\d+号?/g) || []).map(s => s.replace(/\s+/g, ' ')))]; // 士業の登録番号（宅建の免許の代わり）
+  const copy = (t.match(/(?:Copyright|©|\(c\))[^|]{0,80}/i) || [''])[0].trim();
+  return { lic, reg, tel, addr, copy };
+}
+
+async function read(url) {
+  const out = { url, pages: [], picked: { lic: [], tel: [], addr: [], copy: '' } };
+  const top = await get(url);
+  if (!top.ok) { out.error = top.error || `HTTP ${top.status}`; return out; }
+  const p = parse(top.html, top.url);
+  out.final = top.url; out.title = p.title; out.desc = p.desc;
+  out.pages.push({ url: top.url, kind: 'top', text: p.text.slice(0, TEXT_MAX) });
+  const host = new URL(top.url).host;
+  const seen = new Set([top.url]);
+  const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
+    && (new URL(l.url).host === host || /about|company|profile/i.test(l.url)));
+  const uniq = [...new Map(cands.map(l => [l.url, l])).values()].slice(0, 2);
+  for (const l of uniq) {
+    await new Promise(r => setTimeout(r, 400));
+    const g = await get(l.url);
+    if (!g.ok) { out.pages.push({ url: l.url, kind: 'profile', error: g.error || `HTTP ${g.status}` }); continue; }
+    out.pages.push({ url: g.url, kind: 'profile', label: l.label, text: parse(g.html, g.url).text.slice(0, TEXT_MAX) });
+  }
+  const all = out.pages.map(x => x.text || '').join(' ');
+  out.picked = pick(all);
+  out.js_only = p.text.length < 200;   // 本文がほぼない＝画面をJSで作るサイト
+  return out;
+}
+
+export { read };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [csv, dst] = process.argv.slice(2);
+  const rows = fs.readFileSync(csv, 'utf8').replace(/^﻿/, '').trim().split(/\r?\n/).slice(1)
+    .map(l => { const c = l.split(','); return { seq: c[0], tag: c[1], name: c[2], url: c[c.length - 1] }; });
+  (async () => {
+    const res = [];
+    for (const r of rows) {
+      const x = await read(r.url);
+      res.push({ ...r, ...x });
+      const k = x.error ? `× ${x.error}` : `免許${x.picked.lic.length ? '○' : '×'} 電話${x.picked.tel.length ? '○' : '×'} 住所${x.picked.addr.length ? '○' : '×'} 一段${x.pages.length - 1}`;
+      console.log(r.seq.padStart(2), k);
+    }
+    fs.writeFileSync(dst, JSON.stringify(res, null, 1));
+  })();
+}

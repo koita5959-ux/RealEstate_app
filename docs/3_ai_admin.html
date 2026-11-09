@@ -78,8 +78,8 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="admin" data-title="管理画面 ― 試作（コンテンツ：3 AI型）"></header>
-<script src="shell.js"></script>
+<header id="appbar" data-current="admin" data-title="3. 管理画面 ― 試作（コンテンツ：3 AI型）"></header>
+<script src="js/shell.js"></script>
 <div class="noticebar">左の番号は、メイン画面の番号と同じです。「設定を変更する」でメイン画面に反映し、右上の「メイン画面」で確かめられます（設定はこのブラウザに保存され、メイン画面が読みます）。AIの返事はダミーです。</div>
 <div class="wrap">
   <main class="admin">
@@ -323,7 +323,7 @@ function renderHelp() {
     <p>AIの返事の形、立ち位置、個人情報の扱いです。どの店でも同じで、変えられません。</p>`;
 }
 
-// ---- メイン画面（index.html）へ連動：設定をこのブラウザに保存し、メイン画面が読む ----
+// ---- メイン画面（3_ai_main.html）へ連動：設定をこのブラウザに保存し、メイン画面が読む ----
 // 書き換えは下書き。「設定を変更する」で初めて保存し、メイン画面が読む
 let dirty = false;
 function save() { dirty = true; document.getElementById("checks").innerHTML = ""; lamp(); }
@@ -385,8 +385,8 @@ Shell.beforeGo = key => { // メイン画面へ行くとき、未確定の下書
 // 未確定のときの三択：OK＝入力を捨てて移動／確定して移動＝設定を変更してから移動（エラーならとどまる）／キャンセル＝とどまる
 document.getElementById("leave").onclose = e => {
   const v = e.target.returnValue;
-  if (v === "ok") { loadSaved(); renderAdmin(); renderHelp(); goScreen("./", "reUser"); }
-  else if (v === "commit") { if (commit()) goScreen("./", "reUser"); else document.getElementById("checks").scrollIntoView({ block:"center" }); }
+  if (v === "ok") { loadSaved(); renderAdmin(); renderHelp(); goScreen("3_ai_main.html", "reUser"); }
+  else if (v === "commit") { if (commit()) goScreen("3_ai_main.html", "reUser"); else document.getElementById("checks").scrollIntoView({ block:"center" }); }
 };
 
 function renderAll() { renderAdmin(); renderHelp(); save(); }

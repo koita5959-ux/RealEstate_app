@@ -139,18 +139,18 @@ export function summarize(ctx) {
   // セッション（画面を開いてから閉じるまで）
   const sess = new Map();
   const S = (sid) => {
-    if (!sess.has(sid)) sess.set(sid, { sid, by: "?", started: null, last: null, rounds: 0, errors: 0, rejected: 0, inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true, maxQ: 0, place: "", branch: "", ended: false, events: 0, first: "", reach: -1, inqOpen: false, inqSend: false });
+    if (!sess.has(sid)) sess.set(sid, { sid, by: "?", started: null, last: null, screen: "ai", rounds: 0, errors: 0, rejected: 0, inTok: 0, outTok: 0, est: 0, usd: 0, fixed: true, maxQ: 0, place: "", branch: "", ended: false, events: 0, first: "", reach: -1, inqOpen: false, inqSend: false });
     return sess.get(sid);
   };
   const touch = (s, ts) => { if (!s.started || ts < s.started) s.started = ts; if (!s.last || ts > s.last) s.last = ts; };
   for (const t of turns) {
-    const s = S(t.sid || "no-sid"); touch(s, t.ts); s.by = t.by || s.by;
+    const s = S(t.sid || "no-sid"); touch(s, t.ts); s.by = t.by || s.by; if (t.type === "talk") s.screen = "talk"; // 画面のタイプ（2 対話型／3 AI型）
     if (t.status === "ok") { s.rounds++; s.inTok += t.inputTokens || 0; s.outTok += t.outputTokens || 0; s.est += t.est; s.usd += t.usd; s.fixed = s.fixed && t.fixed; if (!s.first && t.userText) s.first = t.userText; }
     else if (t.status === "rejected") s.rejected++; else s.errors++;
     if (t.meta) { s.maxQ = Math.max(s.maxQ, +t.meta.q || 0); if (t.meta.place) s.place = t.meta.place; if (t.meta.branch) s.branch = t.meta.branch; }
   }
   for (const e of events) {
-    const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?";
+    const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?"; if (e.screen === "talk") s.screen = "talk";
     if (e.type === "end") s.ended = true;
     const R = { open: 0, map: 1, pin: 2, evaluate: 3, choice: 3 }; // どこまで進んだか（①以降は maxQ で見る）
     if (e.type in R) s.reach = Math.max(s.reach, R[e.type]);

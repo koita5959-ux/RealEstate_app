@@ -3,14 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>不動産ロケーション評価Webアプリ（準備中）</title>
-<link rel="stylesheet" href="css/app.css">
+<title>不動産機能サイトの紹介</title>
+<style>
+  body { margin:0; background:#f5f7fa; color:#1f2933; font-family:system-ui,"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:32px 16px; }
+  h1 { font-size:22px; margin:0 0 20px; }
+  a.type, div.type { display:block; padding:16px 18px; margin:0 0 12px; border-radius:8px; background:#fff; border:1px solid #d9e2ec; color:inherit; text-decoration:none; }
+  a.type:hover { border-color:#1d6fb8; }
+  .type b { display:block; font-size:17px; color:#1d6fb8; margin-bottom:4px; }
+  .type span { font-size:13px; color:#52606d; }
+  div.type { opacity:.55; }
+  div.type b { color:#52606d; }
+</style>
 </head>
 <body>
 <main>
-  <h1>不動産ロケーション評価Webアプリ</h1>
-  <p>プロトタイプ準備中です。</p>
+  <h1>不動産機能サイトの紹介</h1>
+  <!-- 3つのタイプのメイン画面への入口。ファイル名の頭（1_select_／2_talk_／3_ai_）がタイプ -->
+  <div class="type"><b>1　選択式</b><span>ボタンを選んで進む（準備中）</span></div>
+  <a class="type" href="2_talk_main.html"><b>2　対話型</b><span>店を知る外の人が、書いた言葉に沿って話す（準備中・管理画面の見本あり）</span></a>
+  <a class="type" href="3_ai_main.html"><b>3　AI型</b><span>ボタンと言葉で、AIが道筋に沿って案内する</span></a>
 </main>
-<script src="js/app.js"></script>
 </body>
 </html>

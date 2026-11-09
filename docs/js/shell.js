@@ -2,7 +2,11 @@
 // 使い方：各画面に <header id="appbar" data-current="user|admin|report|dev" data-title="タイトル"> を置き、直後でこのファイルを読み込む。
 // 色の約束：青＝利用者の視点の画面／赤＝開発者の視点の画面。「利用状況」は、メイン画面にセッション（体験の記録）がなければグレー。
 (function () {
-  const BASE = new URL(".", document.currentScript.src).href; // …/docs/proto/
+  const BASE = new URL("../", document.currentScript.src).href; // …/docs/
+  // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
+  const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];
+  // 体験の記録（このブラウザ）はタイプごとに分ける。AI型は前からの名前のまま
+  const SKEY = TYPE === "3_ai_" ? "reSession" : "reSession_" + TYPE.replace(/_$/, "");
 
   // 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く
   window.goScreen = function (url, name, ev) {
@@ -18,10 +22,10 @@
   };
 
   const SCREENS = {
-    user:   { label: "メイン画面へ", url: "./",               name: "reUser",     cls: "btn-user" },
-    admin:  { label: "管理画面へ",   url: "admin_mode.html",  name: "reAdminWin", cls: "btn-dev" },
-    report: { label: "利用状況",     url: "report.html",      name: "reReport",   cls: "btn-user", needsSession: true },
-    dev:    { label: "開発利用状況", url: "../../api/admin/", name: "reDevWin",   cls: "btn-dev" },
+    user:   { label: "メイン画面へ", url: TYPE + "main.html",   name: "reUser",     cls: "btn-user" },
+    admin:  { label: "管理画面へ",   url: TYPE + "admin.html",  name: "reAdminWin", cls: "btn-dev" },
+    report: { label: "利用状況",     url: TYPE + "report.html", name: "reReport",   cls: "btn-user", needsSession: true },
+    dev:    { label: "開発利用状況", url: "../api/admin/",     name: "reDevWin",   cls: "btn-dev" },
   };
   const ORDER = ["user", "admin", "report", "dev"];
 
@@ -39,7 +43,7 @@
   `;
   document.head.appendChild(css);
 
-  const hasSession = () => { try { return !!localStorage.getItem("reSession"); } catch (e) { return false; } };
+  const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
   window.name = SCREENS[current].name; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
@@ -53,6 +57,7 @@
   bar.appendChild(nav);
 
   const Shell = (window.Shell = {
+    skey: SKEY, type: TYPE,
     channel,
     beforeGo: null, // 画面ごとに差し込める：(key) => false で移動を止める（管理画面の「未確定の下書き」の確認など）
     go(key, ev) {
@@ -78,5 +83,5 @@
     },
   });
   Shell.refresh();
-  window.addEventListener("storage", e => { if (e.key === "reSession" || e.key === null) Shell.refresh(); });
+  window.addEventListener("storage", e => { if (e.key === SKEY || e.key === null) Shell.refresh(); });
 })();

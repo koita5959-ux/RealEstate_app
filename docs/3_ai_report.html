@@ -27,9 +27,9 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="report" data-title="あなたの利用状況（体験のレポート）"></header>
-<script src="shell.js"></script>
-<script src="sessionview.js"></script>
+<header id="appbar" data-current="report" data-title="3. あなたの利用状況（体験のレポート）"></header>
+<script src="js/shell.js"></script>
+<script src="js/sessionview.js"></script>
 <div class="wrap">
   <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 
@@ -79,7 +79,7 @@ function load() {
 async function loadSaved() {
   $("clearbox").hidden = true;
   try {
-    const r = await fetch("../../api/admin/session?sid=" + encodeURIComponent(replaySid), { cache: "no-store" });
+    const r = await fetch("../api/admin/session?sid=" + encodeURIComponent(replaySid), { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
     const d = await r.json();
     $("none").hidden = true; $("main").hidden = false;

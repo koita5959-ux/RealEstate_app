@@ -37,6 +37,7 @@
   .hide { display:none; }
   tr.replayable { cursor:pointer; } tr.replayable:hover td { background:#eef4fb; }
   a.btn-user-link { display:inline-block; font-size:12px; padding:2px 9px; border-radius:6px; background:#1d6fb8; color:#fff; text-decoration:none; white-space:nowrap; }
+  a.btn-user-link.replay { font-size:11px; padding:0 4px; border-radius:4px; line-height:1.5; } /* 表の再表示ボタンは小さく。数字は画面のタイプ（２＝対話型／３＝AI型） */
   details { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; margin:4px 0; }
   summary { cursor:pointer; }
   pre { white-space:pre-wrap; margin:6px 0 0; font:inherit; }
@@ -45,7 +46,7 @@
 </head>
 <body>
 <header id="appbar" data-current="dev" data-title="開発利用状況（開発者用）"></header>
-<script src="../../docs/proto/shell.js"></script>
+<script src="../../docs/js/shell.js"></script>
 <div class="wrap">
 <div class="toolbar">
   <span id="state" class="pill"></span>
@@ -143,7 +144,7 @@ async function replay(sid) {
   } catch (e) { toast("このセッションを読み込めませんでした（" + e.message + "）", true); }
   return false;
 }
-const replayCell = s => s.canReplay ? `<a class="btn-user-link" href="#" onclick="return replay('${esc(s.sid)}')">再表示</a>` : '<span class="note">—</span>';
+const replayCell = s => s.canReplay ? `<a class="btn-user-link replay" href="#" onclick="return replay('${esc(s.sid)}')" title="${s.screen === "talk" ? "2 対話型" : "3 AI型"}の体験">再表示${s.screen === "talk" ? "２" : "３"}</a>` : '<span class="note">—</span>';
 const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面）"` : "";
 function bars(rows, valf, labf, fmt) {
   const max = Math.max(...rows.map(valf), 1e-9);

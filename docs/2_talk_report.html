@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>利用状況（対話型・試作）</title>
+<style>
+  :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif; color:var(--ink); background:var(--bg); }
+  .wrap { max-width:760px; margin:0 auto; padding:6px 16px 60px; }
+  h2 { font-size:14px; margin:22px 0 8px; color:var(--sub); }
+  .hint { font-size:12px; color:var(--sub); }
+  .logline { font-size:12px; color:var(--sub); margin:8px 0 0; }
+  .sheet { background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px; font-size:14px; line-height:1.7; }
+  .sheet h3 { font-size:13px; margin:10px 0 4px; }
+  .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; line-height:1.7; }
+  .route .hint { display:none; }
+  table.data { width:100%; border-collapse:collapse; font-size:13px; background:#fff; }
+  table.data td { border-bottom:1px solid var(--line); padding:6px 8px; vertical-align:top; }
+  table.data td:first-child { color:var(--sub); width:34%; }
+  .empty { color:#b4472b; }
+  .turn { background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; font-size:13px; line-height:1.7; }
+  .turn .meta { font-size:11px; color:var(--sub); }
+  button.quiet { font:inherit; font-size:12px; padding:5px 10px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; margin-top:18px; }
+</style>
+</head>
+<body>
+<header id="appbar" data-current="report" data-title="2. あなたの利用状況（体験のレポート）"></header>
+<script src="js/shell.js"></script>
+<script src="js/sessionview.js"></script>
+<div class="wrap">
+  <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
+
+  <div id="none" class="sheet" style="margin-top:16px" hidden>
+    まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。
+  </div>
+
+  <div id="main" hidden>
+    <div class="hint" style="margin-top:10px" id="stamp"></div>
+    <div id="route" class="route" style="margin-top:12px"></div>
+    <h2>AIの利用状況</h2>
+    <div id="usage" class="sheet"></div>
+    <h2>導入した場合の費用の目安</h2>
+    <div id="cost" class="sheet"></div>
+    <div id="sheet"></div>
+    <div id="talkbox" hidden><h2>やり取り（開発者用・本文つき）</h2><div id="talk"></div></div>
+    <div id="clearbox"><button class="quiet" id="clear">この記録を、このブラウザから消す</button>
+    <div class="hint">消すのは、このブラウザに残した表示用の記録だけです。</div></div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+// この画面は、保存された記録を出すだけ（開くときに計算しない）。開いたまま、次の2つの表示を切り替えられる。
+// ・体験中の表示：このブラウザのメイン画面が動きのたびに保存した記録（localStorage）
+// ・再表示：サーバーに保存されたセッション（開発利用状況の行を押す／?sid=…。認証が必要）
+const V = window.SessionView;
+let replaySid = new URLSearchParams(location.search).get("sid"); // 再表示中のセッション。null なら体験中の表示
+function paint(st) {
+  $("route").innerHTML = V.route(st);
+  $("usage").innerHTML = V.usage(st);
+  $("cost").innerHTML = V.cost(st);
+  $("sheet").innerHTML = V.sheet(st);
+}
+function load() {
+  if (replaySid) return loadSaved();
+  $("clearbox").hidden = false; $("talkbox").hidden = true;
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("reSession_2_talk")); } catch (e) { /* 読めなければ空扱い */ }
+  const st = s && s.state;
+  $("none").hidden = !!st; $("main").hidden = !st;
+  $("none").textContent = "まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
+  if (!st) return;
+  $("stamp").innerHTML = (st.stage ? "いまの段階：<b>" + V.esc(st.stage) + "</b>" + (st.place ? "（" + V.esc(st.place) + "）" : "") + "<br>" : "")
+    + "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに、この画面も自動で更新されます。";
+  paint(st);
+}
+async function loadSaved() {
+  $("clearbox").hidden = true;
+  try {
+    const r = await fetch("../api/admin/session?sid=" + encodeURIComponent(replaySid), { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    $("none").hidden = true; $("main").hidden = false;
+    $("stamp").innerHTML = "<b>記録の再表示</b>（開発者用）　セッション " + V.esc(replaySid.slice(0, 8)) + "　利用者名：" + V.esc(d.by) + "　最終保存 " + new Date(d.savedAt).toLocaleString("ja-JP")
+      + (d.reconstructed ? "<br><span class=\"empty\">ログからの復元です。この機能を入れる前のセッションのため、面積・地価・用途地域などは復元できません。</span>" : "")
+      + '<br><button class="quiet" id="toLive" style="margin-top:6px">体験中の表示に戻す</button>';
+    $("toLive").onclick = () => showLive();
+    paint(d.state);
+    $("talkbox").hidden = !d.turns.length;
+    $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①②③④⑤⑥⑦⑧⑨"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
+  } catch (e) {
+    $("main").hidden = true; $("none").hidden = false;
+    $("none").textContent = "このセッションの記録を読み込めませんでした（" + e.message + "）。";
+  }
+}
+function showReplay(sid) { replaySid = sid; try { history.replaceState(null, "", "?sid=" + encodeURIComponent(sid)); } catch (e) { /* 何もしない */ } load(); window.scrollTo(0, 0); }
+function showLive() { replaySid = null; try { history.replaceState(null, "", location.pathname); } catch (e) { /* 何もしない */ } load(); window.scrollTo(0, 0); }
+if (window.Shell && Shell.channel) Shell.channel.onmessage = e => { // 開発利用状況の行を押した／ヘッダーの「利用状況」を押した
+  if (e.data && e.data.type === "replay" && /^[A-Za-z0-9_-]{1,64}$/.test(e.data.sid || "")) { showReplay(e.data.sid); Shell.channel.postMessage({ type: "ack", sid: e.data.sid }); } // 届いたことを開発利用状況へ返す
+  else if (e.data && e.data.type === "live") showLive();
+};
+$("clear").onclick = () => { try { localStorage.removeItem("reSession_2_talk"); } catch (e) { /* 何もしない */ } load(); };
+window.addEventListener("storage", e => { if (e.key === "reSession_2_talk" && !replaySid) load(); }); // 再表示中は、メイン画面の動きで表示を奪わない // 体験画面で進むと、開いたままのこの画面も更新される
+load();
+</script>
+</body>
+</html>

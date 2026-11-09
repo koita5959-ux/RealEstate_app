@@ -24,6 +24,7 @@ const DATA_DIR = env.DATA_DIR || "/data";
 const ADMIN_PASSWORD_FILE = env.ADMIN_PASSWORD_FILE || "/run/secrets/admin_password";
 const LAND_KEY_FILE = env.LAND_KEY_FILE || "/run/secrets/reinfolib_api_key"; // 不動産情報ライブラリ。なければ見本の値
 const SYSTEM_PROMPT = fs.readFileSync(new URL("./system.txt", import.meta.url), "utf8").trim();
+const SYSTEM_TALK = fs.readFileSync(new URL("./system_talk.txt", import.meta.url), "utf8").trim(); // 2 対話型（外の人）
 
 // 価格（USD / 100万トークン）。推定用。Console の請求額が正。
 const PRICES = {
@@ -197,6 +198,7 @@ function parseBody(body) {
   };
   return {
     meta, cut,
+    type: body.type === "talk" ? "talk" : "ai", // 画面のタイプ（2 対話型／3 AI型）
     sid: clip(body.sid, 64) || "no-sid",
     by: clip(body.by, 32) || "visitor",
     context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
@@ -255,8 +257,9 @@ async function handleChat(req, res) {
   if (spentUsd >= limits().dailyCap) return reject(429, "daily_cap");
   if (rateLimited(who)) return reject(429, "rate_limited");
 
-  const system = input.context ? `${SYSTEM_PROMPT}\n\n【画面から渡された状況】\n${input.context}` : SYSTEM_PROMPT;
-  const rec = { ...base, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
+  const sp = input.type === "talk" ? SYSTEM_TALK : SYSTEM_PROMPT;
+  const system = input.context ? `${sp}\n\n【画面から渡された状況】\n${input.context}` : sp;
+  const rec = { ...base, type: input.type, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
@@ -319,7 +322,7 @@ async function handleEvent(req, res) {
   const data = {};
   if (b.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data).slice(0, 8)) data[clip(k, 20)] = typeof v === "number" || typeof v === "boolean" ? v : clip(v, 80);
   try {
-    fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, data }) + "\n", { mode: 0o600 });
+    fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, ...(b.screen === "talk" ? { screen: "talk" } : {}), data }) + "\n", { mode: 0o600 });
   } catch (e) { console.error("event write failed:", e.message); }
   touchSnap();
   return send(res, 204, {});
