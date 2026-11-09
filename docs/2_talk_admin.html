@@ -91,7 +91,7 @@
     <button class="plus" id="addAsk">＋ 聞きたいことを足す</button>
 
     <h2><span class="n">3</span>あなたの店を勧める場面 <span class="who shop">店が書く</span></h2>
-    <p class="lead">この話になったら、この人は「ここから先は○○さんに聞いた方がいいですよ」と勧めます。回数で切るのではなく、話の中身で渡します。理由を書いておくと、紹介に聞こえます。</p>
+    <p class="lead">この話になったら、この人は「ここから先は○○に聞いた方がいいですよ」と勧めます。回数で切るのではなく、話の中身で渡します。理由を書いておくと、紹介に聞こえます。</p>
     <div class="box">
       <div class="colh"><span></span><span>この話になったら</span><span>勧めるときに添える理由</span><span></span></div>
       <div class="rows two" id="hands"></div>
@@ -102,13 +102,13 @@
     <div class="seg" id="tone"></div>
 
     <h2><span class="n">5</span>話の長さの上限 <span class="who shop">店が変えられる</span></h2>
-    <div class="box"><input id="limit" type="number" min="3" max="20" value="8" style="width:5em"> 往復まで <span class="hint">勧める場面に当たらないまま上限に来たら、この人は「ここから先は店に直接聞いてみてください」と締めます。</span></div>
+    <div class="box"><input id="limit" type="number" min="3" max="20" value="" style="width:5em"> 往復まで <span class="hint">初期設定では上限の指定をしていません。<br>上限を指定すると、AIはその回数で回答を終え、テキストの入力もできなくなり、「お問い合わせ」機能のみ利用できる状態になります。</span></div>
     <button id="reset" style="margin-top:14px">初期値（見本サイトの読み）に戻す</button>
   </main>
 
   <aside class="side">
     <h3>話し方の見本</h3>
-    <div class="persona"><div class="face">外</div><p><b>この店を知る、不動産好きの人</b><br>店の人ではありません。店のことは「<span id="pName"></span>さん」と外から呼びます。</p></div>
+    <div class="persona"><div class="face">外</div><p><b>この店を知る、不動産好きの人</b><br>店の人ではありません。店のことは「<span id="pName"></span>」（敬称なし）と外から呼びます。</p></div>
     <div class="chat" id="chat"></div>
     <p class="legend">緑の下線＝「1」で読んだこと（根拠）から出た言葉。<br>右の見本は、左の設定から組み立てた例です。本番ではAIが、お客さんの言葉に合わせて話します。</p>
   </aside>
@@ -154,34 +154,34 @@ function draw() {
   const chat = [
     ["me", "親の実家が5年ほど空き家です。古いので、更地にして売るしかないと思っています。"],
     ["ai", say("古い家だと、そう思いますよね。", "古い家だと、そう考える方は多いです。", "古いお家ですと、そのようにお考えになる方は多いです。")
-      + (good ? ` ただ、${name}さんは${m(good)}の相談をよく受けているようで、売る以外の道が出てくることもあります。` : "")
+      + (good ? ` ただ、${name}は${m(good)}の相談をよく受けているようで、売る以外の道が出てくることもあります。` : "")
       + " " + askLine(asks[0]), asks[0] ? "聞き出してほしいこと 1" : ""],
     ["me", "まだ何も決めていません。隣も空き地になっています。"],
     ["ai", say("隣が空いてるなら、話が変わるかもしれません。", "隣が空いているなら、合わせると話が変わることがあります。", "お隣が空いているのでしたら、合わせることで見方が変わる場合があります。")
-      + (what ? ` ${name}さんは${m(what.replace(/。$/, ""))}なので、決めていない段階の方が合っています。` : "")
+      + (what ? ` ${name}は${m(what.replace(/。$/, ""))}なので、決めていない段階の方が合っています。` : "")
       + " " + askLine(asks[1]), asks[1] ? "聞き出してほしいこと 2" : ""],
     ["me", "隣の持ち主のことは、少し知っています。"],
     ["ai close", hand[0]
-      ? say(`それなら、ここから先は${name}さんに聞いた方が早いですよ。`, `それなら、ここから先は${name}さんに聞いた方がいいと思います。`, `それでしたら、この先は${name}さんにご相談なさるのが確かです。`)
-        + (hand[1] ? ` ${m(hand[1].replace(/ので$/, ""))}からです。` : "") + `<br><span class="shopbtn">${name}さんに相談する</span>`
+      ? say(`それなら、ここから先は${name}に聞いた方が早いですよ。`, `それなら、ここから先は${name}に聞いた方がいいと思います。`, `それでしたら、この先は${name}にご相談なさるのが確かです。`)
+        + (hand[1] ? ` ${m(hand[1].replace(/ので$/, ""))}からです。` : "") + `<br><span class="shopbtn">メールで問い合わせる</span>`
       : "（勧める場面が書かれていないので、この人は話を続けます）", hand[0] ? `勧める場面：${hand[0]}` : ""],
   ];
   $("chat").innerHTML = chat.map(([c, t, tag]) => `<div class="${c}">${t}${tag ? `<span class="tag">${tag}</span>` : ""}</div>`).join("");
 }
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
 const FIELDS = ["name", "what", "good", "team", "strong"];
-const DEF = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:8 };
+const DEF = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:null };
 function save() {
-  const t = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value.trim()])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || 8 };
+  const t = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value.trim()])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null, lv:2 }; // lv＝上限の既定が空になった後の保存
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
 }
 function load(t) {
   FIELDS.forEach(id => { if (t[id] != null) $(id).value = t[id]; });
   ASKS.splice(0, ASKS.length, ...(t.asks || [])); HANDS.splice(0, HANDS.length, ...(t.hands || []).map(h => h.slice()));
   tone = t.tone || "mid"; [...$("tone").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === tone; l.classList.toggle("on", i.checked); });
-  $("limit").value = t.limit || 8;
+  $("limit").value = t.limit || "";
 }
-try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && t.name) load(t); } catch (e) { /* 初期値のまま */ }
+try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && t.name) load(t.lv ? t : { ...t, limit:null }); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
 $("limit").oninput = save;
 $("reset").onclick = () => { if (!confirm("初期値（見本サイトの読み）に戻しますか？")) return; load(DEF); try { localStorage.removeItem("reTalk"); } catch (e) {} rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); draw(); };
 const draw0 = draw; draw = () => { draw0(); save(); };
