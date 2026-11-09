@@ -434,9 +434,10 @@ function firstJudgment() {
     + "<b>幅4m以上の道に、2m以上接していること</b>（建築基準法の接道義務）。<br>"
     + "これは地図からは読めません。この土地は、道にどう接していますか？",
     "渡したもの：住む・活かす・手放す、どの道にも効く決まり（根拠つき）", "開けた穴：道への接し方（持ち主なら見れば分かる）");
-  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], null, (t, c) => {
+  choices(["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"], null, async (t, c) => {
     noteText(t, "道への接し方");
-    if (c) return onRoad(c, t);
+    c = await typed(t, 1, c, ["道に広く面している", "細い通路の奥にある（旗竿地）", "わからない"]);
+    if (c) return onRoad(c);
     S.sheet.接道 = "（ボタンは選ばず、書いて答えた）";
     askBuilding(TEXT_LEAD);
   }, 1, TEXT_PH);
@@ -444,17 +445,65 @@ function firstJudgment() {
 // ①②も「選ぶ＋書き欄＋送信」。書いた言葉は事情としてデータシートに残し、③→④の AI に渡る。台本は選んだボタンで進む
 const TEXT_PH = "ボタンに合わなければ、ここに書いて答えられます";
 const TEXT_LEAD = "書いていただいたことは、このあとの見立てに入れます。";
-// ボタンを選んだうえで書いた言葉もあるとき：台本は中身に触れられないので、受け止めた一言を先に置く（無視されたように見えないように）
-const ack = t => t ? "書いていただいたことも、このあとの見立てに入れます。<br>" : "";
+// ①②で書いた言葉は無視しない（11-09 ユーザー）。書いた言葉があれば、その段の返事は AI が作る：
+// 台本の返事（伝える事実と次の問い）と次のボタンを渡し、書いた言葉に答えたうえで次の選択へ流れる返事にする。
+// ボタンを選ばずに書いただけのときは、先に AI がどのボタンに当たるかを決める（決められなければ「書いて答えた」の道）。
+// 仕組み：typed() が PENDING を立てる → 台本の say() は表示せず BUF に預ける → 次の choices() が AI に作らせて、行の前に出す
+let PENDING = null, BUF = null;
+const TYPED_FALLBACK = "書いていただいたことも、このあとの見立てに入れます。";
+function typedBase() { // ④から先の「次に…」の指示と、対話型の勧める場面・聞きたいことは外す（この段は台本の問いで終える）
+  let c = aiContext(0).split(/\n次に|\n\n【[^】]*(?:聞きたいこと|勧める場面)】/)[0];
+  if (typeof TONE_TXT !== "undefined" && typeof TALK !== "undefined") c += "\n" + (TONE_TXT[TALK.tone] || TONE_TXT.mid);
+  return c;
+}
+async function typed(t, q, c, list) {
+  if (!t) return c;
+  if (!c) c = await pickByText(t, q, list);
+  PENDING = { t, q, c };
+  return c;
+}
+async function pickByText(t, q, list) {
+  if (REPLAYING || AI_OFF) {
+    const rp = RESTORE && RESTORE.replies[0] && RESTORE.replies[0].q === q && /^【選択\d】$/.test(RESTORE.replies[0].reply.trim()) ? RESTORE.replies.shift() : null;
+    const n = rp ? +rp.reply.match(/\d/)[0] : 0;
+    return list[n - 1] || null;
+  }
+  const ctx = typedBase() + "\n\n【この返事だけの決まり】利用者は次の選択肢に、ボタンを選ばず言葉で答えました。\n" + list.map((b, x) => `${x + 1}. ${b}`).join("\n")
+    + "\n言葉がどれに当たるかを判断し、【選択N】とだけ書いてください。どれとも言えなければ【選択0】と書きます。ほかの文は書きません。";
+  const r = await askAI(0, false, "書いた言葉：" + t, { q, press:"", typed:true, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:"", kind:"ボタンの判断" }, ctx);
+  AI_HIST.length = Math.max(0, AI_HIST.length - (r ? 2 : 0)); // 判断だけの往復は会話の履歴に残さない
+  TRACE = null;
+  const m = r && plain(r).match(/【選択(\d)】/);
+  return m ? list[+m[1] - 1] || null : null;
+}
+async function typedReply(list, row) {
+  const b = BUF, p = PENDING; BUF = PENDING = null;
+  row.style.display = "none";
+  let html = null;
+  const userText = (p.c ? "選んだボタン：" + p.c + "\n" : "ボタンは選ばず、書いて答えた\n") + "書いた言葉：" + p.t;
+  if (REPLAYING || AI_OFF) { // 元に戻すときは、記録にあるこの段の返事を使う
+    const rp = RESTORE && RESTORE.replies[0] && RESTORE.replies[0].q === p.q ? RESTORE.replies.shift() : null;
+    if (rp) { AI_HIST.push({ role:"user", content:userText }, { role:"assistant", content:rp.reply }); html = esc(rp.reply).replace(/\n/g, "<br>"); }
+  } else {
+    const ctx = typedBase() + `\n\n【この段の返事】いまは土地の条件をボタンで聞いている途中（${"①②③"[p.q - 1]}）です。利用者は書いた言葉を添えました。`
+      + "\n決まった返事（台本）は次のとおりです：\n" + plain(b.html.replace(/<br>/g, "\n"))
+      + "\n\n書いた言葉を無視せず、まずそれに短く答えてください。そのうえで台本の事実を伝え、最後は台本と同じ問いで終えてください（次に利用者へ出るボタン：" + list.join(" / ") + "）。"
+      + "ボタンの名前を並べて読み上げません。台本にない数字や決まりを足しません。知らないことは知らないと短く言います。謝罪から始めません。";
+    html = await askAI(0, false, userText, { q:p.q, press:p.c || "", typed:true, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:"", kind:"書いた言葉に答える" }, ctx);
+  }
+  say(html || TYPED_FALLBACK + "<br>" + b.html + (REPLAYING || AI_OFF ? "" : AI_FAIL), html ? b.gave.replace(/^渡したもの：/, "渡したもの：書いた言葉への答え＋") : b.gave, b.hole, row);
+  row.style.display = "";
+}
 function noteText(t, about) { if (t) S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(about + "について：" + t); }
-function onRoad(c, t0) {
+function onRoad(c) {
   if (c.startsWith("細い")) {
     S.sheet.形と向き = "旗竿地・奥まっています";
-    say(ack(t0) + "旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
+    say("旗竿地なら、決め手は<b>通路の幅</b>です。2mあれば建て直せます。2mに足りなければ、今の家はそのまま使えても、建て直しができない土地（再建築不可）として見られます。<br>通路の幅は、2mありますか？",
       "渡したもの：2mが何を決めるか（客は幅を知っていても、意味は知らないことが多い）", "開けた穴：通路の幅");
-    choices(["2mある", "2mない・狭い", "測ったことがない"], null, (t, c2) => {
+    choices(["2mある", "2mない・狭い", "測ったことがない"], null, async (t, c2) => {
       noteText(t, "通路の幅");
-      if (c2) return onWidth(c2, t);
+      c2 = await typed(t, 2, c2, ["2mある", "2mない・狭い", "測ったことがない"]);
+      if (c2) return onWidth(c2);
       S.sheet.接道 = "旗竿地・通路の幅は書いて答えた";
       askBuilding(TEXT_LEAD);
     }, 2, TEXT_PH);
@@ -462,36 +511,37 @@ function onRoad(c, t0) {
     S.sheet.形と向き = "道に面している";
     S.sheet.接道 = "道に広く面している（お答えより）";
     const local = localNear(S.near) && SETBACK[S.near.name];
-    say(ack(t0) + "それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
+    say("それなら、接する長さは心配いりません。残るのは<b>前の道の幅</b>です。4mに足りない道だと、建て直すときに敷地を道側へ下げる（セットバック）ことになり、使える面積が減ります。"
       + (local ? "<br>" + local : "") + "<br>前の道の幅は、4mくらいありますか？（車2台が並べるくらい）",
       "渡したもの：道の幅が面積を削る決まり" + (local ? "＋地域の事実（年次・出典つき）" : ""), "開けた穴：前の道の幅（4mあるか、車2台が並べるかで答えられる）");
-    choices(["4m以上ありそう", "4mはなさそう", "わからない"], null, (t, c2) => {
+    choices(["4m以上ありそう", "4mはなさそう", "わからない"], null, async (t, c2) => {
       noteText(t, "前の道の幅");
+      c2 = await typed(t, 2, c2, ["4m以上ありそう", "4mはなさそう", "わからない"]);
       if (!c2) { S.sheet.接道 += "／前の道の幅は書いて答えた"; return askBuilding(TEXT_LEAD); }
       S.sheet.接道 += { "4m以上ありそう":"／前の道は広い", "4mはなさそう":"／ただし前の道は4m未満の可能性（建て直し時にセットバックの確認が必要）", "わからない":"／前の道の幅は不明" }[c2];
       if (c2 === "わからない") S.signals.push("前の道の幅：客は分からない（現地確認）");
-      askBuilding(ack(t) + ({ "4mはなさそう":"それなら、建て直すときに何㎡残るかを先に確かめる土地です。", "わからない":"わからなくて当然です。担当が現地を一度見れば、すぐ分かる所です。" }[c2] || "接道の面では、この土地は素直な土地です。"));
+      askBuilding(({ "4mはなさそう":"それなら、建て直すときに何㎡残るかを先に確かめる土地です。", "わからない":"わからなくて当然です。担当が現地を一度見れば、すぐ分かる所です。" }[c2] || "接道の面では、この土地は素直な土地です。"));
     }, 2, TEXT_PH);
     // ボタンの上に、判定の決まりを一文（一方通行・すれ違いなどで迷わないように）
     [...document.querySelectorAll("#talk .row")].pop().querySelector(".qnum").insertAdjacentHTML("afterend", '<div class="hint rownote">※道幅だけで判定します（一方通行などは問いません）</div>');
   } else {
     S.signals.push("接し方：客は分からない（現地確認）");
-    askBuilding(ack(t0) + "わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
+    askBuilding("わからなくて当然です。普段、気にする所ではありません。担当が現地を一度見れば、すぐ分かる所です。");
   }
 }
-function onWidth(c, t) {
+function onWidth(c) {
   if (c === "2mある") {
     S.sheet.接道 = "旗竿地・通路2m以上（お答えより）";
-    askBuilding(ack(t) + "それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
+    askBuilding("それなら建て直せます。旗竿地でも、ここが通っていれば土台は崩れません。");
   } else if (c === "2mない・狭い") {
     S.sheet.接道 = "旗竿地・通路2m未満（お答えより）＝再建築不可の可能性";
     const k = localNear(S.near) && PREF.localKnowledge[S.near.name];
-    askBuilding(ack(t) + "それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
+    askBuilding("それなら、この土地の値打ちは「単独で何ができるか」より、「お隣と合わせたら何ができるか」で決まります。"
       + (k && k.includes("隣地") ? `<br><small>（${PREF.office}の土地勘：${k}）</small>` : ""));
   } else {
     S.sheet.接道 = "旗竿地・通路の幅は不明";
     S.signals.push("通路の幅：客は測ったことがない（現地確認）");
-    askBuilding(ack(t) + "測ったことがない方がほとんどです。メジャー一本で分かりますし、担当が見に行くこともできます。");
+    askBuilding("測ったことがない方がほとんどです。メジャー一本で分かりますし、担当が見に行くこともできます。");
   }
 }
 function askBuilding(lead) {
@@ -682,7 +732,7 @@ function aiContext(n, ask) {
   else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
 }
-async function askAI(n, ask, userText, meta) {
+async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明をこれに差し替える
   TRACE = null;
   AI_HIST.push({ role:"user", content:userText });
   saveSession(); // 送った時点の内容（データシートなど）も、返事を待つ間に保存しておく
@@ -693,7 +743,7 @@ async function askAI(n, ask, userText, meta) {
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ sid:SID, by:BY, context:aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
+      body: JSON.stringify({ sid:SID, by:BY, context:ctx || aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
     TRACE = { sent:d.trace, raw:d.text || "", stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
@@ -836,11 +886,12 @@ function showSheet(where) {
   where.appendChild(div);
 }
 // ---- 表示部品 ----
-function say(html, gave, hole) {
+function say(html, gave, hole, at) {
+  if (PENDING && !BUF && !at) { BUF = { html, gave, hole }; return; } // 書いた言葉があるとき、台本は AI に渡すだけ
   const d = document.createElement("div"); d.className = "ai"; d.innerHTML = `<span class="tag">AI</span>${html}`;
   if (gave) d.innerHTML += `<div class="will">${gave}<br>${hole}</div>`;
   if (TRACE) { addTrace(d, TRACE); TRACE = null; }
-  document.getElementById("talk").appendChild(d);
+  if (at) at.before(d); else document.getElementById("talk").appendChild(d);
   saveSession();
 }
 // ---- 試験用：AIの返事ごとに「送ったもの（プロンプト）／画面に出した返事／AIの原文」を1組で見せる。切り捨て（あふれ）は赤で出す ----
@@ -900,6 +951,7 @@ function choices(list, cb, onText, q, ph) {
     };
   }
   document.getElementById("talk").appendChild(d);
+  if (BUF) typedReply(list, d);
 }
 
 // ---- 選び直し：最後に答えた行は、次の段階に答える前なら、ボタンを押して答える前の状態に戻せる ----
