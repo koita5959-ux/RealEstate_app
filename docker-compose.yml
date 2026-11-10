@@ -24,6 +24,7 @@ services:
       - anthropic_api_key
       - admin_password   # 開発者向け管理画面（/api/admin/）の入口。ユーザー名は admin
       - reinfolib_api_key # 不動産情報ライブラリ。空のあいだは見本の値
+      - google_maps_embed_key # ストリートビューの埋め込み。サイトを限定したキー（画面に渡す）
     volumes:
       - ./data:/data
     mem_limit: 256m
@@ -36,3 +37,5 @@ secrets:
     file: ./secrets/admin_password.txt
   reinfolib_api_key:
     file: ./secrets/reinfolib_api_key.txt
+  google_maps_embed_key:
+    file: ./secrets/google_maps_embed_key.txt

@@ -23,6 +23,7 @@ const KEY_FILE = env.KEY_FILE || "/run/secrets/anthropic_api_key";
 const DATA_DIR = env.DATA_DIR || "/data";
 const ADMIN_PASSWORD_FILE = env.ADMIN_PASSWORD_FILE || "/run/secrets/admin_password";
 const LAND_KEY_FILE = env.LAND_KEY_FILE || "/run/secrets/reinfolib_api_key"; // 不動産情報ライブラリ。なければ見本の値
+const MAP_KEY_FILE = env.MAP_KEY_FILE || "/run/secrets/google_maps_embed_key"; // Google の Maps Embed API（ストリートビュー）。画面に渡す種類のキーで、使えるサイトを Google 側で限定してある
 const SYSTEM_PROMPT = fs.readFileSync(new URL("./system.txt", import.meta.url), "utf8").trim();
 const SYSTEM_TALK = fs.readFileSync(new URL("./system_talk.txt", import.meta.url), "utf8").trim(); // 2 対話型（外の人）
 
@@ -305,7 +306,7 @@ async function handleChat(req, res) {
 }
 
 // ---- 画面の動き（開いた・地図・ピン・押したボタン・閉じた）。AI を呼ばない①〜③も含め、どこまで進んだかを残す ----
-const EVENT_TYPES = new Set(["open", "map", "pin", "evaluate", "choice", "inquiry_open", "inquiry_send", "rewind", "end"]);
+const EVENT_TYPES = new Set(["open", "map", "pin", "evaluate", "choice", "inquiry_open", "inquiry_send", "rewind", "view", "end"]);
 const evHits = new Map();
 async function handleEvent(req, res) {
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
@@ -421,6 +422,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);
     if (req.method === "GET" && url.pathname === "/api/land") return await handleLand(req, res, url);
+    if (req.method === "GET" && url.pathname === "/api/mapkey") { let key = ""; try { key = fs.readFileSync(MAP_KEY_FILE, "utf8").trim(); } catch { /* なければ「道から見る」を出さない */ } return send(res, 200, { key }); }
     if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
     if (await adminHandler(req, res, url, adminCtx)) return;
     return send(res, 404, { error: "not_found" });
