@@ -61,6 +61,7 @@
   .row.done > button:only-of-type, .row.done .hint:not(.rownote) { display:none; } /* 判定の決まりの注記は、答えた後も残す */
   .route { font-size:13px; background:#eef4fb; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-top:12px; line-height:1.7; }
   .route:empty { display:none; }
+  .qround { display:inline-block; font-size:13px; color:#c0392b; margin-right:8px; vertical-align:middle; }
   .qnum { display:inline-block; font-size:20px; color:#c0392b; margin-right:6px; vertical-align:middle; }
   .opt { display:inline-block; min-width:18px; height:18px; line-height:18px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; text-align:center; margin-right:6px; }
   .row.done button.chosen .opt { background:#fff; color:var(--accent); }
@@ -588,12 +589,14 @@ function nextButtons(n) { // 次のステップnで利用者に出る、店の�
   const st = n === 1 ? BRANCH : ADMIN.steps[n];
   return st ? liveOf(st) : [];
 }
+// AIへ渡すときの項目名。画面の名前のままだと、標準地（別の土地）の広さをこの土地の面積と取り違えるため（11-10 テスト）
+const AI_KEY = { 面積:"この土地の面積（利用者の申告）", 標準地の地積と形:"標準地（近くの別の土地）の広さと形" };
 function aiContext(n, ask) {
-  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
+  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
   const src = S.sheet.公開データ || "";
   if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
-  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。標準地の価格をこの土地の値段として言い切らず、価格の話は「現地を見て弊社が確かめます」につなげてください。";
+  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。標準地の価格をこの土地の値段として言い切らず、価格の話は「現地を見て弊社が確かめます」につなげてください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
   if (!src || /取得できません/.test(src)) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (ADMIN.stance && ADMIN.stance.trim()) { if (ADMIN.name) c += "\n弊社の業態：" + ADMIN.name; c += "\n弊社の受け方：" + ADMIN.stance.trim(); }
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
@@ -872,6 +875,7 @@ function newRow(q) {
   const prev = [...document.querySelectorAll("#talk .row")].pop();
   d.dataset.q = q || (prev ? +prev.dataset.q + 1 : 1);
   d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
+  if (d.dataset.q >= 4) d.innerHTML += `<span class="qround">${d.dataset.q - 3}${isFinite(LIMIT_T) ? "／" + LIMIT_T + "往復" : "往復目"}</span>`; // ④が1往復目。上限があれば「1／8往復」
   return d;
 }
 function renderRoute() {
@@ -1086,11 +1090,11 @@ const TONE_TXT = { near:"話し方は、知り合いの先輩くらいの近さ�
 const LIMIT_T = +TALK.limit > 0 ? Math.max(3, +TALK.limit) : Infinity; // 往復の上限（③→④の返事を1往復目と数える）。空なら上限なし
 let HANDED = null; // 勧めた場面 [話題, 理由]
 function aiContext(n) {
-  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + k + "：" + plain(String(v)));
+  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
   const src = S.sheet.公開データ || "";
   if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
-  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。";
+  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
   if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
   const nm = TALK.name;
   c += `\n\n【あなたが知っている会社：${nm}】`

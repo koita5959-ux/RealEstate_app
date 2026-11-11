@@ -261,7 +261,8 @@ function renderAdmin() {
   const lm = document.getElementById("limit");
   const showLimit = () => {
     lm.value = limit ?? autoLimit();
-    document.getElementById("limitNote").textContent = limit == null ? `（初期値：ボタンのあるステップ ${autoLimit() - 2}＋2）` : "（店が変更）";
+    const last = NUM[(limit ?? autoLimit()) + 3] || "";
+    document.getElementById("limitNote").textContent = (last ? `（④〜${last}）` : "") + (limit == null ? `（初期値：ボタンのあるステップ ${autoLimit() - 2}＋2）` : "（店が変更）");
   };
   showLimit();
   lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : null; save(); };
