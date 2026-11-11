@@ -1,0 +1,2 @@
+# ユーザーのテスト（?by=owner）を5分ごとに GitHub へ。入れ方：crontab -l に下の1行を足す（tools/install-sync.sh が行う）
+*/5 * * * * flock -n /tmp/realestate-sync.lock $HOME/.nvm/versions/node/v24.14.1/bin/node $HOME/docker-templates/RealEstate_app/tools/sync-owner.mjs >> $HOME/docker-templates/RealEstate_app/data/sync-owner.log 2>&1

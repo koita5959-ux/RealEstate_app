@@ -490,7 +490,12 @@ const QS = new URLSearchParams(location.search);
 const AI_OFF = QS.has("demo") || QS.get("ai") === "off"; // デモ再生中は呼ばない
 const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36);
 let SID = newSid(); // ブラウザを開いてから閉じるまで
-const BY = (QS.get("by") || "visitor").replace(/[^\w-]/g, "").slice(0, 32) || "visitor"; // ?by=名前 で誰の利用か分ける
+// ?by=名前 で誰の利用か分ける。一度付けて開けば、このブラウザで覚える（画面を行き来しても消えない）。?by=visitor で戻す
+const BY = (() => {
+  const q = (QS.get("by") || "").replace(/[^\w-]/g, "").slice(0, 32);
+  try { if (q) localStorage.setItem("reBy", q); return q || localStorage.getItem("reBy") || "visitor"; } catch (e) { return q || "visitor"; }
+})();
+if (BY !== "visitor") document.addEventListener("DOMContentLoaded", () => { const l = document.querySelector(".logline"); if (l) l.insertAdjacentHTML("beforeend", `<b style="margin-left:8px">［記録：${BY}］</b>`); });
 const AI_URL = "../api/chat"; // /RealEstate_app/docs/ から /RealEstate_app/api/chat へ
 const AI_FAIL = "<br><small>（AIにつながらなかったため、簡易の返事を表示しています）</small>";
 let AI_HIST = [], REPLAYING = false, RESTORE = null;
