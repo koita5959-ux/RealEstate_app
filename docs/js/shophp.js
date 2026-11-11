@@ -10,8 +10,34 @@ const SHOP_HP_SAMPLE = {
   why:{}, unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
 function shopHP() { try { const h = JSON.parse(localStorage.getItem("reShopHP")); if (h && (h.name || h.unreadable)) return h; } catch (e) {} return SHOP_HP_SAMPLE; }
 function setShopHP(h) { try { localStorage.setItem("reShopHP", JSON.stringify(h)); } catch (e) {} }
+// 読み取り中は画面を暗くし、経過秒と段階を出す（終わるまで操作させない）
+function readingCover(url) {
+  const el = document.createElement("div");
+  el.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:wait";
+  el.innerHTML = `<style>@keyframes reSpin{to{transform:rotate(360deg)}}</style>
+    <div style="background:#fff;color:#222;border-radius:10px;padding:22px 26px;max-width:min(420px,calc(100vw - 32px));text-align:center;font-size:14px;line-height:1.7;box-shadow:0 8px 30px rgba(0,0,0,.3)">
+      <div style="width:36px;height:36px;margin:0 auto 12px;border:4px solid #ddd;border-top-color:#2a6fdb;border-radius:50%;animation:reSpin 1s linear infinite"></div>
+      <div style="font-weight:bold">HPを読み取っています</div>
+      <div data-url style="font-size:12px;color:#666;word-break:break-all"></div>
+      <div data-stage style="margin-top:8px"></div>
+      <div data-sec style="font-size:12px;color:#666"></div>
+    </div>`;
+  el.querySelector("[data-url]").textContent = url;
+  document.body.appendChild(el);
+  const t0 = Date.now(), tick = () => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    el.querySelector("[data-stage]").textContent = s < 8 ? "ページを取りに行っています…" : s < 40 ? "AIが店の姿をまとめています…" : "もう少しかかっています…";
+    el.querySelector("[data-sec]").textContent = `${s}秒（ふつう30秒ほど。最長85秒で諦めます）`;
+  };
+  tick(); const id = setInterval(tick, 1000);
+  return () => { clearInterval(id); el.remove(); };
+}
 // サーバーに読ませる。返り値：{ hp, msg, err }
 async function readShopHP(url) {
+  const close = readingCover(url);
+  try { return await readShopHP0(url); } finally { close(); }
+}
+async function readShopHP0(url) {
   const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url }), signal:AbortSignal.timeout(85000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { err:true, msg:{ daily_cap:"今日の費用の上限に達しています。", rate_limited:"続けて押されています。少し待ってください。", busy:"混み合っています。少し待ってください。", disabled:"いまAIは止めてあります。", no_key:"APIの鍵が設定されていません。" }[j.error] || "読み取れませんでした（" + (j.detail || j.error || r.status) + "）" };

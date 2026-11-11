@@ -117,7 +117,8 @@
     <div class="seg" id="tone"></div>
 
     <h2><span class="n">5</span>話の長さの上限 <span class="who shop">店が変えられる</span></h2>
-    <div class="box"><input id="limit" type="number" min="3" max="20" value="" style="width:5em"> 往復まで <span class="hint">初期設定では上限の指定をしていません。<br>上限を指定すると、AIはその回数で回答を終え、テキストの入力もできなくなり、「お問い合わせ」機能のみ利用できる状態になります。</span></div>
+    <div class="box"><input id="limit" type="number" min="3" max="20" value="" style="width:5em"> 往復まで <span class="hint">初期設定では上限の指定をしていません。<br>上限を指定すると、AIはその回数で回答を終え、テキストの入力もできなくなり、「お問い合わせ」機能のみ利用できる状態になります。</span>
+      <div style="margin-top:8px"><input id="after" type="number" min="0" max="5" value="1" style="width:5em"> 往復（勧める場面のあと） <span class="hint">勧める場面に当たったら、すぐ問い合わせの欄を出します。そのあと、お客さんがここに書いた回数だけ話を続けられます（初期値1、0なら勧めた返事で終わり）。最後の返事は、分かったこと・まだ決まっていない点・問い合わせの案内で締めます。</span></div></div>
     <button id="reset" style="margin-top:14px">初期値（見本サイトの読み）に戻す</button>
   </main>
 
@@ -275,11 +276,11 @@ function draw() {
   $("chat").innerHTML = chat.map(([c, t, tag]) => `<div class="${c}">${t}${tag ? `<span class="tag">${escH(tag)}</span>` : ""}</div>`).join("");
 }
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
-const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:null };
+const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:null, after:1 };
 function save() {
   const flat = Object.fromEntries(KNOW.map(([k]) => [k, eff(k).trim()])); // 今の目線で効いている値（メイン画面が読む）
   const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
-    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null };
+    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null, after:$("after").value === "" ? 1 : Math.max(0, +$("after").value) };
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
   if (!hp.sample) setShopHP(hp); // 読んだHPはタイプ3とも共有
 }
@@ -292,9 +293,11 @@ function load(t) {
   ASKS.splice(0, ASKS.length, ...(t.asks || [])); HANDS.splice(0, HANDS.length, ...(t.hands || []).map(h => h.slice()));
   tone = t.tone || "mid"; [...$("tone").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === tone; l.classList.toggle("on", i.checked); });
   $("limit").value = (t.lv ? t.limit : null) || "";
+  $("after").value = t.after != null ? t.after : 1;
 }
 try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && (t.name || t.hp)) load(t); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
 $("limit").oninput = save;
+$("after").oninput = save;
 $("memo").oninput = save;
 $("reset").onclick = () => {
   if (!confirm("初期値（見本サイトの読み・外野目線）に戻しますか？")) return;

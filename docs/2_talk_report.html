@@ -46,6 +46,8 @@
     <div id="cost" class="sheet"></div>
     <div id="sheet"></div>
     <div id="talkbox" hidden><h2>やり取り（開発者用・本文つき）</h2><div id="talk"></div></div>
+    <div id="exportbox" style="margin:18px 0 8px"><a id="export" class="quiet" style="font-size:13px">このセッションをテキストで書き出す（開発者用）</a>
+    <div class="hint">条件・会話・AIへ渡したもの（土地の条件・HPの読み）を、UTF-8 のテキストで保存します。Claude.ai に読ませるときは _works/ に置いてください。</div></div>
     <div id="clearbox"><button class="quiet" id="clear">この記録を、このブラウザから消す</button>
     <div class="hint">消すのは、このブラウザに残した表示用の記録だけです。</div></div>
   </div>
@@ -57,6 +59,7 @@ const $ = id => document.getElementById(id);
 // ・再表示：サーバーに保存されたセッション（開発利用状況の行を押す／?sid=…。認証が必要）
 const V = window.SessionView;
 let replaySid = new URLSearchParams(location.search).get("sid"); // 再表示中のセッション。null なら体験中の表示
+function exportLink(sid) { const a = $("export"); $("exportbox").hidden = !sid; if (sid) a.href = "../api/admin/export?sid=" + encodeURIComponent(sid); }
 function paint(st) {
   $("route").innerHTML = V.route(st);
   $("usage").innerHTML = V.usage(st);
@@ -72,6 +75,7 @@ function load() {
   $("none").hidden = !!st; $("main").hidden = !st;
   $("none").textContent = "まだ体験の記録がありません。「メイン画面へ」から、地図で場所を指定して進めてみてください。ここに、通った道・データシート・AIの利用状況がたまっていきます。";
   if (!st) return;
+  exportLink(s.sid);
   $("stamp").innerHTML = (st.stage ? "いまの段階：<b>" + V.esc(st.stage) + "</b>" + (st.place ? "（" + V.esc(st.place) + "）" : "") + "<br>" : "")
     + "最終更新 " + (st.updated ? new Date(st.updated).toLocaleTimeString("ja-JP") : "—") + "　メイン画面で動きがあるたびに、この画面も自動で更新されます。";
   paint(st);
@@ -87,7 +91,7 @@ async function loadSaved() {
       + (d.reconstructed ? "<br><span class=\"empty\">ログからの復元です。この機能を入れる前のセッションのため、面積・地価・用途地域などは復元できません。</span>" : "")
       + '<br><button class="quiet" id="toLive" style="margin-top:6px">体験中の表示に戻す</button>';
     $("toLive").onclick = () => showLive();
-    paint(d.state);
+    paint(d.state); exportLink(replaySid);
     $("talkbox").hidden = !d.turns.length;
     $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①②③④⑤⑥⑦⑧⑨"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
   } catch (e) {

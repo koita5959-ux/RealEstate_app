@@ -587,8 +587,11 @@ function aiContext(n, ask) {
   const H = shopHP(); // 弊社のHPの読み（管理画面の「読み取る」。なければ見本サイト）。会話が会社のHPと結びついて聞こえるように
   if (!H.unreadable && (H.what || H.good || H.fit || H.strong)) c += "\n\n【弊社のホームページに書いてあること】"
     + (H.what ? "\n・どんな会社か：" + H.what : "") + (H.good ? "\n・よく受けている相談：" + H.good : "") + (H.fit ? "\n・弊社に合う相談：" + H.fit : "")
-    + (H.strong ? "\n・弊社の強み：" + H.strong : "") + (H.team ? "\n・連携している専門家：" + H.team : "")
-    + "\n利用者の話と重なるところがあれば、見立ての一言に弊社のことを短く結びつけます（例：「弊社でも相続した実家のご相談をよくお受けしています」）。毎回でなくてよく、重ならないときは使いません。ここに書かれていないこと（値段・日程・実績の数字など）は言いません。";
+    + (H.strong ? "\n・弊社の強み：" + H.strong : "") + (H.team ? "\n・連携している専門家：" + H.team : "") + (H.unfit ? "\n・弊社に合いにくい相談：" + H.unfit : "")
+    + (n === 0 || n >= LIMIT
+      ? "\n【この返事では、重なりを探します】利用者が選んだ項目・書いた言葉、土地の条件（公開データ）と、上の弊社のこと（よく受けている相談・合う相談・強み・専門家）を突き合わせます。重なったら、どの事情と弊社のどの得意が重なったかが分かる一言にします（例：「通路の幅で建て直せるかが変わる土地です。弊社は旗竿地や再建築不可の売却を多く扱っています」）。重ならなくても、合いにくい相談に当たるなら、正直にそう伝えます（例：「弊社は売却が中心です」）。どちらにも当たらなければ、無理に結びつけません。"
+      : "\n利用者の話と重なるところがあれば、見立ての一言に弊社のことを短く結びつけます。毎回でなくてかまいません。")
+    + "\nホームページの宣伝の言葉（「最短〇日」「〇社以上」「〇万円で売却」など）を、事実として言いません。ここに書かれていないこと（値段・日程・実績の数字など）も言いません。";
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   const axis = n === 0 ? ADMIN.steps[0] && ADMIN.steps[0].topic : n === 1 ? BRANCH && BRANCH.name : ADMIN.steps[n] && ADMIN.steps[n].topic;
   if (axis && n < LIMIT) c += "\n次に聞くこと：" + axis;
@@ -602,7 +605,9 @@ function aiContext(n, ask) {
     if (BR_BY_BTN != null) c += `\nボタンからは方向${BR_BY_BTN + 1}にあたります。`;
     c += "\n利用者の書いた言葉を優先して、合う方向を一つ選び、" + UKE + "見立てを一言返してから、その方向のボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。"
       + "\n返事の最後に、行を分けて【方向1】か【方向2】とだけ書いてください。";
-  } else if (n >= LIMIT) c += "\n次はありません。これが最後の返事です。直前の利用者の言葉への答えだけを、2〜3文で返してください。新しい話題（税金・専門家への相談の勧めなど）は持ち出さず、問いかけも付けません。打ち切りの案内は画面が添えるので、問い合わせの案内は書かないでください。";
+  } else if (n >= LIMIT) c += "\n次はありません。これが最後の返事で、この返事が締めになります。直前の利用者の言葉に短く答えてから、ここまでの話で分かったことを一言でまとめ、まだ決まっていないことを一つ名指しして（例：前の道の幅、境目が確定しているか）、現地を見ないと決まらない理由を一言添え、「そこは弊社が現地で確かめます」と引き受けます。"
+    + (closeNow() ? "弊社の一手の例：" + closeNow() : "")
+    + "最後に「ここまでの話を添えて、弊社にお問い合わせできます」のように案内します。全体で4文まで。問いかけは付けません。「ここまでです」「お答えできるのは以上です」のような打ち切りの言葉は使いません。";
   else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事は、" + UKE + "、この土地・この相談の見立てを一言で返してから、このボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。";
   else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
@@ -651,7 +656,10 @@ function topicsOf(list) {
   return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
 }
 function goStep(i, lead, real) {
-  if (i >= LIMIT) { say(lead + "<br>" + END + (closeNow() ? "<br>" + esc(closeNow()) : "")); return; }
+  if (i >= LIMIT) { // 締め：AIの最後の返事そのもの。固定の打ち切り文は付けない（AIにつながらなかったときだけ END）
+    say(real ? lead : lead + "<br>" + END, real ? "渡したもの：締めの返事" : "渡したもの：台本", "店へ渡した：往復の上限（" + LIMIT + "）");
+    inquiryBar(true); saveSession(); return;
+  }
   const st = i === 1 ? BRANCH : ADMIN.steps[i];
   let list = liveOf(st), hole;
   if (list.length) hole = `開けた穴：管理画面の${NUM[3 + i]}${i === 1 ? "（" + (st.name || "枝") + "・" + st.kind + "）" : "（" + (st.topic || "題名なし") + "）"}のボタン`;
@@ -719,9 +727,9 @@ function inqSentMark(box) {
   box.classList.add("sent");
   box.insertAdjacentHTML("beforeend", `<div class="sheet" style="margin-top:8px">送信しました。担当者からのご連絡をお待ちください。<br><small>試作のため、実際には送られていません。</small></div>`);
 }
-function inquiryBar() {
+function inquiryBar(ended) {
   const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
+  bar.innerHTML = `${ended ? `<div class="hint" style="margin-bottom:4px">ここまでの話を添えて、弊社に聞けます。</div>` : ""}<button id="inqOpen" class="inq">これらの情報をもとにお問い合わせ</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
     ev("inquiry_open");
     bar.innerHTML = "";

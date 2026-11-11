@@ -70,8 +70,15 @@ function parse(html, base) {
       links.push({ url: u.href, label });
     } catch {}
   }
-  const text = decode(html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-  return { title, desc, links, text };
+  const body = html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, ' ');
+  const plain = decode(body.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  // 本文の画像の alt も材料にする（「［画像：…］」として本文に混ぜる）。飾りの短い alt は拾わない
+  const imgs = body.match(/<img\b[^>]*>/gi) || [];
+  const alts = imgs.map(t => decode((t.match(/\balt=["']([^"']*)["']/i) || [])[1] || '').trim());
+  const text = decode(body.replace(/<img\b[^>]*\balt=["']([^"']{4,})["'][^>]*>/gi, ' ［画像：$1］ ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  // 画像の中に文字がありそうなページ：本文が画像の数に比べて少なく、alt もほぼない（雰囲気づくりの大きな画像が数枚だけのトップは出さない）
+  const imgHeavy = imgs.length >= 8 && plain.length / imgs.length < 150 && alts.filter(a => a.length >= 4).length < imgs.length / 2;
+  return { title, desc, links, text, imgs: imgs.length, imgHeavy };
 }
 
 // 決まった形のものを拾う
@@ -91,7 +98,7 @@ async function read(url) {
   if (!top.ok) { out.error = top.error || `HTTP ${top.status}`; return out; }
   const p = parse(top.html, top.url);
   out.final = top.url; out.title = p.title; out.desc = p.desc;
-  out.pages.push({ url: top.url, kind: 'top', text: p.text.slice(0, TEXT_MAX) });
+  out.pages.push({ url: top.url, kind: 'top', text: p.text.slice(0, TEXT_MAX), imgs: p.imgs, imgHeavy: p.imgHeavy });
   const host = new URL(top.url).host;
   const seen = new Set([top.url]);
   const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
@@ -104,7 +111,8 @@ async function read(url) {
     await new Promise(r => setTimeout(r, 400));
     const g = await get(l.url);
     if (!g.ok) { out.pages.push({ url: l.url, kind: l.kind, error: g.error || `HTTP ${g.status}` }); continue; }
-    out.pages.push({ url: g.url, kind: l.kind, label: l.label, text: parse(g.html, g.url).text.slice(0, TEXT_MAX) });
+    const q = parse(g.html, g.url);
+    out.pages.push({ url: g.url, kind: l.kind, label: l.label, text: q.text.slice(0, TEXT_MAX), imgs: q.imgs, imgHeavy: q.imgHeavy });
   }
   const all = out.pages.map(x => x.text || '').join(' ');
   out.picked = pick(all);

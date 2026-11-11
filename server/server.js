@@ -326,7 +326,8 @@ async function handleShopRead(req, res) {
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
   const r = await readSite(target);
   const site = { final: r.final, title: r.title, js_only: !!r.js_only, picked: r.picked, error: r.error,
-    pages: r.pages.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, error: p.error })) };
+    pages: r.pages.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, imgs: p.imgs, imgHeavy: p.imgHeavy, error: p.error })) };
+  const heavy = r.pages.filter(p => p.imgHeavy).map(p => ({ top: "トップ", profile: "会社概要", case: "事例" }[p.kind] || p.kind));
   if (r.error || r.js_only) { // 読めないHPには API を使わない。読めないこと自体を店に見せる
     writeLog({ ...base, status: "unreadable", error: r.error || "js_only", costUsd: 0, ms: Date.now() - t0 });
     return send(res, 200, { site, shop: null, costUsdEstimate: 0, ms: Date.now() - t0 });
@@ -335,6 +336,8 @@ async function handleShopRead(req, res) {
   try {
     const u = await understand(client, { model: MODEL, maxTokens: 4000, effort: EFFORT }, r);
     const costUsd = estimateUsd(u.usage); spentUsd += costUsd;
+    if (u.shop && heavy.length) u.shop.unread = [...(Array.isArray(u.shop.unread) ? u.shop.unread : []),
+      `画像の中の文字（${heavy.join("・")}のページ。本文より画像が多く、売り文句が画像の中にあると、AIにも検索にも読まれていない可能性があります）`];
     writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd, ms: Date.now() - t0, reply: clip(u.text, 4000) });
     return send(res, 200, { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000), costUsdEstimate: costUsd, ms: Date.now() - t0 });
   } catch (e) {

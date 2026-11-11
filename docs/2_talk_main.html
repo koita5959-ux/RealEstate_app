@@ -1091,7 +1091,9 @@ function restoreSession(d) {
 // 話が管理画面の「勧める場面」に当たったら、AIが【勧める:N】を付けて返し、画面は店への相談へつなぐ。
 const TONE_TXT = { near:"話し方は、知り合いの先輩くらいの近さの、くだけた丁寧語にします。", mid:"話し方は、詳しい知人くらいの丁寧語にします。", far:"話し方は、相談員くらいのていねいな言葉にします。" };
 const LIMIT_T = +TALK.limit > 0 ? Math.max(3, +TALK.limit) : Infinity; // 往復の上限（③→④の返事を1往復目と数える）。空なら上限なし
-let HANDED = null; // 勧めた場面 [話題, 理由]
+const AFTER_T = TALK.after != null && TALK.after !== "" ? Math.max(0, +TALK.after) : 1; // 勧めた後に話せる往復（管理画面。初期値1）
+let HANDED = null, HAND_AT = 0; // 勧めた場面 [話題, 理由] と、勧めた返事の往復目
+const isLast = n => n >= LIMIT_T - 1 || (!!HANDED && n - HAND_AT >= AFTER_T); // n 往復目の返事で終えるか
 function aiContext(n) {
   const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
@@ -1115,6 +1117,9 @@ function aiContext(n) {
     + ((hp.unread || []).length ? "\n・ホームページから読めなかったこと：" + hp.unread.join("、") + "。聞かれたら「ホームページからは分かりませんでした」と答えます。" : "")
     + "\n書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。"
     + (TALK.memo ? `\n\n【${nm}からの一言】（会社が書いたもの。使うときは「${nm}からの一言では」と出どころを付け、ホームページの読みと混ぜません）\n` + TALK.memo : "");
+  // 重なりを探す：①〜③の返事（n=0）と締めでは、利用者の事情 × 公開データ × HPの得意 を突き合わせる
+  if (n === 0 || isLast(n)) c += `\n\n【この返事では、重なりを探します】利用者が選んだ項目・書いた言葉、土地の条件（公開データ）と、${staff ? "弊社のこと" : nm + "のホームページから読んだこと"}（よく受けている相談・合う相談・強み・専門家）を突き合わせます。重なったら、どの事情とどの得意が重なったかが分かる一言にします（${staff ? "例：「弊社は旗竿地や再建築不可の売却を多く扱っています」" : `例：「${nm}のホームページには、旗竿地や再建築不可の売却を扱っていると書かれています」。出どころを必ず付けます`}）。重ならなくても、合いにくい相談に当たるなら、正直にそう伝えます（例：${staff ? "「弊社は売却が中心です」" : `「${nm}のホームページは、売却を中心に書いています」`}）。どちらにも当たらなければ、無理に結びつけません。`;
+  c += staff ? "\nホームページの宣伝の言葉（「最短〇日」「〇社以上」「〇万円で売却」など）は、弊社のことに書かれていなければ言いません。" : "\nホームページの宣伝の言葉（「最短〇日」「〇社以上」「〇万円で売却」など）は、事実として言わず、言うなら「ホームページには〜とあります」の形にします。";
   const asks = (TALK.asks || []).filter(a => a && a.trim());
   if (asks.length) c += `\n\n【${nm}が、利用者から聞きたいこと（聞きたい順）】\n` + asks.map((a, x) => `${x + 1}. ${a}`).join("\n")
     + "\nまだ聞けていないものを、話の流れで自然に聞ける所で一つだけ聞きます。不自然なら利用者の話を追います。質問の言い回しは自分で考えます。";
@@ -1122,26 +1127,32 @@ function aiContext(n) {
   const CLOSE = staff
     ? `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「そこは弊社が現地で確かめます」と引き受けます。引き受けの中身は「弊社が引き受けること」の範囲だけにします。`
     : `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「${nm}に『〜を現地で見てもらえますか』と聞くと、話がはっきりします」のように、${nm}へ持っていく問いを一つ渡します。${nm}の代わりに約束はしません。ホームページから読んだ合う相談とこの件が重なれば、出どころを付けてそれも添えます。`;
+  const CLOSE_LAST = "最初に、ここまでの話で分かったことを一言でまとめます。" + CLOSE + `最後に「ここまでの話を添えて、${me}にお問い合わせできます」のように、問い合わせへ案内します。「ここまでです」「お答えできるのは以上です」のような打ち切りの言葉は使いません。`;
   const hands = (TALK.hands || []).map((h, x) => ({ h, x })).filter(o => o.h[0] && o.h[0].trim());
-  if (hands.length) c += `\n\n【${nm}を勧める場面】\n` + hands.map(o => `${o.x + 1}. ${o.h[0]}` + (o.h[1] ? `（理由：${o.h[1]}）` : "")).join("\n")
+  if (hands.length && !HANDED) c += `\n\n【${nm}を勧める場面】\n` + hands.map(o => `${o.x + 1}. ${o.h[0]}` + (o.h[1] ? `（理由：${o.h[1]}）` : "")).join("\n")
     + `\n利用者の話がこのどれかに当たったら、その返事で${staff ? "弊社が直接うかがう方がよいと" : `「ここから先は${nm}に聞いた方がいい」と`}理由を添えて勧めます。そのときの返事は、次の締めの形にします。${CLOSE}問いかけは付けません。返事の最後に、行を分けて【勧める:番号】とだけ書きます。当たらなければ書きません。`;
   c += "\n" + (TONE_TXT[TALK.tone] || TONE_TXT.mid);
-  if (n >= LIMIT_T - 1) c += `\nこれが最後の返事です。直前の利用者の言葉に短く答えてから、締めます。${CLOSE}問いかけは付けません。`;
+  if (HANDED) c += `\n\n【すでに${me}を勧めました（${HANDED[0]}）】画面には問い合わせの欄が出ています。利用者の言葉に短く答えます。もう一度勧め直したり、【勧める】を書いたりしません。`;
+  if (isLast(n)) c += `\nこれが最後の返事です。直前の利用者の言葉に短く答えてから、締めます。${CLOSE_LAST}問いかけは付けません。`;
   return c;
 }
 function closeNow() { return HANDED && HANDED[1] ? `ご相談をおすすめする理由：${HANDED[1].replace(/ので$/, "")}` : ""; }
 function goStep(i, lead, real) {
   const m = String(lead).match(/\s*(?:<br>)*\s*【勧める[:：]\s*(\d+)】\s*$/);
-  if (m) { lead = lead.slice(0, m.index); HANDED = TALK.hands[+m[1] - 1] || null; }
+  if (i === 0) { HANDED = null; HAND_AT = 0; } // 初めの返事（再表示のやり直しも）で、勧めた印を戻す
+  const fresh = !!(m && !HANDED && TALK.hands[+m[1] - 1]);
+  if (m) lead = lead.slice(0, m.index);
+  if (fresh) { HANDED = TALK.hands[+m[1] - 1]; HAND_AT = i; S.sheet.勧めた場面 = esc(HANDED[0]); }
   lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
-  if (HANDED || i >= LIMIT_T) {
-    S.sheet.勧めた場面 = HANDED ? esc(HANDED[0]) : "（往復の上限まで話した）";
-    say(lead + (HANDED ? "" : (TALK.mode === "staff" ? "<br>ここから先は、弊社に直接お問い合わせください。" : `<br>ここから先は、${esc(TALK.name)}に直接聞いてみてください。`)),
-      real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：往復の上限（${LIMIT_T}）`);
-    STAGE = "店を勧めた"; inquiryBar(); saveSession();
+  if (isLast(i)) { // 締め：固定の打ち切り文は付けず、AIの最後の返事そのものを締めにする
+    if (!HANDED) S.sheet.勧めた場面 = "（往復の上限まで話した）";
+    say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：往復の上限（${LIMIT_T}）`);
+    STAGE = "店を勧めた"; inquiryBar(true); saveSession();
     return;
   }
-  say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", `開けた穴：書き欄で続ける（${isFinite(LIMIT_T) ? "上限 " + LIMIT_T + " 往復の " : ""}${i + 1} 往復目）`);
+  say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本",
+    fresh ? `店へ渡した：勧める場面「${esc(HANDED[0])}」（あと ${AFTER_T} 往復話せる）` : `開けた穴：書き欄で続ける（${isFinite(LIMIT_T) ? "上限 " + LIMIT_T + " 往復の " : ""}${i + 1} 往復目）`);
+  if (fresh) { STAGE = "店を勧めた"; inquiryBar(); }
   choices([], null, t => {
     if (!t) return;
     S.sheet.事情 = (S.sheet.事情 ? S.sheet.事情 + " / " : "") + esc(t);

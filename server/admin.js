@@ -359,6 +359,32 @@ export async function adminHandler(req, res, url, ctx) {
   if (req.method === "GET" && url.pathname === "/api/admin/stamp") { // 開発利用状況が数秒ごとに聞く「新しい動きがあったか」（数字が変わったら読み直す）。集計はしない
     return json(200, { seq: ctx.getSeq() });
   }
+  if (req.method === "GET" && url.pathname === "/api/admin/export") { // 1セッションを UTF-8 のテキストで書き出す（Claude.ai に読ませる用）：条件1行＋会話＋AIへ渡したもの
+    const sid = url.searchParams.get("sid") || "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
+    const logs = readJsonl(ctx.DATA_DIR, "log").filter((r) => r.sid === sid && r.type !== "shopread").sort((a, b) => a.ts.localeCompare(b.ts));
+    if (!logs.length) return json(404, { error: "not_found" });
+    const first = logs[0], last = logs[logs.length - 1], c0 = String(first.context || "");
+    const pick = (re) => (c0.match(re) || [])[1] || "";
+    const company = pick(/【あなたを置いた会社：([^（】]+)/) || pick(/【弊社のこと（あなたは(.+?)の社員/) || (pick(/・どんな会社か：([^\n]{0,40})/) ? "（HPの読み）" + pick(/・どんな会社か：([^\n]{0,40})/) : "");
+    const head = [
+      "タイプ：" + (first.type === "talk" ? "2 対話型" + (first.mode ? "（" + (first.mode === "staff" ? "社員目線" : "外野目線") + "）" : "") : "3 AI型"),
+      company && "会社：" + company,
+      pick(/弊社の業態：([^\n]+)/) && "業態：" + pick(/弊社の業態：([^\n]+)/),
+      "場所：" + (first.meta?.place || "—"),
+      "日時：" + new Date(first.ts).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
+      "往復：" + logs.filter((r) => r.status === "ok").length,
+      "利用者名：" + (first.by || "—"), "セッション：" + sid,
+    ].filter(Boolean).join("／");
+    const num = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+    const body = logs.map((r) => `── ${r.meta?.q ? num[r.meta.q - 1] || r.meta.q : ""} ${new Date(r.ts).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo" })}${r.status === "ok" ? "" : "（" + r.status + (r.reason ? "：" + r.reason : "") + "）"}\n利用者：${r.userText || ""}\nAI：${r.reply || "（返事なし）"}`).join("\n\n");
+    const ctxs = [["最初の返事", first], ...(last !== first ? [["最後の返事", last]] : [])];
+    const tail = ctxs.map(([k, r]) => `── AIへ渡した説明（${k}・${r.meta?.q ? num[r.meta.q - 1] || "" : ""}）\n${r.context || "（記録なし）"}`).join("\n\n");
+    const text = `${head}\n\n＝＝ 会話 ＝＝\n${body}\n\n＝＝ AIへ渡したもの（土地の条件・HPの読み・指示） ＝＝\n${tail}\n`;
+    const name = `session_${new Date(first.ts).toISOString().slice(0, 10)}_${first.type === "talk" ? "Type2" : "Type3"}_${sid.slice(0, 8)}.txt`;
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${name}"` });
+    res.end("﻿" + text); return true;
+  }
   if (req.method === "GET" && url.pathname === "/api/admin/session") { // セッションの再表示用（記録＋会話の本文）。保存した記録がなければ、ログから復元する
     const sid = url.searchParams.get("sid") || "";
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
