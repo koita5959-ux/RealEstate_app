@@ -106,6 +106,7 @@
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="js/shell.js"></script>
+<script src="js/shophp.js"></script>
 <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
@@ -1104,15 +1105,15 @@ function aiContext(n) {
   const nm = TALK.name, staff = TALK.mode === "staff", me = staff ? "弊社" : nm;
   const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
   const w = hp.why || {};
-  if (staff) c += `\n\n【弊社のこと（あなたは${nm}の社員として話します）】`
-    + line("どんな会社か", TALK.what) + line("相談をよく受けている事情", TALK.good) + line("一緒に動く専門家", TALK.team)
-    + line("弊社に合う相談", TALK.fit) + line("弊社に合いにくい相談", TALK.unfit) + line("弊社の強み", TALK.strong) + line("宅建の免許", TALK.lic)
-    + (ex.take ? "\n・弊社が引き受けること（約束してよいのはここに書かれた範囲だけ）：" + ex.take : "\n・弊社が引き受けること：書かれていません。現地を見る・調べる以上の約束（値段・日程・費用）はしません。")
-    + line("この辺りの土地勘", ex.local) + line("連絡の受け方", ex.contact) + line("弊社から伝えたいこと", TALK.memo);
+  if (staff) c += `\n\n【弊社のこと（あなたは${nm}の社員として話します。ホームページの読みと、弊社が書き足したこと）】`
+    + shopKnowText({ ...TALK, why:w, unread:hp.unread || [] }, { own:TALK.own || {}, extra:ex }) + line("宅建の免許", TALK.lic) + line("弊社から伝えたいこと", TALK.memo)
+    + "\n「店の考え」は、名前を出して語るより、受け止め方・話し方に出します。"
+    + (ex.way ? "\n締めで引き受けるときは、「相談を受けたら、最初にすること」に沿って具体的に言います。" : "");
   else c += `\n\n【あなたを置いた会社：${nm}（外から見た目線で話します）】`
     + "\nホームページから読んだこと（店は書き換えられません。話すときは「ホームページによると」など出どころを付けます）："
-    + line("どんな会社か", TALK.what, w.what) + line("相談をよく受けている事情", TALK.good, w.good) + line("一緒に動く専門家", TALK.team, w.team)
-    + line("合う相談", TALK.fit, w.fit) + line("合いにくい相談", TALK.unfit, w.unfit) + line("外から見た強み", TALK.strong, w.strong)
+    + line("どんな会社か", TALK.what, w.what) + line("立場と理由", TALK.stance, w.stance) + line("代表・店の考え", TALK.voice, w.voice)
+    + line("相談をよく受けている事情", TALK.good, w.good) + line("ホームページが取り上げているお客さんの悩み", TALK.worries, w.worries) + line("一緒に動く専門家", TALK.team, w.team)
+    + line("合う相談", TALK.fit, w.fit) + line("合いにくい相談", TALK.unfit, w.unfit) + line("外から見た強み", TALK.strong, w.strong) + line("対応している地域", TALK.area)
     + (TALK.lic ? `\n・宅建の免許（ホームページの免許番号）：${TALK.lic}。括弧の数字は免許の更新回数＋1で、数字が大きいほど長く続けている会社です。` : "")
     + ((hp.unread || []).length ? "\n・ホームページから読めなかったこと：" + hp.unread.join("、") + "。聞かれたら「ホームページからは分かりませんでした」と答えます。" : "")
     + "\n書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。"

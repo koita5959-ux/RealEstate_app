@@ -156,11 +156,7 @@ $("tone").onchange = e => { tone = e.target.value; [...$("tone").children].forEa
 // 外野目線（初期）：HPから読んだ欄に鍵をかける。店が変えたくても変えられない、外からの話の材料になる。変えたければHPを直して読み直す。
 // 社員目線：同じ欄を店が書き換えられる。HPの読みは「外からはこう見えています」として横に残す。HPにないことも足せる。
 const MODES = [["out", "外野目線（初期）", "店が置いたAIですが、外から見た目線で話します。HPから読んだ欄は変えられません"], ["staff", "社員目線", "店の社員として「弊社」と話します。HPから読んだ欄を書き換え、HPにないことも足せます"]];
-const KNOW = [["name", "呼び名"], ["what", "どんな店か"], ["good", "得意な事情"], ["team", "一緒に動く人"], ["fit", "合う相談"], ["unfit", "合いにくい相談"], ["strong", "外から見えた強み"]];
-const EXTRA = [
-  ["take", "引き受けること", "例：現地を見るのは無料。連絡から3日以内に、宅建士が伺います", "締めの「弊社が現地で確かめます」が具体になります。書いたことは約束になります"],
-  ["local", "この辺りの土地勘", "例：長良地区で30年。昔は田んぼだった所、水が出やすい所を知っています", "公開データにない一言が言えます（地域を悪く言う言い方はAIがしません）"],
-  ["contact", "連絡の受け方", "例：平日9〜18時は電話、夜はメール。代表の〇〇が出ます", "電話の後の不安を減らします"]];
+const KNOW = SHOP_KNOW, EXTRA = SHOP_EXTRA; // 欄はタイプ3と共通（js/shophp.js）
 const SAMPLE_HP = {
   url:"https://taskboard.asuscomm.com/RealEstate/", sample:true,
   name:"遠見不動産",
@@ -175,7 +171,7 @@ const SAMPLE_HP = {
     team:"会社案内の「連携先」", fit:"事例3件が、どれも「決める前」の相談から始まっている", strong:"「考え方」の約束と、隣地との調整の実績（累計41件）。HPでは「約束」ですが、外から読むと、この店の芯に見えます" },
   unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
 const clone = o => JSON.parse(JSON.stringify(o));
-let mode = "out", hp = clone(SAMPLE_HP), own = {}, extra = {};
+let mode = "out", hp = clone(SAMPLE_HP), { own, extra } = shopKnow(); // 店が直した欄・書いた欄は、タイプ3と共有
 const eff = k => mode === "out" ? (hp[k] || "") : (own[k] ?? hp[k] ?? "");
 const escH = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 function licNote(lic) { // 括弧の数字は、免許の更新回数＋1（(1)は最初の免許の期間）
@@ -214,7 +210,7 @@ function renderAll() {
   const ex = $("extra"); ex.innerHTML = "";
   for (const [k, label, ph, hint] of EXTRA) {
     ex.insertAdjacentHTML("beforeend", `<div class="k">${label}</div><div>
-      <textarea id="x_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPに書かれていないため、外の目には見えません。HPに載せれば、外野目線でも使えます" : escH(ph)}">${out ? "" : escH(extra[k] || "")}</textarea>
+      <textarea id="x_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPに書かれていないため、外の目には見えません。HPに載せれば、外野目線でも使えます" : escH(k === "unreadAns" ? ((hp.unread || []).length ? "HPから読めなかったこと：" + hp.unread.join("／") : "（HPから読めなかったことはありません）") : ph)}">${out ? "" : escH(extra[k] || "")}</textarea>
       <span class="badge ${out ? "lock" : "free"}">${out ? "空白・変更できません" : "店が書く"}</span><p class="why">${escH(hint)}</p></div>`);
     const f = $("x_" + k);
     if (!out) f.oninput = () => { extra[k] = f.value; draw(); };
@@ -283,6 +279,7 @@ function save() {
     asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null, after:$("after").value === "" ? 1 : Math.max(0, +$("after").value) };
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
   if (!hp.sample) setShopHP(hp); // 読んだHPはタイプ3とも共有
+  setShopKnow({ own, extra }); // 店が直した欄・書いた欄もタイプ3と共有
 }
 function load(t) {
   if (t.lv >= 3) { mode = t.mode === "staff" ? "staff" : "out"; hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }
@@ -290,6 +287,7 @@ function load(t) {
     mode = "out"; hp = clone(SAMPLE_HP); own = {}; extra = {}; $("memo").value = "";
     for (const [k] of KNOW) if (t[k] != null && t[k] !== (SAMPLE_HP[k] || "")) own[k] = t[k];
   }
+  const K = shopKnow(); if (Object.keys(K.own).length || Object.keys(K.extra).length) { own = K.own; extra = K.extra; } // タイプ3で書いた分も読む
   ASKS.splice(0, ASKS.length, ...(t.asks || [])); HANDS.splice(0, HANDS.length, ...(t.hands || []).map(h => h.slice()));
   tone = t.tone || "mid"; [...$("tone").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === tone; l.classList.toggle("on", i.checked); });
   $("limit").value = (t.lv ? t.limit : null) || "";
@@ -301,7 +299,7 @@ $("after").oninput = save;
 $("memo").oninput = save;
 $("reset").onclick = () => {
   if (!confirm("初期値（見本サイトの読み・外野目線）に戻しますか？")) return;
-  load({ lv:3, ...clone(DEF) }); $("url").value = SAMPLE_HP.url; try { localStorage.removeItem("reTalk"); } catch (e) {}
+  setShopKnow({ own:{}, extra:{} }); load({ lv:3, ...clone(DEF) }); own = {}; extra = {}; $("url").value = SAMPLE_HP.url; try { localStorage.removeItem("reTalk"); } catch (e) {}
   rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); renderAll();
 };
 const draw0 = draw; draw = () => { draw0(); save(); };

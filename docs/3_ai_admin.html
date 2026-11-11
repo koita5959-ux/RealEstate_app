@@ -128,18 +128,40 @@
 // ---- あなたのHP：読みは押したときに保存（「決定」とは別）。AIは選択の前の一言で、この読みを弊社のこととして結びつける ----
 (() => {
   const esc1 = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  // 読みは下書き。店が直した欄（own）と、HPにないので店が書く欄（extra）は、書いたそばから保存し、メイン画面のAIへ渡る
   const show = () => {
-    const h = shopHP(); document.getElementById("hpUrl").value = h.url || "";
-    document.getElementById("hpView").innerHTML = h.unreadable ? `<span style="color:#b4472b">${esc1(h.unreadable)}</span>`
-      : [["呼び名", h.name], ["どんな店か", h.what], ["得意な事情", h.good], ["合う相談", h.fit], ["強み", h.strong], ["連携先", h.team], ["免許", h.lic]].filter(x => x[1]).map(([k, v]) => `<b>${k}</b>：${esc1(v)}`).join("<br>")
-        + (h.sample ? '<br><span class="hint">（見本サイトの読みです。あなたのHPのURLを入れて読み取ってください）</span>' : "");
+    const h = shopHP(), K = shopKnow(); document.getElementById("hpUrl").value = h.url || "";
+    const ta = (id, v, ph) => `<textarea id="${id}" rows="1" style="width:100%;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;field-sizing:content" placeholder="${esc1(ph)}">${esc1(v)}</textarea>`;
+    let html = h.unreadable ? `<div style="color:#b4472b;margin-bottom:6px">${esc1(h.unreadable)}</div>` : "";
+    html += `<div style="font-weight:bold;margin:6px 0 2px">HPから読んだこと（下書き。直せばAIは直した方を使います）</div>`;
+    for (const [k, l] of SHOP_KNOW) {
+      const hv = h.unreadable ? "" : (h[k] || ""), changed = K.own[k] != null && K.own[k] !== hv;
+      html += `<div style="margin:4px 0"><b>${l}</b>${changed && hv ? ' <span class="hint">（直しました。HPの読み：' + esc1(hv) + "）</span>" : ""}${ta("kn_" + k, K.own[k] ?? hv, hv ? "" : "HPから読めませんでした。書けば、AIが使います")}</div>`;
+    }
+    if (h.lic) html += `<div class="hint">宅建の免許：${esc1(h.lic)}（HPの免許番号。直せません）</div>`;
+    const un = h.unreadable ? [] : (h.unread || []);
+    html += `<div style="font-weight:bold;margin:12px 0 2px">HPにないが、会話に効くこと（店が書く・空白から）</div>`;
+    for (const [k, l, ph, hint] of SHOP_EXTRA) {
+      const p = k === "unreadAns" ? (un.length ? "HPから読めなかったこと：" + un.join("／") : "（HPから読めなかったことはありません）") : ph;
+      html += `<div style="margin:4px 0"><b>${l}</b> <span class="hint">${esc1(hint)}</span>${ta("ex_" + k, K.extra[k] || "", p)}</div>`;
+    }
+    if (h.sample) html += '<div class="hint">（いまは見本サイトの読みです。あなたのHPのURLを入れて読み取ってください）</div>';
+    const view = document.getElementById("hpView"); view.innerHTML = html;
+    view.oninput = e => {
+      const id = e.target.id || "", k2 = shopKnow();
+      if (id.startsWith("kn_")) { const k = id.slice(3), hv = h.unreadable ? "" : (h[k] || ""); if (e.target.value === hv) delete k2.own[k]; else k2.own[k] = e.target.value; }
+      else if (id.startsWith("ex_")) k2.extra[id.slice(3)] = e.target.value;
+      setShopKnow(k2);
+    };
   };
   show();
   document.getElementById("hpRead").onclick = async () => {
     const url = document.getElementById("hpUrl").value.trim(), st = document.getElementById("hpSt"), btn = document.getElementById("hpRead");
     if (!/^https?:\/\//i.test(url)) { st.textContent = "URLは http:// か https:// から入れてください。"; return; }
+    const K = shopKnow();
+    if (Object.keys(K.own).length && !confirm("読み直すと、HPから読んだ欄で直したところは、新しい読みに戻ります（店が書いた欄はそのまま残ります）。続けますか？")) return;
     btn.disabled = true; st.textContent = "読んでいます…（30秒ほどかかることがあります）";
-    try { const r = await readShopHP(url); if (r.hp) setShopHP(r.hp); st.textContent = r.msg; show(); }
+    try { const r = await readShopHP(url); if (r.hp) { setShopHP(r.hp); setShopKnow({ own:{}, extra:K.extra }); } st.textContent = r.msg; show(); }
     catch (e) { st.textContent = "読み取れませんでした（時間切れか、通信の失敗）。"; }
     finally { btn.disabled = false; }
   };
