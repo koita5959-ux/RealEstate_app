@@ -8,6 +8,8 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { adminHandler, publicStats, summarize } from "./admin.js";
 import { landSetup } from "./land.js";
+import { read as readSite } from "./shop/read.js";
+import { understand } from "./shop/understand.js";
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -25,7 +27,8 @@ const ADMIN_PASSWORD_FILE = env.ADMIN_PASSWORD_FILE || "/run/secrets/admin_passw
 const LAND_KEY_FILE = env.LAND_KEY_FILE || "/run/secrets/reinfolib_api_key"; // 不動産情報ライブラリ。なければ見本の値
 const MAP_KEY_FILE = env.MAP_KEY_FILE || "/run/secrets/google_maps_embed_key"; // Google の Maps Embed API（ストリートビュー）。画面に渡す種類のキーで、使えるサイトを Google 側で限定してある
 const SYSTEM_PROMPT = fs.readFileSync(new URL("./system.txt", import.meta.url), "utf8").trim();
-const SYSTEM_TALK = fs.readFileSync(new URL("./system_talk.txt", import.meta.url), "utf8").trim(); // 2 対話型（外の人）
+const SYSTEM_TALK = fs.readFileSync(new URL("./system_talk.txt", import.meta.url), "utf8").trim(); // 2 対話型・外野目線（初期）
+const SYSTEM_TALK_STAFF = fs.readFileSync(new URL("./system_talk_staff.txt", import.meta.url), "utf8").trim(); // 2 対話型・社員目線（店が選ぶ）
 
 // 価格（USD / 100万トークン）。推定用。Console の請求額が正。
 const PRICES = {
@@ -200,6 +203,7 @@ function parseBody(body) {
   return {
     meta, cut,
     type: body.type === "talk" ? "talk" : "ai", // 画面のタイプ（2 対話型／3 AI型）
+    mode: body.mode === "staff" ? "staff" : "out", // 2 対話型の目線（out＝外野目線、staff＝社員目線）
     sid: clip(body.sid, 64) || "no-sid",
     by: clip(body.by, 32) || "visitor",
     context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
@@ -258,9 +262,9 @@ async function handleChat(req, res) {
   if (spentUsd >= limits().dailyCap) return reject(429, "daily_cap");
   if (rateLimited(who)) return reject(429, "rate_limited");
 
-  const sp = input.type === "talk" ? SYSTEM_TALK : SYSTEM_PROMPT;
+  const sp = input.type === "talk" ? (input.mode === "staff" ? SYSTEM_TALK_STAFF : SYSTEM_TALK) : SYSTEM_PROMPT;
   const system = input.context ? `${sp}\n\n【画面から渡された状況】\n${input.context}` : sp;
-  const rec = { ...base, type: input.type, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
+  const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
@@ -303,6 +307,40 @@ async function handleChat(req, res) {
   } finally {
     release();
   }
+}
+
+// ---- 管理画面の「読み取る」：URLのHPを読み（プログラム）、店の姿を根拠つきで作る（API 1回）。押したときだけ走る ----
+async function handleShopRead(req, res) {
+  const t0 = Date.now();
+  const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
+  const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
+  let b;
+  try { b = await readBody(req, 4096); } catch { return send(res, 400, { error: "bad_request" }); }
+  const target = clip(b && b.url, 500);
+  if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
+  const base = { ts: new Date().toISOString(), who, model: MODEL, type: "shopread", url: target };
+  if (disabled()) return send(res, 503, { error: "disabled" });
+  if (!client) return send(res, 503, { error: "no_key" });
+  if (today() !== spentDate) loadSpent();
+  if (spentUsd >= limits().dailyCap) return send(res, 429, { error: "daily_cap" });
+  if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
+  const r = await readSite(target);
+  const site = { final: r.final, title: r.title, js_only: !!r.js_only, picked: r.picked, error: r.error,
+    pages: r.pages.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, error: p.error })) };
+  if (r.error || r.js_only) { // 読めないHPには API を使わない。読めないこと自体を店に見せる
+    writeLog({ ...base, status: "unreadable", error: r.error || "js_only", costUsd: 0, ms: Date.now() - t0 });
+    return send(res, 200, { site, shop: null, costUsdEstimate: 0, ms: Date.now() - t0 });
+  }
+  if (!(await acquire())) return send(res, 429, { error: "busy" });
+  try {
+    const u = await understand(client, { model: MODEL, maxTokens: 4000, effort: EFFORT }, r);
+    const costUsd = estimateUsd(u.usage); spentUsd += costUsd;
+    writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd, ms: Date.now() - t0, reply: clip(u.text, 4000) });
+    return send(res, 200, { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000), costUsdEstimate: costUsd, ms: Date.now() - t0 });
+  } catch (e) {
+    writeLog({ ...base, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
+    return send(res, 502, { error: "upstream", detail: clip(e.message, 300), site });
+  } finally { release(); }
 }
 
 // ---- 画面の動き（開いた・地図・ピン・押したボタン・閉じた）。AI を呼ばない①〜③も含め、どこまで進んだかを残す ----
@@ -418,6 +456,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, enabled: !disabled(), keyConfigured: !!client, model: MODEL });
     }
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
+    if (req.method === "POST" && url.pathname === "/api/shopread") return await handleShopRead(req, res);
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);

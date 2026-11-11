@@ -59,31 +59,45 @@
   .ai.close { border-color:var(--out); background:var(--out-bg); }
   .shopbtn { display:inline-block; margin-top:6px; font-size:12px; padding:4px 10px; border-radius:6px; background:var(--accent); color:#fff; }
   .legend { font-size:11px; color:var(--sub); margin-top:14px; line-height:1.6; }
+  /* 目線と鍵 */
+  .eye .seg label { flex:1 1 220px; }
+  .badge { display:inline-block; font-size:10px; padding:0 6px; border-radius:8px; margin-left:4px; vertical-align:1px; }
+  .badge.lock { background:#e8e2f3; color:var(--app); }
+  .badge.free { background:#e6f0fa; color:var(--accent); }
+  .badge.fact { background:#f3ece0; color:#8a5a14; }
+  textarea.locked, input.locked { background:var(--lock); color:var(--sub); border-style:dashed; }
+  textarea.locked:not(:placeholder-shown) { color:var(--ink); }
+  .mirror { font-size:11px; color:var(--app); background:#f6f2fb; border-radius:4px; padding:3px 7px; margin-top:3px; }
+  .mirror::before { content:"外からはこう見えています："; color:var(--sub); }
+  .readst { font-size:12px; margin-top:6px; color:var(--sub); }
+  .readst.err { color:#b4472b; }
 </style>
 </head>
 <body>
 <header id="appbar" data-current="admin" data-title="2. 管理画面 ― 試作（コンテンツ：2 対話型）"></header>
 <script src="js/shell.js"></script>
-<div class="noticebar">初期値は、見本サイト「遠見不動産」を読んだ設定です（読み取りボタンはまだ動きません）。左を書き換えると、右の会話の見本が変わり、このブラウザのメイン画面にもすぐ反映されます。</div>
+<div class="noticebar">初期値は、見本サイト「遠見不動産」を読んだ設定です。URLを入れて「読み取る」を押すと、そのHPを読んで1を作り直します（1回で数円〜十数円のAPI費用）。左を書き換えると、右の会話の見本と、このブラウザのメイン画面にすぐ反映されます。</div>
 <div class="wrap">
   <main class="admin">
-    <h2>あなたのHP <span class="who shop">店が入れる</span></h2>
-    <div class="box url"><input id="url" value="https://taskboard.asuscomm.com/RealEstate/"><button disabled>読み取る（準備中）</button></div>
+    <h2>AIの目線 <span class="who shop">店が選ぶ</span></h2>
+    <div class="eye"><div class="seg" id="mode"></div></div>
 
-    <h2><span class="n">1</span>この人が知っている、あなたの店 <span class="who app">HPから読んだもの</span></h2>
-    <p class="lead">相談の相手は、あなたの店をよく知る「不動産好きの外の人」です。HPからこう読みました。違う所は直してください。直せば、この人の話も変わります。</p>
-    <div class="box know">
-      <div class="k">呼び名</div>
-      <div><input class="t" id="name" value="遠見不動産"><p class="why">ページ名と会社案内の会社名</p></div>
-      <div class="k">どんな店か</div>
-      <div><textarea id="what">売却ありきで始めず、残す・貸す・売る・隣と合わせるを並べて持ち主と考える店</textarea><p class="why">「考え方」の約束（売却ありきで始めない／選択肢は3つ以上）と、よくある質問</p></div>
-      <div class="k">得意な事情</div>
-      <div><textarea id="good">古い家・空き家、遠方に住む持ち主、旗竿地など売りにくい土地、隣の土地と合わせると変わる土地</textarea><p class="why">事例3件と、よくある質問（遠方でも相談できる）</p></div>
-      <div class="k">一緒に動く人</div>
-      <div><textarea id="team">司法書士、土地家屋調査士、税理士、一級建築士事務所、地域の工務店・解体業者</textarea><p class="why">会社案内の「連携先」</p></div>
-    </div>
-    <div class="strong"><b>外から見えた強み</b><textarea id="strong" style="margin-top:4px;background:transparent">敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること</textarea><p class="why">「考え方」の約束と、隣地との調整の実績（累計41件）。HPでは「約束」ですが、外から読むと、この店の芯に見えます</p></div>
-    <div class="unread">HPから読めなかったこと：担当している地域の地名（「事務所から2.5km」とだけある）、買取をどんなときにするか</div>
+    <h2>あなたのHP <span class="who shop">店が入れる</span></h2>
+    <div class="box"><div class="url"><input id="url" value="https://taskboard.asuscomm.com/RealEstate/"><button id="readBtn">読み取る</button></div>
+      <div class="readst" id="readSt">トップと、会社概要・事例のページを一段だけ読みます。書かれていないことは作りません。</div></div>
+
+    <h2><span class="n">1</span>このAIが知っている、あなたの店 <span class="who app">HPから読んだもの</span></h2>
+    <p class="lead" id="lead1"></p>
+    <div class="box know" id="know"></div>
+    <div class="unread" id="unread"></div>
+
+    <h2>HPにないが、会話に効くこと <span class="who shop" id="extraWho">店が書く</span></h2>
+    <p class="lead" id="leadX"></p>
+    <div class="box know" id="extra"></div>
+
+    <h2>店からの一言 <span class="who shop">店が書く</span></h2>
+    <p class="lead" id="leadMemo"></p>
+    <div class="box"><textarea id="memo" placeholder="例：土日も現地を見に行きます。まずは話だけでも大丈夫です。"></textarea></div>
 
     <h2><span class="n">2</span>聞き出してほしいこと <span class="who shop">店が書く</span></h2>
     <p class="lead">お客さんから聞きたいことを、聞きたい順に書きます。この人は話の流れの中で、自然に聞ける所で聞きます（質問の言い回しは書かなくて大丈夫です）。</p>
@@ -108,7 +122,7 @@
 
   <aside class="side">
     <h3>話し方の見本</h3>
-    <div class="persona"><div class="face">外</div><p><b>この店を知る、不動産好きの人</b><br>店の人ではありません。店のことは「<span id="pName"></span>」（敬称なし）と外から呼びます。</p></div>
+    <div class="persona" id="persona"></div>
     <div class="chat" id="chat"></div>
     <p class="legend">緑の下線＝「1」で読んだこと（根拠）から出た言葉。<br>右の見本は、左の設定から組み立てた例です。本番ではAIが、お客さんの言葉に合わせて話します。</p>
   </aside>
@@ -136,7 +150,109 @@ $("addAsk").onclick = () => { ASKS.push(""); rowList($("asks"), ASKS, false); };
 $("addHand").onclick = () => { HANDS.push(["", ""]); rowList($("hands"), HANDS, true); };
 $("tone").innerHTML = TONES.map(([k, l, s]) => `<label class="${k === tone ? "on" : ""}"><input type="radio" name="tone" value="${k}" ${k === tone ? "checked" : ""}>${l}<small>${s}</small></label>`).join("");
 $("tone").onchange = e => { tone = e.target.value; [...$("tone").children].forEach(l => l.classList.toggle("on", l.querySelector("input").checked)); draw(); };
-["name", "what", "good", "team"].forEach(id => $(id).oninput = draw);
+// ---- 目線と、HPから読んだもの（hp）／店が直したもの（own） ----
+// 外野目線（初期）：HPから読んだ欄に鍵をかける。店が変えたくても変えられない、外からの話の材料になる。変えたければHPを直して読み直す。
+// 社員目線：同じ欄を店が書き換えられる。HPの読みは「外からはこう見えています」として横に残す。HPにないことも足せる。
+const MODES = [["out", "外野目線（初期）", "店が置いたAIですが、外から見た目線で話します。HPから読んだ欄は変えられません"], ["staff", "社員目線", "店の社員として「弊社」と話します。HPから読んだ欄を書き換え、HPにないことも足せます"]];
+const KNOW = [["name", "呼び名"], ["what", "どんな店か"], ["good", "得意な事情"], ["team", "一緒に動く人"], ["fit", "合う相談"], ["unfit", "合いにくい相談"], ["strong", "外から見えた強み"]];
+const EXTRA = [
+  ["take", "引き受けること", "例：現地を見るのは無料。連絡から3日以内に、宅建士が伺います", "締めの「弊社が現地で確かめます」が具体になります。書いたことは約束になります"],
+  ["local", "この辺りの土地勘", "例：長良地区で30年。昔は田んぼだった所、水が出やすい所を知っています", "公開データにない一言が言えます（地域を悪く言う言い方はAIがしません）"],
+  ["contact", "連絡の受け方", "例：平日9〜18時は電話、夜はメール。代表の〇〇が出ます", "電話の後の不安を減らします"]];
+const SAMPLE_HP = {
+  url:"https://taskboard.asuscomm.com/RealEstate/", sample:true,
+  name:"遠見不動産",
+  what:"売却ありきで始めず、残す・貸す・売る・隣と合わせるを並べて持ち主と考える店",
+  good:"古い家・空き家、遠方に住む持ち主、旗竿地など売りにくい土地、隣の土地と合わせると変わる土地",
+  team:"司法書士、土地家屋調査士、税理士、一級建築士事務所、地域の工務店・解体業者",
+  fit:"売るか残すか決めていない空き家、隣の土地と合わせると変わる土地",
+  unfit:"",
+  strong:"敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること",
+  lic:"",
+  why:{ name:"ページ名と会社案内の会社名", what:"「考え方」の約束（売却ありきで始めない／選択肢は3つ以上）と、よくある質問", good:"事例3件と、よくある質問（遠方でも相談できる）",
+    team:"会社案内の「連携先」", fit:"事例3件が、どれも「決める前」の相談から始まっている", strong:"「考え方」の約束と、隣地との調整の実績（累計41件）。HPでは「約束」ですが、外から読むと、この店の芯に見えます" },
+  unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
+const clone = o => JSON.parse(JSON.stringify(o));
+let mode = "out", hp = clone(SAMPLE_HP), own = {}, extra = {};
+const eff = k => mode === "out" ? (hp[k] || "") : (own[k] ?? hp[k] ?? "");
+const escH = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+function licNote(lic) { // 括弧の数字は、免許の更新回数＋1（(1)は最初の免許の期間）
+  const n = +((String(lic).match(/[（(]\s*(\d+)\s*[)）]/) || [])[1] || 0);
+  return n > 1 ? `（${n}）＝免許を${n - 1}回更新している` : n === 1 ? "（1）＝最初の免許の期間" : "";
+}
+
+$("mode").innerHTML = MODES.map(([k, l, s]) => `<label><input type="radio" name="mode" value="${k}">${l}<small>${s}</small></label>`).join("");
+$("mode").onchange = e => { mode = e.target.value; renderAll(); };
+function renderAll() {
+  [...$("mode").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === mode; l.classList.toggle("on", i.checked); });
+  const out = mode === "out";
+  $("lead1").textContent = out
+    ? "外野目線では、ここはHPから読んだままで、変えられません。AIはこれを「HPによると」と出どころを付けて話します。違う所があれば、HPを直して「読み取る」を押し直してください。"
+    : "社員目線では、HPから読んだものを初期値にして書き換えられます。書き換えた欄には、HPからの読み（外からの見え方）を並べて出します。";
+  const know = $("know"); know.innerHTML = "";
+  for (const [k, label] of KNOW) {
+    const v = eff(k), why = hp.why && hp.why[k], changed = !out && own[k] != null && own[k] !== (hp[k] || "");
+    know.insertAdjacentHTML("beforeend", `<div class="k">${label}</div><div>
+      <textarea id="f_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPから読めませんでした" : "HPから読めませんでした。書けば、AIが使います"}">${escH(v)}</textarea>
+      <span class="badge ${out ? "lock" : "free"}">${out ? "HPより・変更できません" : "HPより（初期値）・書き換えできます"}</span>
+      ${why ? `<p class="why">${escH(why)}</p>` : ""}${changed && hp[k] ? `<div class="mirror">${escH(hp[k])}</div>` : ""}</div>`);
+    const f = $("f_" + k);
+    if (!out) f.oninput = () => { own[k] = f.value; draw(); };
+  }
+  const lic = hp.lic || "";
+  know.insertAdjacentHTML("beforeend", `<div class="k">宅建の免許</div><div><input class="t locked" readonly value="${escH(lic)}" placeholder="HPに免許番号が見つかりません">
+    <span class="badge fact">決まった形の事実・どちらの目線でも変更できません</span>${lic ? `<p class="why">HPの免許番号${escH(licNote(lic))}。プログラムが拾い、AIには数え直させません</p>` : ""}</div>`);
+  const un = hp.unread || [];
+  $("unread").style.display = un.length || hp.unreadable ? "" : "none";
+  $("unread").innerHTML = hp.unreadable ? escH(hp.unreadable) : "HPから読めなかったこと：" + un.map(escH).join("、") + (out ? "<br>外野目線のAIは、聞かれたら「HPからは分かりませんでした」と答えます。HPに載せれば、答えられるようになります。" : "");
+  $("extraWho").textContent = out ? "外野目線では空白のまま" : "店が書く";
+  $("leadX").textContent = out
+    ? "零細の不動産屋のHPにはほとんど書かれていないけれど、会話の締めを強くすることです。外の目にはHPに載っていることしか見えないので、外野目線では空白のまま変えられません。ここが空いている数だけ、HPに足すと会話が強くなるものがあります。"
+    : "HPに載っていないけれど、AIとの会話に効くことを書きます。社員目線のAIは、これを弊社の言葉として使います。";
+  const ex = $("extra"); ex.innerHTML = "";
+  for (const [k, label, ph, hint] of EXTRA) {
+    ex.insertAdjacentHTML("beforeend", `<div class="k">${label}</div><div>
+      <textarea id="x_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPに書かれていないため、外の目には見えません。HPに載せれば、外野目線でも使えます" : escH(ph)}">${out ? "" : escH(extra[k] || "")}</textarea>
+      <span class="badge ${out ? "lock" : "free"}">${out ? "空白・変更できません" : "店が書く"}</span><p class="why">${escH(hint)}</p></div>`);
+    const f = $("x_" + k);
+    if (!out) f.oninput = () => { extra[k] = f.value; draw(); };
+  }
+  $("leadMemo").textContent = out
+    ? "外野目線のAIは、これを「" + (eff("name") || "店") + "からの一言では」と出どころを付けて伝えます。HPから読んだことと混ぜません。"
+    : "社員目線のAIは、これを弊社の言葉として使います。";
+  draw();
+}
+
+// ---- 読み取る：サーバーがHPを読み（トップ＋会社概要・事例を一段）、APIで店の姿を根拠つきで作る ----
+$("readBtn").onclick = async () => {
+  const url = $("url").value.trim();
+  if (!/^https?:\/\//i.test(url)) { setSt("URLは http:// か https:// から入れてください。", true); return; }
+  if (Object.keys(own).some(k => own[k] != null) && !confirm("読み直すと、社員目線で書き換えた「1」の欄は、新しい読みに戻ります。続けますか？")) return;
+  $("readBtn").disabled = true; setSt("読んでいます…（30秒ほどかかることがあります）");
+  try {
+    const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url }), signal:AbortSignal.timeout(85000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setSt({ daily_cap:"今日の費用の上限に達しています。", rate_limited:"続けて押されています。少し待ってください。", busy:"混み合っています。少し待ってください。", disabled:"いまAIは止めてあります。", no_key:"APIの鍵が設定されていません。" }[j.error] || "読み取れませんでした（" + (j.detail || j.error || r.status) + "）", true); return; }
+    const s = j.site || {}, p = s.picked || {};
+    if (!j.shop) {
+      const why = s.js_only ? "このHPは外から読み取りにくい作りです（画面をJavaScriptで作っていて、本文がほとんど読めません）。検索やAIにも読まれにくい作りなので、HPの作り直しの候補です。"
+        : s.error === "blocked" ? "このURLには取りに行けません（社内のネットワークなど）。"
+        : "HPを読めませんでした（" + (s.error || "形が読み取れない") + "）。";
+      hp = { url, name:s.title || "", lic:(p.lic || []).join("、"), why:{}, unread:[], unreadable:why }; own = {};
+      setSt(why, true); save(); renderAll(); return;
+    }
+    const sh = j.shop, join = a => Array.isArray(a) ? a.filter(Boolean).join("、") : String(a || "");
+    hp = { url:s.final || url, name:sh.name || s.title || "", shogo:sh.shogo || "", form:sh.form || "", what:sh.what || "", good:join(sh.good), team:join(sh.team),
+      fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
+      why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
+    own = {};
+    const pages = (s.pages || []).filter(x => !x.error).map(x => ({ top:"トップ", profile:"会社概要", case:"事例" }[x.kind] || x.kind));
+    setSt(`読み取りました：${pages.join("・")}（${pages.length}ページ）。` + (hp.form && hp.form !== "店自身" ? `HPの形：${hp.form}。` : "") + (j.costUsdEstimate ? `費用の目安 約${Math.max(1, Math.round(j.costUsdEstimate * 155))}円。` : ""));
+    save(); renderAll();
+  } catch (e) { setSt("読み取れませんでした（時間切れか、通信の失敗）。", true); }
+  finally { $("readBtn").disabled = false; }
+};
+function setSt(t, err) { $("readSt").textContent = t; $("readSt").classList.toggle("err", !!err); }
 
 // 会話の見本（APIなし。設定からの組み立て）
 const first = s => (s || "").split(/[、。,]/)[0].trim();
@@ -146,47 +262,61 @@ function askLine(a) {
   return say(`ちなみに、${a}って、どんな感じです？`, `よければ、${a}を教えてもらえますか。`, `差し支えなければ、${a}をお聞かせいただけますか。`);
 }
 function draw() {
-  const name = $("name").value.trim() || "この会社";
-  $("pName").textContent = name;
+  const out = mode === "out", name = eff("name").trim() || "この会社";
+  $("persona").innerHTML = out
+    ? `<div class="face">外</div><p><b>${escH(name)}が置いた、外から見るAI</b><br>店のことは「${escH(name)}」（敬称なし）と外から呼び、「HPによると」と出どころを付けて話します。約束はしません。</p>`
+    : `<div class="face" style="background:var(--accent)">社</div><p><b>${escH(name)}の社員として話すAI</b><br>自分たちを「弊社」と呼び、「引き受けること」に書いた範囲で引き受けます。</p>`;
   const asks = ASKS.filter(Boolean), hand = HANDS.find(h => h[0]) || ["", ""];
-  const good = first($("good").value), what = $("what").value.trim();
-  const m = (t) => `<mark>${t}</mark>`;
+  const good = first(eff("good")), what = eff("what").trim(), take = !out && (extra.take || "").trim();
+  const m = (t) => `<mark>${escH(t)}</mark>`, who = out ? name + "は、HPによると" : "弊社は";
   const chat = [
     ["me", "親の実家が5年ほど空き家です。古いので、更地にして売るしかないと思っています。"],
     ["ai", say("古い家だと、そう思いますよね。", "古い家だと、そう考える方は多いです。", "古いお家ですと、そのようにお考えになる方は多いです。")
-      + (good ? ` ただ、${name}は${m(good)}の相談をよく受けているようで、売る以外の道が出てくることもあります。` : "")
+      + (good ? ` ただ、${who}${m(good)}の相談をよく受けていて、売る以外の道が出てくることもあります。` : "")
       + " " + askLine(asks[0]), asks[0] ? "聞き出してほしいこと 1" : ""],
     ["me", "まだ何も決めていません。隣も空き地になっています。"],
     ["ai", say("隣が空いてるなら、話が変わるかもしれません。", "隣が空いているなら、合わせると話が変わることがあります。", "お隣が空いているのでしたら、合わせることで見方が変わる場合があります。")
-      + (what ? ` ${name}は${m(what.replace(/。$/, ""))}なので、決めていない段階の方が合っています。` : "")
+      + (what ? ` ${who}${m(what.replace(/。$/, ""))}なので、決めていない段階の方が合っています。` : "")
       + " " + askLine(asks[1]), asks[1] ? "聞き出してほしいこと 2" : ""],
     ["me", "隣の持ち主のことは、少し知っています。"],
     ["ai close", hand[0]
-      ? say(`それなら、ここから先は${name}に聞いた方が早いですよ。`, `それなら、ここから先は${name}に聞いた方がいいと思います。`, `それでしたら、この先は${name}にご相談なさるのが確かです。`)
-        + (hand[1] ? ` ${m(hand[1].replace(/ので$/, ""))}からです。` : "") + `<br><span class="shopbtn">メールで問い合わせる</span>`
-      : "（勧める場面が書かれていないので、この人は話を続けます）", hand[0] ? `勧める場面：${hand[0]}` : ""],
+      ? (out
+        ? `まだ決まっていないのは、隣と合わせたときにどんな形の土地になるかです。それは現地を見ないと分かりません。${name}に「隣と合わせたらどうなるか、現地で見てもらえますか」と聞くと、話がはっきりします。`
+          + (hand[1] ? ` HPによると、${m(hand[1].replace(/ので$/, ""))}そうです。` : "")
+        : `まだ決まっていないのは、隣と合わせたときにどんな形の土地になるかです。そこは弊社が現地で確かめます。` + (take ? ` ${m(take)}。` : ""))
+        + `<br><span class="shopbtn">メールで問い合わせる</span>`
+      : "（勧める場面が書かれていないので、このAIは話を続けます）", hand[0] ? `勧める場面：${hand[0]}（締め：まだ決まっていない点を名指しする）` : ""],
   ];
-  $("chat").innerHTML = chat.map(([c, t, tag]) => `<div class="${c}">${t}${tag ? `<span class="tag">${tag}</span>` : ""}</div>`).join("");
+  $("chat").innerHTML = chat.map(([c, t, tag]) => `<div class="${c}">${t}${tag ? `<span class="tag">${escH(tag)}</span>` : ""}</div>`).join("");
 }
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
-const FIELDS = ["name", "what", "good", "team", "strong"];
-const DEF = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:null };
+const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:null };
 function save() {
-  const t = { ...Object.fromEntries(FIELDS.map(id => [id, $(id).value.trim()])), asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null, lv:2 }; // lv＝上限の既定が空になった後の保存
+  const flat = Object.fromEntries(KNOW.map(([k]) => [k, eff(k).trim()])); // 今の目線で効いている値（メイン画面が読む）
+  const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
+    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null };
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
 }
 function load(t) {
-  FIELDS.forEach(id => { if (t[id] != null) $(id).value = t[id]; });
+  if (t.lv >= 3) { mode = t.mode === "staff" ? "staff" : "out"; hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }
+  else { // 目線を入れる前の保存：見本の読みと違う所を、店が直したもの（社員目線）として引き継ぐ
+    mode = "out"; hp = clone(SAMPLE_HP); own = {}; extra = {}; $("memo").value = "";
+    for (const [k] of KNOW) if (t[k] != null && t[k] !== (SAMPLE_HP[k] || "")) own[k] = t[k];
+  }
   ASKS.splice(0, ASKS.length, ...(t.asks || [])); HANDS.splice(0, HANDS.length, ...(t.hands || []).map(h => h.slice()));
   tone = t.tone || "mid"; [...$("tone").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === tone; l.classList.toggle("on", i.checked); });
-  $("limit").value = t.limit || "";
+  $("limit").value = (t.lv ? t.limit : null) || "";
 }
-try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && t.name) load(t.lv ? t : { ...t, limit:null }); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
+try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && (t.name || t.hp)) load(t); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
 $("limit").oninput = save;
-$("reset").onclick = () => { if (!confirm("初期値（見本サイトの読み）に戻しますか？")) return; load(DEF); try { localStorage.removeItem("reTalk"); } catch (e) {} rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); draw(); };
+$("memo").oninput = save;
+$("reset").onclick = () => {
+  if (!confirm("初期値（見本サイトの読み・外野目線）に戻しますか？")) return;
+  load({ lv:3, ...clone(DEF) }); $("url").value = SAMPLE_HP.url; try { localStorage.removeItem("reTalk"); } catch (e) {}
+  rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); renderAll();
+};
 const draw0 = draw; draw = () => { draw0(); save(); };
-FIELDS.forEach(id => $(id).oninput = draw); // 上で結んだ古い draw を、保存つきに付け替える
-rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); draw();
+rowList($("asks"), ASKS, false); rowList($("hands"), HANDS, true); renderAll();
 </script>
 </body>
 </html>

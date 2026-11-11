@@ -371,7 +371,7 @@ document.getElementById("go").onclick = () => {
   R.innerHTML = `
     <h2>2. データ（公開データから機械的に）</h2>
     <div id="landData"></div>
-    <h2>3. AI</h2>
+    <h2>3. AI <span class="hint" id="talkWho"></span></h2>
     <div id="talk"></div>
     <div id="inq"></div>`;
   renderData();
@@ -452,8 +452,11 @@ const TALK_DEFAULT = {
   strong:"敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること",
   asks:["この家をどうしたいか（決めていなくてよい）", "隣の土地や通りの様子", "持ち主が今どこに住んでいるか"],
   hands:[["隣の土地との話", "隣地との調整を何度も手がけていて、相手との話し方を知っているので"], ["売るか残すか迷っている", "決めるまで、調査と比較表を無料で作ってくれるので"]],
-  tone:"mid", limit:null }; // limit 空＝上限なし
+  fit:"売るか残すか決めていない空き家、隣の土地と合わせると変わる土地",
+  hp:{ unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] },
+  mode:"out", tone:"mid", limit:null }; // limit 空＝上限なし。mode：out＝外野目線（初期）、staff＝社員目線
 const TALK = (() => { try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.lv ? {} : { limit:null }) } : TALK_DEFAULT; } catch (e) { return TALK_DEFAULT; } })();
+{ const w = document.getElementById("talkWho"); if (w) w.textContent = `このAIは${TALK.name}が設置しています（${TALK.mode === "staff" ? "社員目線" : "外から見た目線"}で話します）`; }
 window.addEventListener("storage", e => { if (e.key === "reTalk") location.reload(); }); // 管理画面で書き換えたら読み直す
 // ---- ④から先：管理画面（3_ai_admin.html）で店が書いた選択肢で進む ----
 // 管理画面で「設定確定」した設定はブラウザに保存され、ここで読む。なければ総合系の初期値。
@@ -628,7 +631,7 @@ async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明を�
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ type:"talk", sid:SID, by:BY, context:ctx || aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
+      body: JSON.stringify({ type:"talk", mode:TALK.mode === "staff" ? "staff" : "out", sid:SID, by:BY, context:ctx || aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
     const d = await r.json();
     TRACE = { sent:d.trace, raw:d.text || "", stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
@@ -1096,19 +1099,34 @@ function aiContext(n) {
   if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
   else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
   if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
-  const nm = TALK.name;
-  c += `\n\n【あなたが知っている会社：${nm}】`
-    + (TALK.what ? "\n・どんな会社か：" + TALK.what : "") + (TALK.good ? "\n・相談をよく受けている事情：" + TALK.good : "")
-    + (TALK.team ? "\n・一緒に動く専門家：" + TALK.team : "") + (TALK.strong ? "\n・外から見た強み：" + TALK.strong : "")
-    + "\nこれはホームページから読んだことです。書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。";
+  const nm = TALK.name, staff = TALK.mode === "staff", me = staff ? "弊社" : nm;
+  const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
+  const w = hp.why || {};
+  if (staff) c += `\n\n【弊社のこと（あなたは${nm}の社員として話します）】`
+    + line("どんな会社か", TALK.what) + line("相談をよく受けている事情", TALK.good) + line("一緒に動く専門家", TALK.team)
+    + line("弊社に合う相談", TALK.fit) + line("弊社に合いにくい相談", TALK.unfit) + line("弊社の強み", TALK.strong) + line("宅建の免許", TALK.lic)
+    + (ex.take ? "\n・弊社が引き受けること（約束してよいのはここに書かれた範囲だけ）：" + ex.take : "\n・弊社が引き受けること：書かれていません。現地を見る・調べる以上の約束（値段・日程・費用）はしません。")
+    + line("この辺りの土地勘", ex.local) + line("連絡の受け方", ex.contact) + line("弊社から伝えたいこと", TALK.memo);
+  else c += `\n\n【あなたを置いた会社：${nm}（外から見た目線で話します）】`
+    + "\nホームページから読んだこと（店は書き換えられません。話すときは「ホームページによると」など出どころを付けます）："
+    + line("どんな会社か", TALK.what, w.what) + line("相談をよく受けている事情", TALK.good, w.good) + line("一緒に動く専門家", TALK.team, w.team)
+    + line("合う相談", TALK.fit, w.fit) + line("合いにくい相談", TALK.unfit, w.unfit) + line("外から見た強み", TALK.strong, w.strong)
+    + (TALK.lic ? `\n・宅建の免許（ホームページの免許番号）：${TALK.lic}。括弧の数字は免許の更新回数＋1で、数字が大きいほど長く続けている会社です。` : "")
+    + ((hp.unread || []).length ? "\n・ホームページから読めなかったこと：" + hp.unread.join("、") + "。聞かれたら「ホームページからは分かりませんでした」と答えます。" : "")
+    + "\n書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。"
+    + (TALK.memo ? `\n\n【${nm}からの一言】（会社が書いたもの。使うときは「${nm}からの一言では」と出どころを付け、ホームページの読みと混ぜません）\n` + TALK.memo : "");
   const asks = (TALK.asks || []).filter(a => a && a.trim());
   if (asks.length) c += `\n\n【${nm}が、利用者から聞きたいこと（聞きたい順）】\n` + asks.map((a, x) => `${x + 1}. ${a}`).join("\n")
     + "\nまだ聞けていないものを、話の流れで自然に聞ける所で一つだけ聞きます。不自然なら利用者の話を追います。質問の言い回しは自分で考えます。";
+  // 締め：まだ決まっていない点を一つ名指しし、現地を見ないと決まらない理由を一言。社員目線は引き受け、外野目線は店へ持っていく問いとして渡す
+  const CLOSE = staff
+    ? `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「そこは弊社が現地で確かめます」と引き受けます。引き受けの中身は「弊社が引き受けること」の範囲だけにします。`
+    : `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「${nm}に『〜を現地で見てもらえますか』と聞くと、話がはっきりします」のように、${nm}へ持っていく問いを一つ渡します。${nm}の代わりに約束はしません。ホームページから読んだ合う相談とこの件が重なれば、出どころを付けてそれも添えます。`;
   const hands = (TALK.hands || []).map((h, x) => ({ h, x })).filter(o => o.h[0] && o.h[0].trim());
   if (hands.length) c += `\n\n【${nm}を勧める場面】\n` + hands.map(o => `${o.x + 1}. ${o.h[0]}` + (o.h[1] ? `（理由：${o.h[1]}）` : "")).join("\n")
-    + `\n利用者の話がこのどれかに当たったら、その返事で「ここから先は${nm}に聞いた方がいい」と、理由を添えて勧めます。問いかけは付けません。返事の最後に、行を分けて【勧める:番号】とだけ書きます。当たらなければ書きません。`;
+    + `\n利用者の話がこのどれかに当たったら、その返事で${staff ? "弊社が直接うかがう方がよいと" : `「ここから先は${nm}に聞いた方がいい」と`}理由を添えて勧めます。そのときの返事は、次の締めの形にします。${CLOSE}問いかけは付けません。返事の最後に、行を分けて【勧める:番号】とだけ書きます。当たらなければ書きません。`;
   c += "\n" + (TONE_TXT[TALK.tone] || TONE_TXT.mid);
-  if (n >= LIMIT_T - 1) c += `\nこれが最後の返事です。直前の利用者の言葉に短く答え、${nm}に相談するとよい理由を一言添えます。問いかけは付けません。`;
+  if (n >= LIMIT_T - 1) c += `\nこれが最後の返事です。直前の利用者の言葉に短く答えてから、締めます。${CLOSE}問いかけは付けません。`;
   return c;
 }
 function closeNow() { return HANDED && HANDED[1] ? `ご相談をおすすめする理由：${HANDED[1].replace(/ので$/, "")}` : ""; }
@@ -1118,7 +1136,7 @@ function goStep(i, lead, real) {
   lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
   if (HANDED || i >= LIMIT_T) {
     S.sheet.勧めた場面 = HANDED ? esc(HANDED[0]) : "（往復の上限まで話した）";
-    say(lead + (HANDED ? "" : `<br>ここから先は、${esc(TALK.name)}に直接聞いてみてください。`),
+    say(lead + (HANDED ? "" : (TALK.mode === "staff" ? "<br>ここから先は、弊社に直接お問い合わせください。" : `<br>ここから先は、${esc(TALK.name)}に直接聞いてみてください。`)),
       real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：往復の上限（${LIMIT_T}）`);
     STAGE = "店を勧めた"; inquiryBar(); saveSession();
     return;

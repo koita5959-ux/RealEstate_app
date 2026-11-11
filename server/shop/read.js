@@ -2,17 +2,45 @@
 // トップと「会社概要」などを一段だけたどり、決まった形のもの（免許番号・電話・住所）を拾う。
 // 使い方（試験）：node server/shop/read.js <CSV> <出力JSON>
 import fs from 'fs';
+import dns from 'dns/promises';
+import net from 'net';
 import { pathToFileURL } from 'url';
 
 const UA = 'Mozilla/5.0 (RealEstate_app siteread; +https://taskboard.asuscomm.com/RealEstate_app/)';
 const PROFILE_WORDS = /会社概要|会社案内|会社情報|企業情報|事務所概要|事務所案内|店舗情報|店舗案内|アクセス|プロフィール|運営会社|運営者|私たちについて|当社について|company|profile|about|access|outline|gaiyou|gaiyo/i;
+const CASE_WORDS = /事例|実績|お客様の声|お客さまの声|売却事例|解決事例|取扱物件|取引事例|case|works|voice/i; // 合う相談・合いにくい相談は事例の偏りから読む
 const TEXT_MAX = 8000;
+
+// 管理画面から誰でもURLを渡せるので、サーバーの内側（LAN・自分自身）へは取りに行かない
+function privateIp(a) {
+  if (net.isIPv4(a)) {
+    const [x, y] = a.split('.').map(Number);
+    return x === 10 || x === 127 || x === 0 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224;
+  }
+  const v = a.toLowerCase();
+  if (v.startsWith('::ffff:')) return privateIp(v.slice(7));
+  return v === '::1' || v === '::' || /^f[cd]/.test(v) || v.startsWith('fe80');
+}
+async function safeUrl(u) {
+  let x; try { x = new URL(u); } catch { return false; }
+  if (!/^https?:$/.test(x.protocol) || (x.port && !['80', '443'].includes(x.port)) || x.username || x.password) return false;
+  try { const as = await dns.lookup(x.hostname, { all: true }); return as.length > 0 && as.every(a => !privateIp(a.address)); }
+  catch { return false; }
+}
 
 async function get(url) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 15000);
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'ja' }, redirect: 'follow', signal: ac.signal });
+    let r;
+    for (let hop = 0; ; hop++) { // 転送は1段ずつ確かめてから追う（転送先がLANの内側なら止める）
+      if (!(await safeUrl(url))) return { ok: false, status: 0, url, error: 'blocked' };
+      r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'ja' }, redirect: 'manual', signal: ac.signal });
+      const loc = r.headers.get('location');
+      if (r.status < 300 || r.status >= 400 || !loc) break;
+      if (hop >= 4) return { ok: false, status: r.status, url, error: 'too_many_redirects' };
+      url = new URL(loc, url).href;
+    }
     const buf = Buffer.from(await r.arrayBuffer());
     const ct = r.headers.get('content-type') || '';
     let cs = (ct.match(/charset=([\w-]+)/i) || [])[1];
@@ -20,7 +48,7 @@ async function get(url) {
     let html;
     try { html = new TextDecoder(cs.toLowerCase().replace('x-sjis', 'shift_jis')).decode(buf); }
     catch { html = buf.toString('utf8'); }
-    return { ok: r.ok, status: r.status, url: r.url, html };
+    return { ok: r.ok, status: r.status, url, html };
   } catch (e) {
     return { ok: false, status: 0, url, error: String(e.name === 'AbortError' ? 'timeout' : e.message || e) };
   } finally { clearTimeout(t); }
@@ -68,12 +96,15 @@ async function read(url) {
   const seen = new Set([top.url]);
   const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
     && (new URL(l.url).host === host || /about|company|profile/i.test(l.url)));
-  const uniq = [...new Map(cands.map(l => [l.url, l])).values()].slice(0, 2);
+  const uniq = [...new Map(cands.map(l => [l.url, { ...l, kind: 'profile' }])).values()].slice(0, 2);
+  const cases = p.links.filter(l => CASE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url) && !uniq.some(u => u.url === l.url)
+    && new URL(l.url).host === host);
+  if (cases.length) uniq.push({ ...cases[0], kind: 'case' });
   for (const l of uniq) {
     await new Promise(r => setTimeout(r, 400));
     const g = await get(l.url);
-    if (!g.ok) { out.pages.push({ url: l.url, kind: 'profile', error: g.error || `HTTP ${g.status}` }); continue; }
-    out.pages.push({ url: g.url, kind: 'profile', label: l.label, text: parse(g.html, g.url).text.slice(0, TEXT_MAX) });
+    if (!g.ok) { out.pages.push({ url: l.url, kind: l.kind, error: g.error || `HTTP ${g.status}` }); continue; }
+    out.pages.push({ url: g.url, kind: l.kind, label: l.label, text: parse(g.html, g.url).text.slice(0, TEXT_MAX) });
   }
   const all = out.pages.map(x => x.text || '').join(' ');
   out.picked = pick(all);
