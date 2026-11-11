@@ -64,8 +64,10 @@ async function readShopHP(url) {
   const close = readingCover(url);
   try { return await readShopHP0(url); } finally { close(); }
 }
+let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
-  const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url }), signal:AbortSignal.timeout(85000) });
+  const by = new URLSearchParams(location.search).get("by") || "visitor", force = READ_LAST_CACHED === url;
+  const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(85000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { err:true, msg:{ daily_cap:"今日の費用の上限に達しています。", rate_limited:"続けて押されています。少し待ってください。", busy:"混み合っています。少し待ってください。", disabled:"いまAIは止めてあります。", no_key:"APIの鍵が設定されていません。" }[j.error] || "読み取れませんでした（" + (j.detail || j.error || r.status) + "）" };
   const s = j.site || {}, p = s.picked || {};
@@ -79,5 +81,7 @@ async function readShopHP0(url) {
     fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", stance:sh.stance || "", voice:sh.voice || "", worries:join(sh.worries), lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
     why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
   const pages = (s.pages || []).filter(x => !x.error).map(x => ({ top:"トップ", profile:"会社概要", case:"事例" }[x.kind] || x.kind));
+  READ_LAST_CACHED = j.cached ? url : "";
+  if (j.cached) return { hp, msg:`今日 ${new Date(j.cached).toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit" })} に読み取った結果を使いました（費用0）。HPを直したときは、もう一度押すと読み直します。` };
   return { hp, msg:`読み取りました：${pages.join("・")}（${pages.length}ページ）。` + (hp.form && hp.form !== "店自身" ? `HPの形：${hp.form}。` : "") + (j.costUsdEstimate ? `費用の目安 約${Math.max(1, Math.round(j.costUsdEstimate * 155))}円。` : "") };
 }

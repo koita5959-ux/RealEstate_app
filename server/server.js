@@ -334,6 +334,7 @@ async function handleChat(req, res) {
 }
 
 // ---- 管理画面の「読み取る」：URLのHPを読み（プログラム）、店の姿を根拠つきで作る（API 1回）。押したときだけ走る ----
+const readCache = new Map(); // URL → その日の読み取り結果
 async function handleShopRead(req, res) {
   const t0 = Date.now();
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
@@ -342,7 +343,13 @@ async function handleShopRead(req, res) {
   try { b = await readBody(req, 4096); } catch { return send(res, 400, { error: "bad_request" }); }
   const target = clip(b && b.url, 500);
   if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
-  const base = { ts: new Date().toISOString(), who, model: MODEL, type: "shopread", url: target };
+  const ts = new Date().toISOString(), by = clip(b.by, 32) || "visitor";
+  const base = { ts, who, model: MODEL, type: "shopread", url: target, by, sid: "read-" + ts.replace(/\D/g, "").slice(0, 17) }; // 1回ずつ別の行（開発利用状況）
+  const hit = readCache.get(target); // 同じURLは、その日のうちなら前の結果を使う（費用0）。force で読み直す
+  if (hit && !b.force && hit.day === today()) {
+    writeLog({ ...base, status: "cached", costUsd: 0, ms: Date.now() - t0 });
+    return send(res, 200, { ...hit.body, cached: hit.ts, costUsdEstimate: 0, ms: Date.now() - t0 });
+  }
   if (disabled()) return send(res, 503, { error: "disabled" });
   if (!client) return send(res, 503, { error: "no_key" });
   if (today() !== spentDate) loadSpent();
@@ -363,7 +370,9 @@ async function handleShopRead(req, res) {
     if (u.shop && heavy.length) u.shop.unread = [...(Array.isArray(u.shop.unread) ? u.shop.unread : []),
       `画像の中の文字（${heavy.join("・")}のページ。本文より画像が多く、売り文句が画像の中にあると、AIにも検索にも読まれていない可能性があります）`];
     writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd, ms: Date.now() - t0, reply: clip(u.text, 4000) });
-    return send(res, 200, { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000), costUsdEstimate: costUsd, ms: Date.now() - t0 });
+    const body = { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000) };
+    if (u.shop) readCache.set(target, { day: today(), ts, body });
+    return send(res, 200, { ...body, costUsdEstimate: costUsd, ms: Date.now() - t0 });
   } catch (e) {
     writeLog({ ...base, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
     return send(res, 502, { error: "upstream", detail: clip(e.message, 300), site });

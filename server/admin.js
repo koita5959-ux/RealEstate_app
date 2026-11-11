@@ -144,6 +144,12 @@ export function summarize(ctx) {
   };
   const touch = (s, ts) => { if (!s.started || ts < s.started) s.started = ts; if (!s.last || ts > s.last) s.last = ts; };
   for (const t of turns) {
+    if (t.type === "shopread") { // 管理画面の「読み取る」：1回ずつ別の行。URLを「最初の言葉」の欄に出す（前は sid なしで「?」の1行にまとまっていた）
+      const s = S(t.sid || "read-" + t.ts); touch(s, t.ts); s.by = t.by || "（記録なし）"; s.screen = "read";
+      s.first = "読み取り：" + (t.url || "") + (t.status === "cached" ? "（同じ日の結果を使用・費用0）" : t.status === "unreadable" ? "（読めないHP・費用0）" : "");
+      if (t.status === "ok") { s.rounds++; s.inTok += t.inputTokens || 0; s.outTok += t.outputTokens || 0; s.est += t.est; s.usd += t.usd; s.fixed = s.fixed && t.fixed; }
+      continue;
+    }
     const s = S(t.sid || "no-sid"); touch(s, t.ts); s.by = t.by || s.by; if (t.type === "talk") s.screen = "talk"; // 画面のタイプ（2 対話型／3 AI型）
     if (t.status === "ok") { s.rounds++; s.inTok += t.inputTokens || 0; s.outTok += t.outputTokens || 0; s.est += t.est; s.usd += t.usd; s.fixed = s.fixed && t.fixed; if (!s.first && t.userText) s.first = t.userText; }
     else if (t.status === "rejected") s.rejected++; else s.errors++;
