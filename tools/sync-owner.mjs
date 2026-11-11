@@ -22,6 +22,12 @@ const sum = await (await get("/summary")).json();
 const list = (sum.sessions || []).filter((s) => s.by === OWNER && s.rounds > 0 && s.screen !== "read" && s.started && s.last
   && now - new Date(s.last).getTime() > QUIET_MS && now - new Date(s.started).getTime() < DAYS * 86400_000);
 
+// 利用状況の「GitHubへ渡す」で頼まれたセッション（data/share-queue/<sid>）も、印に関係なく、待たずに上げる
+const qdir = path.join(ROOT, "data", "share-queue");
+let queued = []; try { queued = fs.readdirSync(qdir).filter((f) => /^[A-Za-z0-9_-]{1,64}$/.test(f)); } catch { /* なし */ }
+const all = sum.sessions || [];
+for (const sid of queued) { const s = all.find((x) => x.sid === sid); if (s && !list.includes(s)) list.push(s); }
+
 const changed = [];
 for (const s of list.slice(0, LIMIT)) {
   const text = (await (await get("/export?sid=" + encodeURIComponent(s.sid))).text()).replace(/^﻿/, "");
@@ -32,10 +38,12 @@ for (const s of list.slice(0, LIMIT)) {
   fs.writeFileSync(file, text);
   changed.push("_works/" + name);
 }
-if (!changed.length) process.exit(0);
+const done = () => { for (const sid of queued) try { fs.unlinkSync(path.join(qdir, sid)); } catch { /* 済み */ } };
+if (!changed.length) { done(); process.exit(0); }
 
 git("add", "--", ...changed);
 git("commit", "-q", "-m", `テスト記録（自動・${changed.length}件）`, "--", ...changed);
 try { git("pull", "-q", "--rebase", "--autostash"); } catch (e) { console.error(new Date().toISOString(), "pull:", e.message); }
 git("push", "-q");
+done();
 console.log(new Date().toISOString(), "上げた：", changed.join(" "));

@@ -46,8 +46,8 @@
     <div id="cost" class="sheet"></div>
     <div id="sheet"></div>
     <div id="talkbox" hidden><h2>やり取り（開発者用・本文つき）</h2><div id="talk"></div></div>
-    <div id="exportbox" style="margin:18px 0 8px"><a id="export" class="quiet" style="font-size:13px">このセッションをテキストで書き出す（開発者用）</a>
-    <div class="hint">条件・会話・AIへ渡したもの（土地の条件・HPの読み）を、UTF-8 のテキストで保存します。Claude.ai に読ませるときは _works/ に置いてください。</div></div>
+    <div id="exportbox" style="margin:18px 0 8px"><a id="share" class="primary" target="_blank" style="font-size:14px;display:inline-block;padding:6px 12px;border-radius:6px;background:#1d6fb8;color:#fff;text-decoration:none;margin-right:10px">このセッションを GitHub へ渡す（テスト用）</a><a id="export" class="quiet" style="font-size:13px">このセッションをテキストで書き出す（開発者用）</a>
+    <div class="hint">テストが終わったら「GitHub へ渡す」を押してください（開発利用状況と同じパスワードを聞かれます）。1〜2分で _works/ に上がり、Claude.ai が読めます。中身は、条件・会話・AIへ渡したもの・AIのメモです。</div></div>
     <div id="clearbox"><button class="quiet" id="clear">この記録を、このブラウザから消す</button>
     <div class="hint">消すのは、このブラウザに残した表示用の記録だけです。</div></div>
   </div>
@@ -59,7 +59,7 @@ const $ = id => document.getElementById(id);
 // ・再表示：サーバーに保存されたセッション（開発利用状況の行を押す／?sid=…。認証が必要）
 const V = window.SessionView;
 let replaySid = new URLSearchParams(location.search).get("sid"); // 再表示中のセッション。null なら体験中の表示
-function exportLink(sid) { const a = $("export"); $("exportbox").hidden = !sid; if (sid) a.href = "../api/admin/export?sid=" + encodeURIComponent(sid); }
+function exportLink(sid) { const a = $("export"); $("exportbox").hidden = !sid; if (sid) { a.href = "../api/admin/export?sid=" + encodeURIComponent(sid); $("share").href = "../api/admin/share?sid=" + encodeURIComponent(sid); } }
 function paint(st) {
   $("route").innerHTML = V.route(st);
   $("usage").innerHTML = V.usage(st);

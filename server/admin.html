@@ -146,6 +146,15 @@ async function replay(sid) {
   return false;
 }
 const replayCell = s => s.canReplay ? `<a class="btn-user-link replay" href="#" onclick="return replay('${esc(s.sid)}')" title="${s.screen === "talk" ? "2 対話型" : "3 AI型"}の体験">再表示${s.screen === "talk" ? "２" : "３"}</a>` : '<span class="note">—</span>';
+// 「GitHubへ」：このセッションの記録を _works/ へ上げる順番待ちに入れる（サーバー機が1分ごとに上げる）。押したら「受付済」
+const shareCell = s => s.rounds > 0 && s.screen !== "read" ? (window.shared && window.shared.has(s.sid) ? '<span class="note">受付済</span>' : `<a class="btn-user-link" href="#" onclick="return shareSid(event, '${esc(s.sid)}')">渡す</a>`) : '<span class="note">—</span>';
+async function shareSid(e, sid) {
+  e.stopPropagation(); // 行を押したときの「元に戻す」を起こさない
+  const r = await fetch(BASE + "share?sid=" + encodeURIComponent(sid), { cache:"no-store" }).catch(() => null);
+  if (!r || !r.ok) { alert("受け付けられませんでした（" + (r ? r.status : "通信") + "）"); return false; }
+  (window.shared = window.shared || new Set()).add(sid); render();
+  return false;
+}
 const rowAttr = s => s.canReplay ? ` class="replayable" data-sid="${esc(s.sid)}" title="押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面）"` : "";
 function bars(rows, valf, labf, fmt) {
   const max = Math.max(...rows.map(valf), 1e-9);
@@ -177,8 +186,8 @@ function viewCost() {
   </div>
   <h2>セッションと費用（${top.length}件・開いた時点から）</h2>
   <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は③で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　<label style="white-space:nowrap"><input type="checkbox" id="paid"${window.paidOnly ? " checked" : ""}> 費用が発生したものだけ</label>　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順（始めた時刻）</option><option value="last" ${costSort === "last" ? "selected" : ""}>最後に動いた順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
-  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>進んだ所</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">実績</th><th>最初の言葉</th><th>再表示</th></tr>
-  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? "<br><span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td>${esc(s.by)}</td><td>${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="10" class="note">まだありません</td></tr>`}</table></div>
+  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>進んだ所</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">実績</th><th>最初の言葉</th><th>再表示</th><th>GitHub</th></tr>
+  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? "<br><span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td>${esc(s.by)}</td><td>${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td><td>${shareCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>Console との突き合わせ（日ごと・Console の日の区切り：${D.lots.tz === "UTC" ? "UTC＝日本時間9時切り替え" : "日本時間"}）</h2>
   <div class="note">トークン数は、こちらの記録と Console が同じものを数えているので、ぴったり合うはずです（合わなければ記録の漏れ）。金額は推定なので、ずれは単価の見直し材料です。Console の数字は「設定」で入れます。</div>
   <div class="scroll"><table><tr><th>日</th><th class="n">往復</th><th class="n">入力（こちら）</th><th class="n">入力（Console）</th><th class="n">出力（こちら）</th><th class="n">出力（Console）</th><th class="n">推定</th><th class="n">実績（Console）</th><th class="n">比（実績÷推定）</th></tr>

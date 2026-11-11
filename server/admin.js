@@ -168,7 +168,7 @@ export function summarize(ctx) {
   let saved = new Set();
   try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
   const now = Date.now();
-  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: s.screen !== "read" && (s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3)), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
   // 日別（日本時間）
   const dayMap = new Map();
@@ -390,6 +390,16 @@ export async function adminHandler(req, res, url, ctx) {
     const name = `session_${new Date(first.ts).toISOString().slice(0, 10)}_${first.type === "talk" ? "Type2" : "Type3"}_${sid.slice(0, 8)}.txt`;
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${name}"` });
     res.end("﻿" + text); return true;
+  }
+  if (req.method === "GET" && url.pathname === "/api/admin/share") { // 利用状況の「GitHubへ渡す」：このセッションを渡す順番待ちに入れる。サーバー機の tools/sync-owner.mjs が1分ごとに上げる（コンテナは GitHub の鍵を持たない）
+    const sid = url.searchParams.get("sid") || "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
+    const q = path.join(ctx.DATA_DIR, "share-queue");
+    fs.mkdirSync(q, { recursive: true });
+    fs.writeFileSync(path.join(q, sid), new Date().toISOString());
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>GitHubへ渡す</title><body style="font-family:system-ui,sans-serif;padding:24px;line-height:1.8"><b>受け付けました。</b><br>このセッション（${sid.slice(0, 8)}）の記録を、1〜2分のうちに GitHub の _works/ へ上げます。<br>このタブは閉じてかまいません。</body>`);
+    return true;
   }
   if (req.method === "GET" && url.pathname === "/api/admin/session") { // セッションの再表示用（記録＋会話の本文）。保存した記録がなければ、ログから復元する
     const sid = url.searchParams.get("sid") || "";
