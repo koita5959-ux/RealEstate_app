@@ -80,9 +80,14 @@
 <body>
 <header id="appbar" data-current="admin" data-title="3. 管理画面 ― 試作（コンテンツ：3 AI型）"></header>
 <script src="js/shell.js"></script>
+<script src="js/shophp.js"></script>
 <div class="noticebar">左の番号は、メイン画面の番号と同じです。「設定を変更する」でメイン画面に反映し、右上の「メイン画面」で確かめられます（設定はこのブラウザに保存され、メイン画面が読みます）。AIの返事はダミーです。</div>
 <div class="wrap">
   <main class="admin">
+    <h2>あなたのHP <span class="who shop">店が入れる</span></h2>
+    <div class="box"><div style="display:flex;gap:6px"><input id="hpUrl" style="flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:14px"><button id="hpRead">読み取る</button></div>
+      <div class="hint" id="hpSt" style="margin-top:6px"></div><div id="hpView" style="font-size:12px;line-height:1.6;margin-top:6px"></div></div>
+
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="modes"></div>
     <div class="box"><div class="branch">受け方（選択の前のAIの一言が、お客さんの答えをどう受け止めるか）</div><textarea id="stance" rows="1"></textarea>
@@ -120,6 +125,25 @@
   <div style="text-align:right"><button value="ok">OK</button><button value="commit">確定して移動</button><button value="cancel">キャンセル</button></div>
 </form></dialog>
 <script>
+// ---- あなたのHP：読みは押したときに保存（「決定」とは別）。AIは選択の前の一言で、この読みを弊社のこととして結びつける ----
+(() => {
+  const esc1 = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const show = () => {
+    const h = shopHP(); document.getElementById("hpUrl").value = h.url || "";
+    document.getElementById("hpView").innerHTML = h.unreadable ? `<span style="color:#b4472b">${esc1(h.unreadable)}</span>`
+      : [["呼び名", h.name], ["どんな店か", h.what], ["得意な事情", h.good], ["合う相談", h.fit], ["強み", h.strong], ["連携先", h.team], ["免許", h.lic]].filter(x => x[1]).map(([k, v]) => `<b>${k}</b>：${esc1(v)}`).join("<br>")
+        + (h.sample ? '<br><span class="hint">（見本サイトの読みです。あなたのHPのURLを入れて読み取ってください）</span>' : "");
+  };
+  show();
+  document.getElementById("hpRead").onclick = async () => {
+    const url = document.getElementById("hpUrl").value.trim(), st = document.getElementById("hpSt"), btn = document.getElementById("hpRead");
+    if (!/^https?:\/\//i.test(url)) { st.textContent = "URLは http:// か https:// から入れてください。"; return; }
+    btn.disabled = true; st.textContent = "読んでいます…（30秒ほどかかることがあります）";
+    try { const r = await readShopHP(url); if (r.hp) setShopHP(r.hp); st.textContent = r.msg; show(); }
+    catch (e) { st.textContent = "読み取れませんでした（時間切れか、通信の失敗）。"; }
+    finally { btn.disabled = false; }
+  };
+})();
 // ---- 業態モード 4＋1（Claude.AI「業態モードの分け方」「AI型の全容と動く形の依頼」11-05）----
 // ④のボタンは二つの枝（1・2）に振り分け、⑤は枝ごとにボタン・種類（答える／聞く）・締めを持つ。⑥から先は枝に関係なく共通。
 // s4：[ボタン, 枝]。相続・税の⑤は B（時期で分ける）を採用。総合系の⑤は Claude.AI の案（ユーザー未確認）

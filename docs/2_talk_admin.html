@@ -76,6 +76,7 @@
 <body>
 <header id="appbar" data-current="admin" data-title="2. 管理画面 ― 試作（コンテンツ：2 対話型）"></header>
 <script src="js/shell.js"></script>
+<script src="js/shophp.js"></script>
 <div class="noticebar">初期値は、見本サイト「遠見不動産」を読んだ設定です。URLを入れて「読み取る」を押すと、そのHPを読んで1を作り直します（1回で数円〜十数円のAPI費用）。左を書き換えると、右の会話の見本と、このブラウザのメイン画面にすぐ反映されます。</div>
 <div class="wrap">
   <main class="admin">
@@ -230,25 +231,9 @@ $("readBtn").onclick = async () => {
   if (Object.keys(own).some(k => own[k] != null) && !confirm("読み直すと、社員目線で書き換えた「1」の欄は、新しい読みに戻ります。続けますか？")) return;
   $("readBtn").disabled = true; setSt("読んでいます…（30秒ほどかかることがあります）");
   try {
-    const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url }), signal:AbortSignal.timeout(85000) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { setSt({ daily_cap:"今日の費用の上限に達しています。", rate_limited:"続けて押されています。少し待ってください。", busy:"混み合っています。少し待ってください。", disabled:"いまAIは止めてあります。", no_key:"APIの鍵が設定されていません。" }[j.error] || "読み取れませんでした（" + (j.detail || j.error || r.status) + "）", true); return; }
-    const s = j.site || {}, p = s.picked || {};
-    if (!j.shop) {
-      const why = s.js_only ? "このHPは外から読み取りにくい作りです（画面をJavaScriptで作っていて、本文がほとんど読めません）。検索やAIにも読まれにくい作りなので、HPの作り直しの候補です。"
-        : s.error === "blocked" ? "このURLには取りに行けません（社内のネットワークなど）。"
-        : "HPを読めませんでした（" + (s.error || "形が読み取れない") + "）。";
-      hp = { url, name:s.title || "", lic:(p.lic || []).join("、"), why:{}, unread:[], unreadable:why }; own = {};
-      setSt(why, true); save(); renderAll(); return;
-    }
-    const sh = j.shop, join = a => Array.isArray(a) ? a.filter(Boolean).join("、") : String(a || "");
-    hp = { url:s.final || url, name:sh.name || s.title || "", shogo:sh.shogo || "", form:sh.form || "", what:sh.what || "", good:join(sh.good), team:join(sh.team),
-      fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
-      why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
-    own = {};
-    const pages = (s.pages || []).filter(x => !x.error).map(x => ({ top:"トップ", profile:"会社概要", case:"事例" }[x.kind] || x.kind));
-    setSt(`読み取りました：${pages.join("・")}（${pages.length}ページ）。` + (hp.form && hp.form !== "店自身" ? `HPの形：${hp.form}。` : "") + (j.costUsdEstimate ? `費用の目安 約${Math.max(1, Math.round(j.costUsdEstimate * 155))}円。` : ""));
-    save(); renderAll();
+    const r = await readShopHP(url);
+    if (r.hp) { hp = r.hp; own = {}; save(); renderAll(); }
+    setSt(r.msg, r.err);
   } catch (e) { setSt("読み取れませんでした（時間切れか、通信の失敗）。", true); }
   finally { $("readBtn").disabled = false; }
 };
@@ -296,6 +281,7 @@ function save() {
   const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
     asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, limit:+$("limit").value || null };
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
+  if (!hp.sample) setShopHP(hp); // 読んだHPはタイプ3とも共有
 }
 function load(t) {
   if (t.lv >= 3) { mode = t.mode === "staff" ? "staff" : "out"; hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }

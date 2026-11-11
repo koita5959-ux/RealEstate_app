@@ -102,6 +102,7 @@
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="js/shell.js"></script>
+<script src="js/shophp.js"></script>
 <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
@@ -583,6 +584,11 @@ function aiContext(n, ask) {
   else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。標準地の価格をこの土地の値段として言い切らず、価格の話は「現地を見て弊社が確かめます」につなげてください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
   if (!src || /取得できません/.test(src)) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
   if (ADMIN.stance && ADMIN.stance.trim()) { if (ADMIN.name) c += "\n弊社の業態：" + ADMIN.name; c += "\n弊社の受け方：" + ADMIN.stance.trim(); }
+  const H = shopHP(); // 弊社のHPの読み（管理画面の「読み取る」。なければ見本サイト）。会話が会社のHPと結びついて聞こえるように
+  if (!H.unreadable && (H.what || H.good || H.fit || H.strong)) c += "\n\n【弊社のホームページに書いてあること】"
+    + (H.what ? "\n・どんな会社か：" + H.what : "") + (H.good ? "\n・よく受けている相談：" + H.good : "") + (H.fit ? "\n・弊社に合う相談：" + H.fit : "")
+    + (H.strong ? "\n・弊社の強み：" + H.strong : "") + (H.team ? "\n・連携している専門家：" + H.team : "")
+    + "\n利用者の話と重なるところがあれば、見立ての一言に弊社のことを短く結びつけます（例：「弊社でも相続した実家のご相談をよくお受けしています」）。毎回でなくてよく、重ならないときは使いません。ここに書かれていないこと（値段・日程・実績の数字など）は言いません。";
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   const axis = n === 0 ? ADMIN.steps[0] && ADMIN.steps[0].topic : n === 1 ? BRANCH && BRANCH.name : ADMIN.steps[n] && ADMIN.steps[n].topic;
   if (axis && n < LIMIT) c += "\n次に聞くこと：" + axis;
