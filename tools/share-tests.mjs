@@ -19,7 +19,7 @@ const get = async (p) => { const r = await fetch(API + p, { headers: { Authoriza
 const jst = (iso) => new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString(); // 日本時間の文字列（末尾の Z は無視）
 
 const args = process.argv.slice(2), showAll = args.includes("--all"); // --all：Claude Code のテスト（claudecode）も並べる
-const day = args.find((a) => /^d{4}-dd-dd$/.test(a)) || jst(new Date().toISOString()).slice(0, 10);
+const day = args.find((a) => /^\d{4}-\d\d-\d\d$/.test(a)) || jst(new Date().toISOString()).slice(0, 10);
 const sum = await (await get("/summary")).json();
 const list = (sum.sessions || [])
   .filter((s) => s.rounds > 0 && s.screen !== "read" && (showAll || !/^claude/.test(s.by)) && s.started && jst(s.started).slice(0, 10) === day)
