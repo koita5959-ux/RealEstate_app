@@ -379,7 +379,7 @@ export async function adminHandler(req, res, url, ctx) {
     const num = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
     const body = logs.map((r) => `── ${r.meta?.q ? num[r.meta.q - 1] || r.meta.q : ""} ${new Date(r.ts).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo" })}${r.status === "ok" ? "" : "（" + r.status + (r.reason ? "：" + r.reason : "") + "）"}\n利用者：${r.userText || ""}\nAI：${r.reply || "（返事なし）"}`).join("\n\n");
     const ctxs = [["最初の返事", first], ...(last !== first ? [["最後の返事", last]] : [])];
-    const tail = ctxs.map(([k, r]) => `── AIへ渡した説明（${k}・${r.meta?.q ? num[r.meta.q - 1] || "" : ""}）\n${r.context || "（記録なし）"}`).join("\n\n");
+    const tail = ctxs.map(([k, r]) => `── AIへ渡した説明（${k}・${r.meta?.q ? num[r.meta.q - 1] || "" : ""}）\n${r.contextFixed ? "【店のこと】\n" + r.contextFixed + "\n\n" : ""}${r.context || "（記録なし）"}${r.memo ? "\n\n【AIが書いたメモ】\n" + JSON.stringify(r.memo) : ""}`).join("\n\n");
     const text = `${head}\n\n＝＝ 会話 ＝＝\n${body}\n\n＝＝ AIへ渡したもの（土地の条件・HPの読み・指示） ＝＝\n${tail}\n`;
     const name = `session_${new Date(first.ts).toISOString().slice(0, 10)}_${first.type === "talk" ? "Type2" : "Type3"}_${sid.slice(0, 8)}.txt`;
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${name}"` });

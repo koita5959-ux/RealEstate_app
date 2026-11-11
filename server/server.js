@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { adminHandler, publicStats, summarize } from "./admin.js";
 import { landSetup } from "./land.js";
+import { aroundSetup } from "./around.js";
 import { read as readSite } from "./shop/read.js";
 import { understand } from "./shop/understand.js";
 
@@ -38,8 +39,25 @@ const PRICES = {
   "claude-fable-5-1": { in: 10, out: 50 },
 };
 const price = PRICES[MODEL] || { in: 0, out: 0 };
-const estimateUsd = (u) =>
-  ((u.input_tokens || 0) * price.in + (u.output_tokens || 0) * price.out) / 1e6;
+const estimateUsd = (u) => // キャッシュの書き込みは入力の1.25倍、読み込みは0.1倍
+  ((u.input_tokens || 0) * price.in + (u.cache_creation_input_tokens || 0) * price.in * 1.25
+    + (u.cache_read_input_tokens || 0) * price.in * 0.1 + (u.output_tokens || 0) * price.out) / 1e6;
+
+// 返事の後ろに付けさせる「引き継ぐメモ」。画面には出さず、次の往復と店への記録に使う（2026-11-11）
+const MEMO_RULE = `
+
+【返事のあとに付けるメモ（画面には出ません）】
+返事を書き終えたら（【方向】【勧める】の印があればその後に）、行を分けて【メモ】と書き、続けて次の形のJSONを1行で書きます。各欄は短く（1欄40字まで）、分からない欄は空文字にします。前のメモがあれば、それを引き継いで直します。
+{"分かったこと":"利用者の事情・気持ち・時期","まだ決まっていないこと":"現地や確認が要る点","引き出せたこと":"住む人から見た良さ・周りの変化など、利用者だけが知っていること","次に聞くとよいこと":"","店へのひとこと":"担当者が最初に知っておくとよいこと"}`;
+// 返事とメモを分ける。メモが読めなければ null（返事はそのまま出す）
+function splitMemo(text) {
+  const i = text.lastIndexOf("【メモ】");
+  if (i < 0) return { text, memo: null };
+  const m = text.slice(i + 4).match(/\{[\s\S]*\}/);
+  let memo = null;
+  try { memo = m ? JSON.parse(m[0]) : null; } catch { memo = null; }
+  return { text: text.slice(0, i).trimEnd(), memo };
+}
 
 // ---- キー（ファイルから。中身はログにも画面にも出さない）----
 let apiKey = "";
@@ -206,6 +224,7 @@ function parseBody(body) {
     mode: body.mode === "staff" ? "staff" : "out", // 2 対話型の目線（out＝外野目線、staff＝社員目線）
     sid: clip(body.sid, 64) || "no-sid",
     by: clip(body.by, 32) || "visitor",
+    contextFixed: clip(body.contextFixed, 6000), // 1セッションの中で変わらない説明（店のこと）。キャッシュに載せる
     context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
     messages: clean,
   };
@@ -263,8 +282,11 @@ async function handleChat(req, res) {
   if (rateLimited(who)) return reject(429, "rate_limited");
 
   const sp = input.type === "talk" ? (input.mode === "staff" ? SYSTEM_TALK_STAFF : SYSTEM_TALK) : SYSTEM_PROMPT;
-  const system = input.context ? `${sp}\n\n【画面から渡された状況】\n${input.context}` : sp;
-  const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, userText, meta: input.meta };
+  // 変わらないもの（決まり＋メモの決まり、店のこと）を前に置いてキャッシュし、往復ごとに変わる状況を後ろに置く
+  const system = [{ type: "text", text: sp + MEMO_RULE, ...(input.contextFixed ? {} : { cache_control: { type: "ephemeral" } }) }];
+  if (input.contextFixed) system.push({ type: "text", text: `【店のこと】\n${input.contextFixed}`, cache_control: { type: "ephemeral" } });
+  if (input.context) system.push({ type: "text", text: `【画面から渡された状況】\n${input.context}` });
+  const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, contextFixed: input.contextFixed || undefined, userText, meta: input.meta };
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
@@ -277,7 +299,8 @@ async function handleChat(req, res) {
       output_config: { effort: EFFORT },
       messages: input.messages,
     });
-    const text = r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const raw = r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const { text, memo } = splitMemo(raw);
     const usage = r.usage || {};
     const costUsd = estimateUsd(usage);
     spentUsd += costUsd;
@@ -292,18 +315,19 @@ async function handleChat(req, res) {
       costUsd,
       ms: Date.now() - t0,
       reply: text,
+      memo: memo || undefined,
     });
     return send(res, 200, {
-      text,
-      trace: { system, messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS, queuedMs: rec.queuedMs }, // 試験用：送ったものをそのまま返す（原文は text）
+      text, memo, raw,
+      trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS, queuedMs: rec.queuedMs }, // 試験用：送ったものをそのまま返す（原文は text）
       stopReason: r.stop_reason,
-      usage: { input: usage.input_tokens || 0, output: usage.output_tokens || 0 },
+      usage: { input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheCreate: usage.cache_creation_input_tokens || 0 },
       costUsdEstimate: costUsd,
       ms: Date.now() - t0,
     });
   } catch (e) {
     writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
-    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: clip(e.message, 300), trace: { system, messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
+    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: clip(e.message, 300), trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
   } finally {
     release();
   }
@@ -441,6 +465,15 @@ setInterval(() => { if (today() !== snapDay) rebuild(); }, 5 * 60_000); // 日�
 
 // ---- 公開データ（不動産情報ライブラリ）：GET /api/land?lat=..&lng=.. ----
 const land = landSetup({ keyFile: LAND_KEY_FILE, dataDir: DATA_DIR });
+const around = aroundSetup({ tile: land.tile, dataDir: DATA_DIR });
+// 周り（作業用データ）：GET /api/around?lat=..&lng=..。画面の表には出さず、AIへの説明に入れる。キーがなければ空
+async function handleAround(req, res, url) {
+  const lat = Number(url.searchParams.get("lat")), lng = Number(url.searchParams.get("lng"));
+  if (!(lat > 20 && lat < 46 && lng > 122 && lng < 154)) return send(res, 400, { error: "bad_point" });
+  if (!land.hasKey) return send(res, 200, { none: true });
+  try { return send(res, 200, await around.lookup(lat, lng)); }
+  catch (e) { console.error("around:", e.message); return send(res, 502, { error: "around" }); }
+}
 const landHits = new Map();
 async function handleLand(req, res, url) {
   const lat = Number(url.searchParams.get("lat")), lng = Number(url.searchParams.get("lng"));
@@ -464,6 +497,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);
     if (req.method === "GET" && url.pathname === "/api/land") return await handleLand(req, res, url);
+    if (req.method === "GET" && url.pathname === "/api/around") return await handleAround(req, res, url);
     if (req.method === "GET" && url.pathname === "/api/mapkey") { let key = ""; try { key = fs.readFileSync(MAP_KEY_FILE, "utf8").trim(); } catch { /* なければ「道から見る」を出さない */ } return send(res, 200, { key }); }
     if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
     if (await adminHandler(req, res, url, adminCtx)) return;

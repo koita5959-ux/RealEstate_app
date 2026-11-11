@@ -68,7 +68,7 @@ export function landSetup({ keyFile, dataDir }) {
     return { none: true };
   }
 
-  return { lookup, hasKey: !!key };
+  return { lookup, hasKey: !!key, tile }; // tile は周り（around.js）も使う
 }
 
 function pointOut(p, d, year) {

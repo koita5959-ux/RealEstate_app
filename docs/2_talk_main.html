@@ -107,6 +107,7 @@
 </header>
 <script src="js/shell.js"></script>
 <script src="js/shophp.js"></script>
+<script src="js/around.js"></script>
 <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
   <div id="map"></div>
@@ -376,7 +377,7 @@ document.getElementById("go").onclick = () => {
     <div id="talk"></div>
     <div id="inq"></div>`;
   renderData();
-  loadLand(S, here.lat, here.lng);
+  loadLand(S, here.lat, here.lng); loadAround(S, here.lat, here.lng); // 周りは作業用データ（表には出さず、AIへ）
   firstJudgment();
 };
 
@@ -596,12 +597,13 @@ function nextButtons(n) { // 次のステップnで利用者に出る、店の�
 // AIへ渡すときの項目名。画面の名前のままだと、標準地（別の土地）の広さをこの土地の面積と取り違えるため（11-10 テスト）
 const AI_KEY = { 面積:"この土地の面積（利用者の申告）", 標準地の地積と形:"標準地（近くの別の土地）の広さと形" };
 function aiContext(n, ask) {
-  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
+  const lines = Object.entries(S.sheet).filter(([k, v]) => v && k !== "AIのメモ").map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
   const src = S.sheet.公開データ || "";
   if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
   else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。標準地の価格をこの土地の値段として言い切らず、価格の話は「現地を見て弊社が確かめます」につなげてください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
   if (!src || /取得できません/.test(src)) c += "\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。価格や用途地域の数字を挙げたり推測したりしません。このことを利用者の不安材料として説明・指摘せず、必要なら「その点は現地で確認します」と一言触れる程度にして、利用者が答えられる質問へ進めてください。";
+  c += aroundText(S.around, S.sheet.用途地域, (S.sheet.相談目的 || "") + " " + (S.sheet.事情 || ""), n); // 周り（作業用データ）。買う人の目として渡し、引き出しの問いにつなぐ
   if (ADMIN.stance && ADMIN.stance.trim()) { if (ADMIN.name) c += "\n弊社の業態：" + ADMIN.name; c += "\n弊社の受け方：" + ADMIN.stance.trim(); }
   if (BRANCH) c += "\n相談の方向：" + BRANCH.name;
   const axis = n === 0 ? ADMIN.steps[0] && ADMIN.steps[0].topic : n === 1 ? BRANCH && BRANCH.name : ADMIN.steps[n] && ADMIN.steps[n].topic;
@@ -621,6 +623,16 @@ function aiContext(n, ask) {
   else c += "\n次にボタンは出ません。利用者が自由に書いて答えます。返事の最後の一文は、書いて答えやすい短い問いにしてください。";
   return c;
 }
+// 引き継ぐメモ（前の返事でAIが書いたもの）を説明の末尾に付ける。メモがあれば、会話の全文は直近3往復だけ送る
+function memoBlock() {
+  if (!S || !S.memo) return "";
+  return "\n\n【これまでのメモ（前の返事であなたが書いたもの。引き継いで直します）】\n" + JSON.stringify(S.memo);
+}
+function histForAI() {
+  const h = AI_HIST.slice(S && S.memo ? -7 : -20);
+  while (h.length && h[0].role !== "user") h.shift();
+  return h;
+}
 async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明をこれに差し替える
   TRACE = null;
   AI_HIST.push({ role:"user", content:userText });
@@ -632,10 +644,11 @@ async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明を�
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ type:"talk", mode:TALK.mode === "staff" ? "staff" : "out", sid:SID, by:BY, context:ctx || aiContext(n, ask), meta, messages:AI_HIST.slice(-20) }) });
+      body: JSON.stringify({ type:"talk", mode:TALK.mode === "staff" ? "staff" : "out", sid:SID, by:BY, contextFixed:talkShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI() }) });
     const d = await r.json();
-    TRACE = { sent:d.trace, raw:d.text || "", stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
+    TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error || r.status) + (d.detail ? "：" + d.detail : "") };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
+    if (d.memo) { S.memo = d.memo; S.sheet.AIのメモ = Object.entries(d.memo).filter(([, v]) => v).map(([k, v]) => k + "：" + v).join(" ／ "); } // AIが書いた引き継ぐメモ。次の往復に渡し、店への記録にも残す
     const tb = takeBranch(d.text);
     if (!tb.text) throw new Error("empty");
     if (n === 1 && !BRANCH && meta.branchBy === "ai") setBranch(tb.idx ?? BR_BY_BTN ?? 0, tb.idx != null ? "ai" : "fallback");
@@ -1095,21 +1108,16 @@ const LIMIT_T = +TALK.limit > 0 ? Math.max(3, +TALK.limit) : Infinity; // 往復
 const AFTER_T = TALK.after != null && TALK.after !== "" ? Math.max(0, +TALK.after) : 1; // 勧めた後に話せる往復（管理画面。初期値1）
 let HANDED = null, HAND_AT = 0; // 勧めた場面 [話題, 理由] と、勧めた返事の往復目
 const isLast = n => n >= LIMIT_T - 1 || (!!HANDED && n - HAND_AT >= AFTER_T); // n 往復目の返事で終えるか
-function aiContext(n) {
-  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
-  let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
-  const src = S.sheet.公開データ || "";
-  if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
-  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
-  if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
-  const nm = TALK.name, staff = TALK.mode === "staff", me = staff ? "弊社" : nm;
+// 店のこと（1セッションの中で変わらない）。contextFixed として送り、サーバーがキャッシュに載せる
+function talkShopBlock() {
+  const nm = TALK.name, staff = TALK.mode === "staff";
   const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
-  const w = hp.why || {};
-  if (staff) c += `\n\n【弊社のこと（あなたは${nm}の社員として話します。ホームページの読みと、弊社が書き足したこと）】`
+  const w = hp.why || {}; let c;
+  if (staff) c = `\n\n【弊社のこと（あなたは${nm}の社員として話します。ホームページの読みと、弊社が書き足したこと）】`
     + shopKnowText({ ...TALK, why:w, unread:hp.unread || [] }, { own:TALK.own || {}, extra:ex }) + line("宅建の免許", TALK.lic) + line("弊社から伝えたいこと", TALK.memo)
     + "\n「店の考え」は、名前を出して語るより、受け止め方・話し方に出します。"
     + (ex.way ? "\n締めで引き受けるときは、「相談を受けたら、最初にすること」に沿って具体的に言います。" : "");
-  else c += `\n\n【あなたを置いた会社：${nm}（外から見た目線で話します）】`
+  else c = `\n\n【あなたを置いた会社：${nm}（外から見た目線で話します）】`
     + "\nホームページから読んだこと（店は書き換えられません。話すときは「ホームページによると」など出どころを付けます）："
     + line("どんな会社か", TALK.what, w.what) + line("立場と理由", TALK.stance, w.stance) + line("代表・店の考え", TALK.voice, w.voice)
     + line("相談をよく受けている事情", TALK.good, w.good) + line("ホームページが取り上げているお客さんの悩み", TALK.worries, w.worries) + line("一緒に動く専門家", TALK.team, w.team)
@@ -1118,6 +1126,22 @@ function aiContext(n) {
     + ((hp.unread || []).length ? "\n・ホームページから読めなかったこと：" + hp.unread.join("、") + "。聞かれたら「ホームページからは分かりませんでした」と答えます。" : "")
     + "\n書かれていないこと（値段・日程・対応地域など）は、知らないこととして扱ってください。"
     + (TALK.memo ? `\n\n【${nm}からの一言】（会社が書いたもの。使うときは「${nm}からの一言では」と出どころを付け、ホームページの読みと混ぜません）\n` + TALK.memo : "");
+  return c.trim();
+}
+function aiContext(n) {
+  const lines = Object.entries(S.sheet).filter(([, v]) => v).map(([k, v]) => "・" + (AI_KEY[k] || k) + "：" + plain(String(v)));
+  let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
+  const src = S.sheet.公開データ || "";
+  if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
+  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段の話は、現地を見ないと分からないこととして扱ってください。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
+  if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
+  c += aroundText(S.around, S.sheet.用途地域, (S.sheet.相談目的 || "") + " " + (S.sheet.事情 || ""), n); // 周り（作業用データ）
+  const nm = TALK.name, staff = TALK.mode === "staff", me = staff ? "弊社" : nm;
+  const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
+  const w = hp.why || {};
+  c += `
+
+（${staff ? "弊社のこと" : nm + "のこと"}は、上の【店のこと】にあります）`;
   // 重なりを探す：①〜③の返事（n=0）と締めでは、利用者の事情 × 公開データ × HPの得意 を突き合わせる
   if (n === 0 || isLast(n)) c += `\n\n【この返事では、重なりを探します】利用者が選んだ項目・書いた言葉、土地の条件（公開データ）と、${staff ? "弊社のこと" : nm + "のホームページから読んだこと"}（よく受けている相談・合う相談・強み・専門家）を突き合わせます。重なったら、どの事情とどの得意が重なったかが分かる一言にします（${staff ? "例：「弊社は旗竿地や再建築不可の売却を多く扱っています」" : `例：「${nm}のホームページには、旗竿地や再建築不可の売却を扱っていると書かれています」。出どころを必ず付けます`}）。重ならなくても、合いにくい相談に当たるなら、正直にそう伝えます（例：${staff ? "「弊社は売却が中心です」" : `「${nm}のホームページは、売却を中心に書いています」`}）。どちらにも当たらなければ、無理に結びつけません。`;
   c += staff ? "\nホームページの宣伝の言葉（「最短〇日」「〇社以上」「〇万円で売却」など）は、弊社のことに書かれていなければ言いません。" : "\nホームページの宣伝の言葉（「最短〇日」「〇社以上」「〇万円で売却」など）は、事実として言わず、言うなら「ホームページには〜とあります」の形にします。";
