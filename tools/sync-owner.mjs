@@ -8,7 +8,8 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const OWNER = process.env.SYNC_BY || "owner", QUIET_MS = 10 * 60_000, DAYS = 3, LIMIT = +process.env.SYNC_LIMIT || Infinity; // SYNC_BY・SYNC_LIMIT は動作確認用
+const OWNER = process.env.SYNC_BY || "owner", QUIET_MS = process.env.SYNC_NOW ? 0 : 10 * 60_000, // SYNC_NOW：待たずに今すぐ（「今すぐ渡す」ファイルから）
+  DAYS = 3, LIMIT = +process.env.SYNC_LIMIT || Infinity; // SYNC_BY・SYNC_LIMIT は動作確認用
 const API = "http://127.0.0.1:8110/api/admin";
 const pw = fs.readFileSync(path.join(ROOT, "secrets/admin_password.txt"), "utf8").trim();
 const auth = "Basic " + Buffer.from("admin:" + pw).toString("base64");
