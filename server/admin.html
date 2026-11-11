@@ -147,7 +147,13 @@ async function replay(sid) {
 }
 const replayCell = s => s.canReplay ? `<a class="btn-user-link replay" href="#" onclick="return replay('${esc(s.sid)}')" title="${s.screen === "talk" ? "2 対話型" : "3 AI型"}の体験">再表示${s.screen === "talk" ? "２" : "３"}</a>` : '<span class="note">—</span>';
 // 「GitHubへ」：このセッションの記録を _works/ へ上げる順番待ちに入れる（サーバー機が1分ごとに上げる）。押したら「受付済」
-const shareCell = s => s.rounds > 0 && s.screen !== "read" ? (window.shared && window.shared.has(s.sid) ? '<span class="note">受付済</span>' : `<a class="btn-user-link" href="#" onclick="return shareSid(event, '${esc(s.sid)}')">渡す</a>`) : '<span class="note">—</span>';
+// 渡し済（GitHub にある）＝薄い色。押し直すと最新の内容で上げ直す（変わっていなければ何もしない）
+const shareCell = s => {
+  if (!(s.rounds > 0 && s.screen !== "read")) return '<span class="note">—</span>';
+  if ((window.shared && window.shared.has(s.sid)) || (D.queued || []).includes(s.sid)) return '<span class="note">受付済</span>';
+  const done = D.shared && D.shared[s.sid];
+  return `<a class="btn-user-link" href="#" style="${done ? "opacity:.45" : ""}" title="${done ? "GitHub にあります（押すと最新の内容で上げ直します）" : "GitHub の _works/ へ上げます"}" onclick="return shareSid(event, '${esc(s.sid)}')">${done ? "渡し済" : "渡す"}</a>`;
+};
 async function shareSid(e, sid) {
   e.stopPropagation(); // 行を押したときの「元に戻す」を起こさない
   const r = await fetch(BASE + "share?sid=" + encodeURIComponent(sid), { cache:"no-store" }).catch(() => null);

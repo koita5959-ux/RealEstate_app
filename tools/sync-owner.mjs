@@ -28,16 +28,20 @@ let queued = []; try { queued = fs.readdirSync(qdir).filter((f) => /^[A-Za-z0-9_
 const all = sum.sessions || [];
 for (const sid of queued) { const s = all.find((x) => x.sid === sid); if (s && !list.includes(s)) list.push(s); }
 
+const sharedFile = path.join(ROOT, "data", "shared.json");
+let shared = {}; try { shared = JSON.parse(fs.readFileSync(sharedFile, "utf8")); } catch { /* まだない */ }
 const changed = [];
 for (const s of list.slice(0, LIMIT)) {
   const text = (await (await get("/export?sid=" + encodeURIComponent(s.sid))).text()).replace(/^﻿/, "");
   const name = `${jst(s.started).slice(0, 10)}_ユーザー_テスト記録_Type${s.screen === "talk" ? "2" : "3"}_${jst(s.started).slice(11, 16).replace(":", "")}_${s.sid.slice(0, 6)}.txt`;
   const file = path.join(ROOT, "_works", name);
   let old = ""; try { old = fs.readFileSync(file, "utf8"); } catch { /* 新しい */ }
+  shared[s.sid] = shared[s.sid] || new Date().toISOString(); // 渡し済みの印（開発利用状況で「渡し済」）
   if (old === text) continue;
   fs.writeFileSync(file, text);
   changed.push("_works/" + name);
 }
+fs.writeFileSync(sharedFile, JSON.stringify(shared));
 const done = () => { for (const sid of queued) try { fs.unlinkSync(path.join(qdir, sid)); } catch { /* 済み */ } };
 if (!changed.length) { done(); process.exit(0); }
 

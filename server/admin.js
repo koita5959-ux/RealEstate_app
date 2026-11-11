@@ -359,7 +359,9 @@ export async function adminHandler(req, res, url, ctx) {
   }
   if (req.method === "GET" && url.pathname === "/api/admin/summary") { // 保存した集計を返すだけ。設定の読み取り値（停止スイッチ・今日の費用）だけは今の値に差し替える
     const snap = ctx.getSnapshot();
-    return json(200, { ...snap, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
+    const shared = readJson(path.join(ctx.DATA_DIR, "shared.json"), {}); // GitHub へ渡したセッション（tools/sync-owner.mjs が書く）
+    let queued = []; try { queued = fs.readdirSync(path.join(ctx.DATA_DIR, "share-queue")); } catch { /* なし */ }
+    return json(200, { ...snap, shared, queued, config: { ...snap.config, spentToday: ctx.getSpent(), disabled: ctx.disabled() } });
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/stamp") { // 開発利用状況が数秒ごとに聞く「新しい動きがあったか」（数字が変わったら読み直す）。集計はしない
