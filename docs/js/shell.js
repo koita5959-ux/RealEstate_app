@@ -31,6 +31,7 @@
 
   const css = document.createElement("style");
   css.textContent = `
+  input::placeholder, textarea::placeholder { color:#b3bcc6; opacity:1; }
   .appbar { position:sticky; top:0; z-index:1000; display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; padding:8px 16px; background:#fff; border-bottom:1px solid #d9e2ec; box-shadow:0 1px 3px rgba(0,0,0,.05); font-family:system-ui,"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif; }
   .appbar h1 { font-size:17px; margin:0; font-weight:600; color:#1f2933; }
   .appbar .appextra { font-size:12px; color:#52606d; display:flex; align-items:center; gap:10px; }
