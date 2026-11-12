@@ -50,6 +50,8 @@
   dialog p { margin:0 0 10px; font-size:14px; }
   button.small { font-size:12px; padding:3px 8px; }
   .hint { font-size:12px; color:var(--sub); }
+  .topcommit { font-size:12px; padding:3px 10px; border:1px solid #d9e2ec; border-radius:4px; background:#fff; color:#9aa5b1; cursor:default; }
+  .topcommit.on { border-color:#c0392b; background:#c0392b; color:#fff; font-weight:bold; cursor:pointer; }
   textarea { width:100%; padding:7px; border:1px solid var(--line); border-radius:6px; font-size:13px; field-sizing:content; resize:none; overflow:hidden; font-family:inherit; line-height:1.5; min-height:2.4em; } /* 書いた分だけ縦に伸びる */
   /* 右側 */
   .side h3 { font-size:13px; margin:14px 0 4px; }
@@ -78,7 +80,9 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="admin" data-title="3. 管理画面 ― 試作（コンテンツ：3 AI型）"></header>
+<header id="appbar" data-current="admin" data-title="3. 管理画面 ― 試作（コンテンツ：3 AI型）">
+  <span class="appextra"><button id="commitTop" class="topcommit" title="書き換えをメイン画面に反映します（下の「設定を変更する」と同じ）"></button></span>
+</header>
 <script src="js/shell.js"></script>
 <script src="js/shophp.js"></script>
 <div class="noticebar">左の番号は、メイン画面の番号と同じです。「設定を変更する」でメイン画面に反映し、右上の「メイン画面」で確かめられます（設定はこのブラウザに保存され、メイン画面が読みます）。AIの返事はダミーです。</div>
@@ -375,7 +379,11 @@ function renderHelp() {
 let dirty = false;
 function save() { dirty = true; document.getElementById("checks").innerHTML = ""; lamp(); }
 // 「設定を変更する」は書き換えがあるときだけ点灯
-function lamp() { const b = document.getElementById("commit"); b.disabled = !dirty; b.classList.toggle("on", dirty); }
+function lamp() {
+  const b = document.getElementById("commit"); b.disabled = !dirty; b.classList.toggle("on", dirty);
+  const t = document.getElementById("commitTop"); t.disabled = !dirty; t.classList.toggle("on", dirty);
+  t.textContent = dirty ? "● 未更新あり ― 設定を変更する" : "設定は反映済み";
+}
 function resetTry() { save(); }
 
 // 「設定を変更する」時のチェック。エラーは変更を止め、アドバイスは表示だけ
@@ -424,6 +432,7 @@ function loadSaved() {
   lamp();
 }
 document.getElementById("commit").onclick = commit;
+document.getElementById("commitTop").onclick = () => { commit(); document.getElementById("checks").scrollIntoView({ block:"center" }); };
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
 Shell.beforeGo = key => { // メイン画面へ行くとき、未確定の下書きがあれば三択を出す（ほかの画面へ行くのは下書きに影響しない）
   if (key === "user" && dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
