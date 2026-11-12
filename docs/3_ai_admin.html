@@ -105,7 +105,7 @@
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
     <h2>往復の上限 <span class="who shop">店が変えられる</span></h2>
-    <div class="box"><input id="limit" type="number" min="1" style="width:5em"> 往復まで <span class="hint" id="limitNote"></span></div>
+    <div class="box">標準 <b id="limitBase"></b> ＋ 追加 <input id="limit" type="number" min="0" style="width:4em"> 往復 ＝ <b id="limitTotal"></b></div>
 
     <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
@@ -217,7 +217,7 @@ const LOC = {
 const FIRST = 4; // 店が書く選択肢は④から
 
 // steps[0]＝④ {topic, btns, br}、steps[1]＝⑤ {topic, branches:[{name,kind,btns,close}×2]}、steps[2〜]＝⑥〜 {topic, btns}
-let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = null; // limit: null＝初期値（自動）
+let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = 0; // limit: 標準に足す往復（店が入れる。初期値0）
 function loadMode(k) {
   modeKey = k;
   const m = MODES[k];
@@ -226,7 +226,7 @@ function loadMode(k) {
     { topic:"", branches:m.s5.map(b => ({ ...b, btns:[...b.btns, "", ""] })) }
   ];
   closeText = m.close; stance = m.stance; hint = m.hint;
-  limit = null;
+  limit = 0;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 const live = s => s.btns.map(b => b.trim()).filter(Boolean);
@@ -242,7 +242,7 @@ function slotsOf(el, s, withBr) {
     const inp = document.createElement("input");
     inp.value = b; inp.placeholder = "（空白）";
     inp.size = Math.max(b.length * 2, 8); // field-sizing が効かないブラウザ向け
-    inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); if (limit == null) document.getElementById("limit").onchange(); };
+    inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); document.getElementById("limit").onchange(); };
     w.appendChild(inp);
     if (withBr) {
       const sel = document.createElement("select");
@@ -309,18 +309,15 @@ function renderAdmin() {
   });
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const lm = document.getElementById("limit");
-  const showLimit = () => {
-    lm.value = limit ?? autoLimit();
-    const last = NUM[(limit ?? autoLimit()) + 3] || "";
-    document.getElementById("limitNote").textContent = (last ? `（④〜${last}）` : "") + (limit == null ? `（初期値：ボタンのあるステップ ${autoLimit() - 2}＋2）` : "（店が変更）");
+  const showLimit = () => { // 標準（アプリが決める）＋追加（店が入れる）＝合計。④を1往復目と数える
+    const b = autoLimit(), t = b + limit;
+    lm.value = limit;
+    document.getElementById("limitBase").textContent = `${b}往復（④〜${NUM[b + 3] || ""}）`;
+    document.getElementById("limitTotal").textContent = `${t}往復（${NUM[t + 3] || ""}まで）`;
   };
   showLimit();
-  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : null; save(); };
-  lm.onchange = () => {
-    const n = autoLimit() - 2; // ボタンを設定したステップの数
-    if (limit != null && limit < n) alert(`上限 ${limit} 往復は、ボタンを設定したステップ（${n}）より少なく、店のボタンを最後まで出せません。`);
-    showLimit();
-  };
+  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); showLimit(); };
+  lm.onchange = showLimit;
   const stIn = document.getElementById("stance"), hiIn = document.getElementById("hint");
   stIn.value = stance; hiIn.value = hint;
   stIn.oninput = () => { stance = stIn.value; save(); };
@@ -366,7 +363,7 @@ function renderHelp() {
     <h3>＋ ステップを足す</h3>
     <p>次の番号のステップが増えます。ボタンを書けば、会話はそこまで店の言葉で進みます。ボタンが書かれていないステップでは、AIがボタン候補を出して続けます。</p>
     <h3>往復の上限</h3>
-    <p>会話を何往復で終えるかです。初期値は「ボタンを書いたステップの数＋2」で、ステップを足してボタンを書くと増えます。数を書き換えると、その数に固定されます。上限に来たら、AIは回答の後に次の文で打ち切ります。</p>
+    <p>会話を何往復で終えるかです。標準の往復はアプリが決め、ステップを足してボタンを書くと増えます。足りなければ「追加」に数を入れます（初期値0）。どの段でも、ボタンを選んでも書いても1往復です。上限に来たら、AIは回答の後に次の文で打ち切ります。</p>
     <div class="ex">${END}</div>
     <h3>問い合わせで出す店の一手（④を選ぶ前）</h3>
     <p>④から下に常に出る「これらの情報をもとにお問い合わせ」に添える一文です。④を選んだ後は、⑤の枝の締めの文に替わります。問い合わせると、店が何をしてくれるかを書きます。</p>
@@ -403,9 +400,6 @@ function check() {
   });
   const named = (s, i, x) => live(s).forEach(b => { if (b.length > 9) adv.push(`${NUM[FIRST + i]}${x == null ? "" : " " + BR[x]}「${b}」は長めです。ボタン名は7文字前後が読みやすいです。`); });
   steps.forEach((s, i) => s.branches ? s.branches.forEach((b, x) => named(b, i, x)) : named(s, i));
-  const n = has.filter(Boolean).length, lim = limit ?? autoLimit();
-  if (lim < n) err.push(`往復の上限 ${lim} が、ボタンを設定したステップ（${n}）より少ないです。`);
-  else if (lim === n) adv.push("往復の上限がステップ数と同じなので、AIのボタン候補は出ません。");
   return { err, adv };
 }
 function commit() {
@@ -415,7 +409,7 @@ function commit() {
     (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>メイン画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
   if (err.length) return false;
-  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, name:MODES[modeKey].name, stance, hint, steps, close:closeText, limit })); } catch (e) {}
+  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, name:MODES[modeKey].name, stance, hint, steps, close:closeText, extra:limit })); } catch (e) {}
   dirty = false;
   lamp();
   return true;
@@ -424,7 +418,7 @@ function commit() {
 function loadSaved() {
   loadMode("m3");
   try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
-    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.limit ?? null;
+    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0); // 前の保存（合計で入れた数）は追加に読み替える
     stance = sv.stance ?? MODES[sv.mode].stance; hint = sv.hint ?? MODES[sv.mode].hint;
     if (sv.stance === undefined) localStorage.setItem("reAdmin", JSON.stringify({ ...sv, name:MODES[sv.mode].name, stance, hint })); // 受け方を持たない古い保存は、初期値を足して保存し直す
   } } catch (e) {}
