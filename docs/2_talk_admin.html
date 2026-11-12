@@ -188,10 +188,10 @@ function renderAll() {
     ? "外野目線では、ここはHPから読んだままで、変えられません。AIはこれを「HPによると」と出どころを付けて話します。違う所があれば、HPを直して「読み取る」を押し直してください。"
     : "社員目線では、HPから読んだものを初期値にして書き換えられます。書き換えた欄には、HPからの読み（外からの見え方）を並べて出します。";
   const know = $("know"); know.innerHTML = "";
-  for (const [k, label] of KNOW) {
+  for (const [k, label, ex, from] of KNOW) {
     const v = eff(k), why = hp.why && hp.why[k], changed = !out && own[k] != null && own[k] !== (hp[k] || "");
-    know.insertAdjacentHTML("beforeend", `<div class="k">${label}</div><div>
-      <textarea id="f_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPから読めませんでした" : "HPから読めませんでした。書けば、AIが使います"}">${escH(v)}</textarea>
+    know.insertAdjacentHTML("beforeend", `<div class="k">${label}<br><small style="font-weight:normal;color:#888">${escH(from)}</small></div><div>
+      <textarea id="f_${k}" class="${out ? "locked" : ""}" ${out ? "readonly" : ""} placeholder="${out ? "HPから読めませんでした" : "HPから読めませんでした。書けばAIが使います。" + escH(ex)}">${escH(v)}</textarea>
       <span class="badge ${out ? "lock" : "free"}">${out ? "HPより・変更できません" : "HPより（初期値）・書き換えできます"}</span>
       ${why ? `<p class="why">${escH(why)}</p>` : ""}${changed && hp[k] ? `<div class="mirror">${escH(hp[k])}</div>` : ""}</div>`);
     const f = $("f_" + k);

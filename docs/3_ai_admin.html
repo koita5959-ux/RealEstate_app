@@ -134,9 +134,9 @@
     const ta = (id, v, ph) => `<textarea id="${id}" rows="1" style="width:100%;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;field-sizing:content" placeholder="${esc1(ph)}">${esc1(v)}</textarea>`;
     let html = h.unreadable ? `<div style="color:#b4472b;margin-bottom:6px">${esc1(h.unreadable)}</div>` : "";
     html += `<div style="font-weight:bold;margin:6px 0 2px">HPから読んだこと（下書き。直せばAIは直した方を使います）</div>`;
-    for (const [k, l] of SHOP_KNOW) {
+    for (const [k, l, ex, from] of SHOP_KNOW) {
       const hv = h.unreadable ? "" : (h[k] || ""), changed = K.own[k] != null && K.own[k] !== hv;
-      html += `<div style="margin:4px 0"><b>${l}</b>${changed && hv ? ' <span class="hint">（直しました。HPの読み：' + esc1(hv) + "）</span>" : ""}${ta("kn_" + k, K.own[k] ?? hv, hv ? "" : "HPから読めませんでした。書けば、AIが使います")}</div>`;
+      html += `<div style="margin:4px 0"><b>${l}</b> <span class="hint">${esc1(from)}</span>${changed && hv ? ' <span class="hint">（直しました。HPの読み：' + esc1(hv) + "）</span>" : ""}${ta("kn_" + k, K.own[k] ?? hv, hv ? "" : "HPから読めませんでした。書けばAIが使います。" + ex)}</div>`;
     }
     if (h.lic) html += `<div class="hint">宅建の免許：${esc1(h.lic)}（HPの免許番号。直せません）</div>`;
     const un = h.unreadable ? [] : (h.unread || []);
