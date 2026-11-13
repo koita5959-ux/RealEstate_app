@@ -104,8 +104,8 @@
     <div id="steps"></div>
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
-    <h2>往復の上限 <span class="who shop">店が変えられる</span></h2>
-    <div class="box">標準 <b id="limitBase"></b> ＋ 追加 <input id="limit" type="number" min="0" style="width:4em"> 往復 ＝ <b id="limitTotal"></b></div>
+    <h2>フリートークの回数 <span class="who shop">店が変えられる</span></h2>
+    <div class="box">フリートーク <input id="limit" type="number" min="0" max="20" style="width:4em"> 往復 <span class="hint">（初期値2）選択の欄（ボタンのあるステップ）までは、必ずお客さんに聞きます（数に入れません）。そのあと、書いて話せる回数です。終えると書き込めなくなり、「メールで問い合わせる」だけが残ります。</span></div>
 
     <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
@@ -217,7 +217,7 @@ const LOC = {
 const FIRST = 4; // 店が書く選択肢は④から
 
 // steps[0]＝④ {topic, btns, br}、steps[1]＝⑤ {topic, branches:[{name,kind,btns,close}×2]}、steps[2〜]＝⑥〜 {topic, btns}
-let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = 0; // limit: 標準に足す往復（店が入れる。初期値0）
+let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = 2; // limit: フリートークの回数（店が入れる。初期値2）
 function loadMode(k) {
   modeKey = k;
   const m = MODES[k];
@@ -226,14 +226,13 @@ function loadMode(k) {
     { topic:"", branches:m.s5.map(b => ({ ...b, btns:[...b.btns, "", ""] })) }
   ];
   closeText = m.close; stance = m.stance; hint = m.hint;
-  limit = 0;
+  limit = 2;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 const live = s => s.btns.map(b => b.trim()).filter(Boolean);
 const hasBtns = s => s.branches ? s.branches.some(b => live(b).length) : live(s).length > 0;
 const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
 // 初期値：ボタンを書いたステップの数＋2（＋で足したステップも数える）
-const autoLimit = () => steps.filter(hasBtns).length + 2;
 
 // ボタンの枠（入力欄）を並べる。withBr：④用に枝の選択を付ける
 function slotsOf(el, s, withBr) {
@@ -309,14 +308,9 @@ function renderAdmin() {
   });
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const lm = document.getElementById("limit");
-  const showLimit = () => { // 標準（アプリが決める）＋追加（店が入れる）＝合計。④を1往復目と数える
-    const b = autoLimit(), t = b + limit;
-    lm.value = limit;
-    document.getElementById("limitBase").textContent = `${b}往復（④〜${NUM[b + 3] || ""}）`;
-    document.getElementById("limitTotal").textContent = `${t}往復（${NUM[t + 3] || ""}まで）`;
-  };
+  const showLimit = () => { lm.value = limit; };
   showLimit();
-  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); showLimit(); };
+  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); };
   lm.onchange = showLimit;
   const stIn = document.getElementById("stance"), hiIn = document.getElementById("hint");
   stIn.value = stance; hiIn.value = hint;
@@ -409,7 +403,7 @@ function commit() {
     (err.length ? `<div class="box" style="border-color:#c33"><b style="color:#c33">エラー（変更していません）</b><ul>${li(err)}</ul></div>` : `<div class="box"><b>設定を変更しました。</b>メイン画面に反映されます。</div>`)
     + (adv.length ? `<div class="box"><b>アドバイス</b><ul>${li(adv)}</ul></div>` : "");
   if (err.length) return false;
-  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, name:MODES[modeKey].name, stance, hint, steps, close:closeText, extra:limit })); } catch (e) {}
+  try { localStorage.setItem("reAdmin", JSON.stringify({ mode:modeKey, name:MODES[modeKey].name, stance, hint, steps, close:closeText, free:limit })); } catch (e) {}
   dirty = false;
   lamp();
   return true;
@@ -418,7 +412,7 @@ function commit() {
 function loadSaved() {
   loadMode("m3");
   try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
-    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0); // 前の保存（合計で入れた数）は追加に読み替える
+    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.free ?? 2 + (sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0)); // 前の保存（追加・合計）はフリートークの回数に読み替える
     stance = sv.stance ?? MODES[sv.mode].stance; hint = sv.hint ?? MODES[sv.mode].hint;
     if (sv.stance === undefined) localStorage.setItem("reAdmin", JSON.stringify({ ...sv, name:MODES[sv.mode].name, stance, hint })); // 受け方を持たない古い保存は、初期値を足して保存し直す
   } } catch (e) {}

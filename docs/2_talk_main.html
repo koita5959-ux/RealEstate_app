@@ -898,7 +898,7 @@ function newRow(q) {
   const prev = [...document.querySelectorAll("#talk .row")].pop();
   d.dataset.q = q || (prev ? +prev.dataset.q + 1 : 1);
   d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
-  if (d.dataset.q >= 4) d.innerHTML += `<span class="qround">${d.dataset.q - 3}${isFinite(LIMIT_T) ? "／" + LIMIT_T + "往復" : "往復目"}</span>`; // ④が1往復目。上限があれば「1／8往復」
+  if (d.dataset.q >= 4) d.innerHTML += `<span class="qround">${d.dataset.q - 3}${"／" + FREE_T + "往復"}</span>`; // ④が1往復目。上限があれば「1／8往復」
   return d;
 }
 function renderRoute() {
@@ -1110,10 +1110,10 @@ function restoreSession(d) {
 // ③の返事のあとは、ボタンを出さず、書き欄だけで外の人と話す。やり取りは上から下へ全部残る。
 // 話が管理画面の「勧める場面」に当たったら、AIが【勧める:N】を付けて返し、画面は店への相談へつなぐ。
 const TONE_TXT = { near:"話し方は、知り合いの先輩くらいの近さの、くだけた丁寧語にします。", mid:"話し方は、詳しい知人くらいの丁寧語にします。", far:"話し方は、相談員くらいのていねいな言葉にします。" };
-const LIMIT_T = +TALK.limit > 0 ? Math.max(3, +TALK.limit) : Infinity; // 往復の上限（③→④の返事を1往復目と数える）。空なら上限なし
-const AFTER_T = TALK.after != null && TALK.after !== "" ? Math.max(0, +TALK.after) : 1; // 勧めた後に話せる往復（管理画面。初期値1）
+const FREE_T = TALK.free != null && TALK.free !== "" ? Math.max(0, +TALK.free) : 5; // フリートークの回数（管理画面。初期値5）。選択の欄（①〜③）の返事は数に入れない
+const LIMIT_T = FREE_T + 1; // 返事の数の上限（①〜③への返事を含む）
 let HANDED = null, HAND_AT = 0; // 勧めた場面 [話題, 理由] と、勧めた返事の往復目
-const isLast = n => n >= LIMIT_T - 1 || (!!HANDED && n - HAND_AT >= AFTER_T); // n 往復目の返事で終えるか
+const isLast = n => n >= LIMIT_T - 1; // 勧める場面に当たっても、話はフリートークの回数まで続く // n 往復目の返事で終えるか
 // 店のこと（1セッションの中で変わらない）。contextFixed として送り、サーバーがキャッシュに載せる
 function talkShopBlock() {
   const nm = TALK.name, staff = TALK.mode === "staff";
@@ -1177,12 +1177,12 @@ function goStep(i, lead, real) {
   lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
   if (isLast(i)) { // 締め：固定の打ち切り文は付けず、AIの最後の返事そのものを締めにする
     if (!HANDED) S.sheet.勧めた場面 = "（往復の上限まで話した）";
-    say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：往復の上限（${LIMIT_T}）`);
+    say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：フリートークの回数（${FREE_T}）`);
     STAGE = "店を勧めた"; inquiryBar(true); saveSession();
     return;
   }
   say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本",
-    fresh ? `店へ渡した：勧める場面「${esc(HANDED[0])}」（あと ${AFTER_T} 往復話せる）` : `開けた穴：書き欄で続ける（${isFinite(LIMIT_T) ? "上限 " + LIMIT_T + " 往復の " : ""}${i + 1} 往復目）`);
+    fresh ? `店へ渡した：勧める場面「${esc(HANDED[0])}」（フリートークは ${FREE_T} 往復まで）` : `開けた穴：書き欄で続ける（${FREE_T} 往復の ${i + 1} 往復目）`);
   if (fresh) { STAGE = "店を勧めた"; inquiryBar(); }
   choices([], null, t => {
     if (!t) return;

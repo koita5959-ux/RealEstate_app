@@ -459,8 +459,9 @@ window.addEventListener("storage", e => { if (e.key === "reAdmin") location.relo
 const END = "AIはここまでです。詳しいご相談はメールをお送りいただければ、担当者が対応します。";
 const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
 const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
-const LIMIT_BASE = ADMIN.steps.filter(hasOf).length + 2; // 標準の往復（アプリが決める）
-const LIMIT = LIMIT_BASE + (ADMIN.extra ?? (ADMIN.limit != null ? Math.max(0, ADMIN.limit - LIMIT_BASE) : 0)); // 往復の上限（④を1往復目と数える）＝標準＋店の追加。前の保存（合計の数）は追加に読み替える
+const LIMIT_BASE = ADMIN.steps.filter(hasOf).length; // 選択の欄（ボタンのあるステップ）の数。必ず聞く・数に入れない
+const FREE = ADMIN.free ?? 2 + (ADMIN.extra ?? (ADMIN.limit != null ? Math.max(0, ADMIN.limit - LIMIT_BASE - 2) : 0)); // フリートークの回数（初期値2）。前の保存（追加・合計）は読み替える
+const LIMIT = LIMIT_BASE + FREE; // 往復の上限（④を1往復目と数える）
 let BRANCH = null; // ④で決まる枝（④で書いた言葉があれば、⑤の前の一言と同じ往復で AI が決める）
 let REPLAY_BR = null; // 巻き戻し・元に戻すときに、記録にある枝の番号
 // AIの返事の最後の【方向N】を読み取って消す。idx：0か1（なければ null）
