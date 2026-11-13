@@ -68,6 +68,31 @@ try {
 }
 const client = apiKey ? new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }) : null;
 
+// AI側の一時的な不調（混雑・5xx・つながらない）は、画面の待ち時間（90秒）に収まる範囲で間をあけて繰り返す
+const RETRY_BUDGET_MS = 70_000;
+const retryable = (e) => !e.status || e.status === 429 || e.status >= 500;
+async function createWithRetry(params, rec) {
+  const start = Date.now();
+  for (let i = 0; ; i++) {
+    try {
+      return await client.messages.create(params, { maxRetries: 0, timeout: 60_000 });
+    } catch (e) {
+      const wait = Math.min(2000 * (i + 1), 8000);
+      if (!retryable(e) || Date.now() - start + wait > RETRY_BUDGET_MS) throw e;
+      rec.retries = i + 1; rec.retryStatus = e.status || 0;
+      await new Promise((ok) => setTimeout(ok, wait));
+    }
+  }
+}
+function jaError(e, retries) {
+  const n = retries ? `（${retries}回やり直しても応答なし）` : "";
+  if (e.status === 529 || e.status === 503) return `AI側が混み合っていて応答しませんでした${n}［${e.status}］`;
+  if (e.status >= 500) return `AI側の一時的な不調で応答しませんでした${n}［${e.status}］`;
+  if (e.status === 429) return `AIへの呼び出しが多すぎて断られました${n}［429］`;
+  if (!e.status) return `AIにつながりませんでした（時間切れ・通信）${n}`;
+  return `AIが受け付けませんでした［${e.status}］：${clip(e.message, 200)}`;
+}
+
 // ---- 記録（1往復ごと 1行の JSON）----
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -292,13 +317,13 @@ async function handleChat(req, res) {
   if (!(await acquire())) return reject(429, "busy");
   rec.queuedMs = Date.now() - waitFrom; // 順番待ちした長さ（混み具合の記録）
   try {
-    const r = await client.messages.create({
+    const r = await createWithRetry({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system,
       output_config: { effort: EFFORT },
       messages: input.messages,
-    });
+    }, rec);
     const raw = r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const { text, memo } = splitMemo(raw);
     const usage = r.usage || {};
@@ -327,7 +352,7 @@ async function handleChat(req, res) {
     });
   } catch (e) {
     writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
-    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: clip(e.message, 300), trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
+    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: jaError(e, rec.retries), retries: rec.retries || 0, trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
   } finally {
     release();
   }
