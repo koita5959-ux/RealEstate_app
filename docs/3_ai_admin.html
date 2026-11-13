@@ -316,7 +316,7 @@ function renderAdmin() {
     const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2463 + i) + "のボタン→返事"), rule = 2 + btn.length;
     if (document.activeElement !== lm) lm.value = rule + limit; // 入れている途中は書き換えない
     lm.min = rule + 1;
-    document.getElementById("limitMin").textContent = `（初期値${rule + 2}＝規定＋2・最低${rule + 1}）`;
+    document.getElementById("limitMin").textContent = `（初期値${rule + 2}＝規定＋2）`;
     document.getElementById("limitNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事", ...btn], limit);
   };
   showLimit();
