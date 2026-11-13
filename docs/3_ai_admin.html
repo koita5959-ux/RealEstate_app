@@ -102,7 +102,7 @@
     <h2>業態モード <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="modes"></div>
     <div class="box"><div class="branch">受け方（選択の前のAIの一言が、お客さんの答えをどう受け止めるか）</div><textarea id="stance" rows="1"></textarea>
-      <div class="branch">書き欄の例（③から先の書き欄に薄く出る文）</div><textarea id="hint" rows="1"></textarea></div>
+      <div class="branch">書き欄の例（②から先の書き欄に薄く出る文）</div><textarea id="hint" rows="1"></textarea></div>
 
     <h2>ロケーション <span class="who common">全業態共通・変更なし</span></h2>
     <div id="common"></div>
@@ -114,7 +114,7 @@
     <h2>話の総回数 <span class="who shop">店が変えられる</span></h2>
     <div class="box">総回数 <input id="limit" type="number" style="width:4em"> 往復 <span class="hint" id="limitMin"></span><div class="hint" id="limitNote" style="margin-top:6px;line-height:1.7"></div></div>
 
-    <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
+    <h2>問い合わせで出す店の一手（③を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
 
     <button class="plus" id="commit">設定を変更する</button>
@@ -224,7 +224,7 @@ const LOC = {
        skip:"①で「わからない」なら②は飛ばして③へ" },
   3: { title:"建物", btns:["住んでいる家がある","空き家・古い家がある","何もない（更地）"] }
 };
-const FIRST = 4; // 店が書く選択肢は④から
+const FIRST = 3; // 店が書く選択肢は③から（③＝3往復目。①土地評価データー、②設問）
 
 // steps[0]＝④ {topic, btns, br}、steps[1]＝⑤ {topic, branches:[{name,kind,btns,close}×2]}、steps[2〜]＝⑥〜 {topic, btns}
 let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = 2; // limit: フリートークの回数（店が入れる。初期値2）
@@ -241,8 +241,9 @@ function loadMode(k) {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 const live = s => s.btns.map(b => b.trim()).filter(Boolean);
 // 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
-function lengthNote(rules, free) { // 規定回数（土地評価データの表示から、選択の欄があるところまで）＋追加（フリートーク）
-  return `土地評価データー表示から規定として <b>${rules.length}</b>回、追加（フリートーク）で <b>${free}</b>回`;
+function lengthNote(rules, free) { // 規定回数（①土地評価データー〜選択の欄があるところまで）＋追加（フリートーク）。番号＝何往復目か
+  const c = n => String.fromCharCode(0x2460 + n - 1), r = rules.length, range = (a, b) => a === b ? c(a) : c(a) + "〜" + c(b);
+  return `土地評価データー表示から規定として <b>${r}</b>回（${range(1, r)}）、追加（フリートーク）で <b>${free}</b>回（${range(r + 1, r + free)}）`;
 }
 const hasBtns = s => s.branches ? s.branches.some(b => live(b).length) : live(s).length > 0;
 const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
@@ -278,15 +279,9 @@ function renderAdmin() {
     l.onclick = e => { e.preventDefault(); if (k !== modeKey) { loadMode(k); renderAll(); } };
     m.appendChild(l);
   }
-  document.getElementById("common").innerHTML =
-    `<div class="box lock"><div class="head"><span class="num">⓪</span><span class="title">市区町村・地図・ピン</span></div><div class="hint">利用者が市区町村を選び、地図に土地のピンを立てる。</div></div>`
-    + [1, 2, 3].map(n => {
-      const s = LOC[n];
-      const body = s.branches
-        ? s.branches.map(b => `<div class="branch">${b.when} → ${b.title}</div>${b.note ? `<div class="hint">${b.note}</div>` : ""}<div class="slots">${fixedBtns(b.btns)}</div>`).join("") + `<div class="branch">${s.skip}</div>`
-        : `<div class="slots">${fixedBtns(s.btns)}</div>`;
-      return `<div class="box lock"><div class="head"><span class="num">${NUM[n]}</span><span class="title">${s.title}</span></div>${body}</div>`;
-    }).join("");
+  document.getElementById("common").innerHTML = // ①②は全業態共通（何往復目かの番号）
+    `<div class="box lock"><div class="head"><span class="num">①</span><span class="title">土地評価データー</span></div><div class="hint">利用者が市区町村を選び、地図に土地のピンを立てて「評価する」を押すと、国の公開データ（用途地域・標準地など）を表に出す。</div></div>`
+    + `<div class="box lock"><div class="head"><span class="num">②</span><span class="title">土地の様子（一枚の設問）</span></div><div class="hint">道との関係（広い道・細い道。細い道なら、どんな細さか・通路の幅）／当てはまるもの／いまの使われ方 を、まとめて答えてもらい、AIが返事をする。</div></div>`;
   const box = document.getElementById("steps");
   box.innerHTML = "";
   steps.forEach((s, i) => {
@@ -296,14 +291,14 @@ function renderAdmin() {
     d.querySelector(".topic").oninput = e => { s.topic = e.target.value; save(); };
     if (s.branches) {
       // ⑤：④で選ばれた枝ごとに出し分ける
-      d.insertAdjacentHTML("beforeend", `<div class="hint">④の選択で分かれます。分かれるのはここだけで、⑥から先は共通です。</div>`);
+      d.insertAdjacentHTML("beforeend", `<div class="hint">③の選択で分かれます。分かれるのはここだけで、⑤から先は共通です。</div>`);
       s.branches.forEach((b, x) => {
         const from = steps[0].btns.filter((t, j) => t.trim() && steps[0].br[j] === x);
         const e = document.createElement("div");
         e.className = "brbox";
         e.innerHTML = `<div class="head"><b>${BR[x]}</b><input class="topic" placeholder="枝の呼び名（管理用）" value="${esc(b.name)}">
             <select><option${b.kind === "答える" ? " selected" : ""}>答える</option><option${b.kind === "聞く" ? " selected" : ""}>聞く</option></select></div>
-          <div class="branch">④で ${from.length ? from.map(t => `「${esc(t)}」`).join("") : "（振り分けられたボタンなし）"} を選んだ人</div>
+          <div class="branch">③で ${from.length ? from.map(t => `「${esc(t)}」`).join("") : "（振り分けられたボタンなし）"} を選んだ人</div>
           <div class="slots"></div><button class="small">＋ 枠を足す</button>
           <div class="branch">締めの文（この枝の問い合わせに添える）</div><textarea class="closeIn" rows="1">${esc(b.close)}</textarea>`;
         e.querySelector(".topic").oninput = ev => { b.name = ev.target.value; save(); };
@@ -314,7 +309,7 @@ function renderAdmin() {
         d.appendChild(e);
       });
     } else {
-      d.insertAdjacentHTML("beforeend", `${i === 0 ? '<div class="hint">ボタンごとに、⑤のどちらの枝へ進むかを選びます。</div>' : ""}<div class="slots"></div><button class="small">＋ 枠を足す</button>`);
+      d.insertAdjacentHTML("beforeend", `${i === 0 ? '<div class="hint">ボタンごとに、④のどちらの枝へ進むかを選びます。</div>' : ""}<div class="slots"></div><button class="small">＋ 枠を足す</button>`);
       slotsOf(d.querySelector(".slots"), s, i === 0);
       d.querySelector("button.small").onclick = () => { s.btns.push(""); if (s.br) s.br.push(0); save(); renderAdmin(); };
     }
@@ -323,11 +318,11 @@ function renderAdmin() {
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const lm = document.getElementById("limit");
   const showLimit = () => { // 規定回数：評価する・①〜③の設問・ボタンのあるステップ
-    const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2463 + i) + "のボタン→返事"), rule = 2 + btn.length;
+    const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2462 + i) + "のボタン→返事"), rule = 2 + btn.length;
     if (document.activeElement !== lm) lm.value = rule + limit; // 入れている途中は書き換えない
     lm.min = rule + 1;
     document.getElementById("limitMin").textContent = `（初期値${rule + 2}＝規定＋2）`;
-    document.getElementById("limitNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事", ...btn], limit);
+    document.getElementById("limitNote").innerHTML = lengthNote(["①土地評価データー", "②設問→返事", ...btn], limit);
   };
   showLimit();
   lm.oninput = () => { const v = parseInt(lm.value, 10), rule = 2 + steps.filter(hasBtns).length; limit = isNaN(v) ? 2 : Math.max(1, v - rule); save(); showLimit(); }; // 総回数からフリートークの数（最低1）
@@ -378,13 +373,13 @@ function renderHelp() {
     <p>店のホームページのURLを入れて「読み取る」を押すと、AIがHPを読み、店のこと（呼び名・何をしている店か・得意な相談など）を下書きにします。読みは直せます。直した欄は、AIが直した方を使います。</p>
     <p>「HPにないが、会話に効くこと」は、店が空白から書く欄です。HPから読めなかったことも、ここに書けばAIが使います。この欄は書いたそばから保存され、「設定を変更する」は要りません。</p>
     <h3>業態モード</h3>
-    <p>店の得意な方向を選びます。選ぶと、④から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
-    <div class="ex">例：「土地の活かし方から一緒に考える店」→ ④に「住む・建て直す」「建てて貸す」など</div>
+    <p>店の得意な方向を選びます。選ぶと、③から先の選択肢と店の一手に初期値が入ります。初期値は書き換えられます。</p>
+    <div class="ex">例：「土地の活かし方から一緒に考える店」→ ③に「住む・建て直す」「建てて貸す」など</div>
     <p>「受け方」は、選択の前のAIの一言が、お客さんの答えをどう受け止めるかです。空なら、AIには渡しません。「書き欄の例」は、書き欄に薄く出る文です。</p>
-    <h3><span class="num">①</span>〜<span class="num">③</span> ロケーション</h3>
-    <p>「評価する」で土地評価データー（国の公開データ）を出したあと、土地の様子を一枚の設問でまとめて聞きます。道との関係（広い道・細い道。細い道なら、どんな細さか・通路の幅）、当てはまるもの、いまの使われ方です。どの業態でも同じで、変えられません。</p>
-    <h3><span class="num">④</span>〜<span class="num">${last}</span> 選択肢</h3>
-    <p>利用者を店の得意な方向へ引き寄せる問いです。④のボタンは、⑤のどちらの枝へ進むかを選びます。⑤は枝ごとに、ボタン、種類、締めの文を書きます。⑥から先は、どの枝から来ても通じる言葉で書きます。</p>
+    <h3><span class="num">①</span><span class="num">②</span> ロケーション</h3>
+    <p>番号は、何往復目かです。①は「評価する」で出す土地評価データー（国の公開データ）、②は土地の様子を一枚の設問でまとめて聞く往復です。道との関係（広い道・細い道。細い道なら、どんな細さか・通路の幅）、当てはまるもの、いまの使われ方です。どの業態でも同じで、変えられません。</p>
+    <h3><span class="num">③</span>〜<span class="num">${last}</span> 選択肢</h3>
+    <p>利用者を店の得意な方向へ引き寄せる問いです。③のボタンは、④のどちらの枝へ進むかを選びます。④は枝ごとに、ボタン、種類、締めの文を書きます。⑤から先は、どの枝から来ても通じる言葉で書きます。</p>
     <p>種類「答える」では、AIは考え方を返して店へつなぎます。「聞く」では、店が買う側になるので、AIは利用者に答えてもらい、その答えが何を意味するかを返します。締めの文は、その枝の利用者に問い合わせで添えます。ボタン名は7文字前後に収めてください。</p>
     <p>空白の枠は利用者の画面に出ません。題名は管理用の呼び名で、利用者の画面には出ません。AIは一つ前の答えに答えた後、このステップのボタンを話題として示します。利用者はボタンを選ばずに書いても進めます。</p>
     <div class="ex">例：（回答）「住む・建て直す」や「建てて貸す」・「売る」などについてお話ししましょう。</div>
@@ -393,8 +388,8 @@ function renderHelp() {
     <h3>話の総回数</h3>
     <p>会話を何往復で終えるかです。土地評価データー表示から、ボタンのあるステップまでが規定の回数です。総回数から規定を引いた分が、お客さんが書いて話せるフリートークです。初期値は規定＋2で、規定以下を入れると規定＋1に直ります。最後の返事には、次の一文を必ず付けて締めます。</p>
     <div class="ex">${END}</div>
-    <h3>問い合わせで出す店の一手（④を選ぶ前）</h3>
-    <p>④から下に常に出る「これらの情報をもとにお問い合わせ」に添える一文です。④を選んだ後は、⑤の枝の締めの文に替わります。問い合わせると、店が何をしてくれるかを書きます。</p>
+    <h3>問い合わせで出す店の一手（③を選ぶ前）</h3>
+    <p>③から下に常に出る「これらの情報をもとにお問い合わせ」に添える一文です。③を選んだ後は、④の枝の締めの文に替わります。問い合わせると、店が何をしてくれるかを書きます。</p>
     <h3>アプリが持つ決まり</h3>
     <p>AIの返事の形、立ち位置、個人情報の扱いです。どの店でも同じで、変えられません。</p>
     <h3>話し方の見本</h3>
@@ -419,14 +414,14 @@ function check() {
   const has = steps.map(hasBtns);
   const lastSet = has.lastIndexOf(true);
   has.forEach((h, i) => { if (!h && i > 1 && i < lastSet) err.push(`${NUM[FIRST + i]} にボタンがありません。後ろのステップにはボタンがあるので、間を埋めるか削ってください。`); });
-  if (!has[0]) err.push("④にボタンが一つもありません。");
+  if (!has[0]) err.push("③にボタンが一つもありません。");
   if (!closeText.trim()) err.push("問い合わせで出す店の一手が空です。");
   const s4 = steps[0];
   steps[1].branches.forEach((b, x) => {
     const used = s4.btns.some((t, j) => t.trim() && s4.br[j] === x);
-    if (used && !b.close.trim()) err.push(`⑤ ${BR[x]}の締めの文が空です。`);
-    if (used && !live(b).length) adv.push(`⑤ ${BR[x]}にボタンがありません。この枝ではAIのボタン候補で続きます。`);
-    if (!used && live(b).length) adv.push(`⑤ ${BR[x]}に進む④のボタンがありません。この枝は使われません。`);
+    if (used && !b.close.trim()) err.push(`④ ${BR[x]}の締めの文が空です。`);
+    if (used && !live(b).length) adv.push(`④ ${BR[x]}にボタンがありません。この枝ではボタンの段がなく、書き欄だけで続きます。`);
+    if (!used && live(b).length) adv.push(`④ ${BR[x]}に進む③のボタンがありません。この枝は使われません。`);
   });
   const named = (s, i, x) => live(s).forEach(b => { if (b.length > 9) adv.push(`${NUM[FIRST + i]}${x == null ? "" : " " + BR[x]}「${b}」は長めです。ボタン名は7文字前後が読みやすいです。`); });
   steps.forEach((s, i) => s.branches ? s.branches.forEach((b, x) => named(b, i, x)) : named(s, i));

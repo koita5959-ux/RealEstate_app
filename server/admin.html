@@ -67,7 +67,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const usd = (v, d = 4) => v == null ? "—" : "$" + v.toFixed(d);
 const jpy = v => v == null ? "—" : (v * D.config.usdJpy).toLocaleString("ja-JP", { maximumFractionDigits: v * D.config.usdJpy < 10 ? 2 : 0 }) + "円";
 const money = (v, d = 4) => v == null ? "—" : `${usd(v, d)}<span class="note">（${jpy(v)}）</span>`;
-const NUMQ = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+const NUMQ = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫"; // 記録の q で引く。表示は何往復目か（q−1）
 const stageOf = s => { // どこまで進んだか
   if (s.screen === "read") return "HP読み取り";
   const base = s.maxQ ? (NUMQ[s.maxQ - 1] || s.maxQ) + "まで" : (["開いた", "地図を開いた", "ピンを置いた", "評価した"][s.reach] || "—");
@@ -76,7 +76,7 @@ const stageOf = s => { // どこまで進んだか
 const actual = x => x.rounds ? (x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">未確定</span>') : '<span class="note">—</span>';
 const tm = ts => ts ? new Date(ts).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
 const num = v => v == null ? "—" : Math.round(v).toLocaleString("ja-JP");
-const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"③に答えた", q4:"④（相談目的）に進んだ", q5:"⑤以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
+const STAGE = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", q1:"①に答えた", q2:"②に答えた", q3:"②に答えた", q4:"③（相談目的）に進んだ", q5:"④以降に進んだ", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
 const actorSel = () => window.actorSel || "all"; // 対象：全部／一般の訪問者（visitor）／テスト（visitor 以外）
 const actorOk = s => actorSel() === "all" || (actorSel() === "visitor" ? s.by === "visitor" : s.by !== "visitor");
 const actorSelect = () => `対象：<select id="asel"><option value="all" ${actorSel() === "all" ? "selected" : ""}>全部</option><option value="visitor" ${actorSel() === "visitor" ? "selected" : ""}>一般の訪問者（visitor）</option><option value="test" ${actorSel() === "test" ? "selected" : ""}>テスト（visitor 以外）</option></select>`;
@@ -192,7 +192,7 @@ function viewCost() {
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>セッションと費用（${top.length}件・開いた時点から）</h2>
-  <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は③で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　<label style="white-space:nowrap"><input type="checkbox" id="paid"${window.paidOnly ? " checked" : ""}> 費用が発生したものだけ</label>　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順（始めた時刻）</option><option value="last" ${costSort === "last" ? "selected" : ""}>最後に動いた順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
+  <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は②で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面と利用状況の画面。先に確認が出ます）。　<label style="white-space:nowrap"><input type="checkbox" id="paid"${window.paidOnly ? " checked" : ""}> 費用が発生したものだけ</label>　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順（始めた時刻）</option><option value="last" ${costSort === "last" ? "selected" : ""}>最後に動いた順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>進んだ所</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">実績</th><th>最初の言葉</th><th>再表示</th><th>GitHub</th></tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? "<br><span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td>${esc(s.by)}</td><td>${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 60))}</td><td>${replayCell(s)}</td><td>${shareCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>Console との突き合わせ（日ごと・Console の日の区切り：${D.lots.tz === "UTC" ? "UTC＝日本時間9時切り替え" : "日本時間"}）</h2>
@@ -238,8 +238,8 @@ function viewTested() {
   <div class="note">対象: <select id="fsel">${bys.map(b => `<option value="${esc(b)}" ${b === sel ? "selected" : ""}>${b === "_all" ? "全部" : esc(b)}</option>`).join("")}</select>　①〜③は AI を呼ばないため、画面の動きの記録から数えています。</div>
   ${bars(f, r => r.sessions, r => STAGE[r.stage], r => `${r.sessions}件（${(r.sessions / top * 100).toFixed(0)}%）`)}
   <div class="two">
-    <div><h2>④で選ばれた相談目的</h2>${list(T.purposes)}<h3>相談の方向（枝）</h3>${list(T.branches)}</div>
-    <div><h2>⑤以降に押されたボタン</h2>${list(T.later)}<h3>①〜③の答え</h3>${list(T.roads)}</div>
+    <div><h2>③で選ばれた相談目的</h2>${list(T.purposes)}<h3>相談の方向（枝）</h3>${list(T.branches)}</div>
+    <div><h2>④以降に押されたボタン</h2>${list(T.later)}<h3>②の答え</h3>${list(T.roads)}</div>
     <div><h2>試された地域（市区町村）</h2>${list(T.places)}<h3>最寄りの標準地</h3>${list(T.near)}</div>
     <div><h2>画面の幅・来た経路</h2>${list(T.devices)}<h3>参照元</h3>${list(T.refs)}</div>
   </div>
@@ -248,7 +248,7 @@ function viewTested() {
   <details><summary class="note">分類の規則を見る（正規表現）</summary>${D.themeRules.map(r => `<div class="note">${esc(r.name)}：${esc(r.rule)}</div>`).join("")}<div class="note">どれにも当たらないものは「その他」。</div></details></div>
   <h2>書かれた言葉（新しい順・最大150件）</h2>
   <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>段階</th><th>分類</th><th>書かれた言葉</th></tr>
-  ${T.texts.map(x => `<tr><td>${tm(x.ts)}</td><td>${esc(x.by)}</td><td>${"①②③④⑤⑥⑦⑧"[x.q - 1] || x.q}</td><td><span class="pill">${esc(x.theme)}</span></td><td>${esc(x.text)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだありません</td></tr>`}</table></div>`;
+  ${T.texts.map(x => `<tr><td>${tm(x.ts)}</td><td>${esc(x.by)}</td><td>${"①①②③④⑤⑥⑦⑧"[x.q - 1] || x.q}</td><td><span class="pill">${esc(x.theme)}</span></td><td>${esc(x.text)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだありません</td></tr>`}</table></div>`;
 }
 
 function viewSessions() {

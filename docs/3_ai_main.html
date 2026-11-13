@@ -110,7 +110,7 @@
   <div id="map"></div>
   <aside>
     <div id="step0">
-      <h2>0. 土地のある市区町村</h2>
+      <h2>土地のある市区町村</h2>
       <div class="pc-row">
         <div class="pc"><label for="prefName">都道府県</label>
           <div class="combo"><input id="prefName" type="text" placeholder="例：東京都" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false"><ul class="combo-list" id="prefList" role="listbox" hidden></ul></div></div>
@@ -121,7 +121,7 @@
       <div id="mapMsg" class="hint"></div>
     </div>
     <div id="step1" class="hidden">
-      <h2>1. 地図をクリックして場所を指定</h2>
+      <h2>地図をクリックして場所を指定</h2>
       <div class="hint">ピンは地図を拡大して、土地の正確な位置に置いてください。位置が正確なほど、見立てが確かになります。</div>
       <button id="preset" class="small hidden">例：鷺山の旗竿地にピンを置く</button>
       <div id="picked" class="hint">まだ指定されていません</div>
@@ -368,9 +368,9 @@ document.getElementById("go").onclick = () => {
     near, area, log: [], signals: [], revised: null, used: []
   };
   R.innerHTML = `
-    <h2>2. データ（公開データから機械的に）</h2>
+    <h2><span class="qnum">①</span>土地評価データー（公開データから機械的に）</h2>
     <div id="landData"></div>
-    <h2>3. AI</h2>
+    <h2>AI</h2>
     <div id="talk"></div>
     <div id="inq"></div>`;
   renderData();
@@ -386,8 +386,8 @@ const LAND_NOTE = "このサービスは、国土交通省の不動産情報ラ�
 const DATA_ROWS = [
   ["この土地（ピンの場所）"],
   ["所在", "所在"], ["面積", "面積"], ["用途地域", "用途地域"], ["建ぺい率・容積率", "建ぺい率・容積率"],
-  ["道への接し方", "接道", "未定（下の①〜③で伺います）"], ["形と向き", "形と向き", "未定（下の①〜③で伺います）"],
-  ["高低差", "高低差", "未定（下の①〜③で伺います）"], ["車の置きやすさ", "車", "未定（下の①〜③で伺います）"], ["隣との境目", "境界", "未定（下の①〜③で伺います）"],
+  ["道への接し方", "接道", "未定（下の②で伺います）"], ["形と向き", "形と向き", "未定（下の②で伺います）"],
+  ["高低差", "高低差", "未定（下の②で伺います）"], ["車の置きやすさ", "車", "未定（下の②で伺います）"], ["隣との境目", "境界", "未定（下の②で伺います）"],
   ["最寄りの標準地（近くの別の土地の公的な値）"],
   ["地点", "最寄り標準地"], ["種類", "標準地の種類"], ["価格", "標準地価格"], ["前年から", "標準地の変動"],
   ["広さ・形", "標準地の地積と形"], ["使われ方", "標準地の利用現況"], ["周りの様子", "標準地の周辺"], ["前の道", "標準地の前面道路"],
@@ -493,7 +493,7 @@ const STAGE_LABEL = { open:"画面を開いた", map:"地図を開いた", pin:"
 function ev(type, data) {
   if (AI_OFF || REPLAYING) return;
   window.__restored = false; // 本物の操作が始まった＝ここから新しい体験として記録する
-  if (type === "choice") STAGE = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"[(+(data && data.q) || 1) - 1] + "に答えた";
+  if (type === "choice") STAGE = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"[(+(data && data.q) || 1) - 1] + "に答えた";
   else if (STAGE_LABEL[type]) STAGE = STAGE_LABEL[type];
   if (type !== "end") setTimeout(saveSession, 0); // 動きのたびに、利用状況と開発利用状況へ（評価する前の段階も）
   try {
@@ -758,7 +758,7 @@ function inquiryBar(ended) {
   bar.querySelector("button").onclick = () => {
     ev("inquiry_open");
     bar.innerHTML = "";
-    const box = newRow(); box.classList.add("inqrow");
+    const box = newRow(); box.classList.add("inqrow"); box.querySelectorAll(".qnum, .qround").forEach(x => x.remove()); // 問い合わせは往復ではないので番号を付けない
     document.getElementById("talk").appendChild(box);
     box.insertAdjacentHTML("beforeend", INQ_FORM);
     box.scrollIntoView({ block:"start" });
@@ -817,10 +817,10 @@ function addTrace(bubble, t) {
   const x = document.createElement("details"); x.className = "trace";
   x.innerHTML = `<summary>送信と原文（試験用）${warn.length ? '<span class="tw">　あふれ・異常あり</span>' : ""}</summary>`
     + (warn.length ? `<div class="tw">${warn.map(esc).join("<br>")}</div>` : "")
-    + `<b>① 送ったもの</b>　<span class="hint">システムの指示 ${n((sent.system || "").length)}字 ＋ 会話 ${(sent.messages || []).length}件${sent.queuedMs ? `　順番待ち ${(sent.queuedMs / 1000).toFixed(1)}秒` : ""}</span>`
+    + `<b>※1 送ったもの</b>　<span class="hint">システムの指示 ${n((sent.system || "").length)}字 ＋ 会話 ${(sent.messages || []).length}件${sent.queuedMs ? `　順番待ち ${(sent.queuedMs / 1000).toFixed(1)}秒` : ""}</span>`
     + (sent.system ? `<div class="hint">システムの指示（共通の決まり＋画面から渡した説明）</div>${pre(sent.system)}<div class="hint">会話</div>${pre(msgs)}` : `<div class="hint">（送ったものは届いていません）</div>`)
-    + `<b>② 画面に出した返事</b>${pre(shown)}`
-    + `<b>③ AIの原文</b>　<span class="hint">${t.stop ? "止まった理由 " + esc(String(t.stop)) : ""}${t.usage ? `　入力 ${n(t.usage.input)}・出力 ${n(t.usage.output)}トークン` : ""}${t.ms ? `　${(t.ms / 1000).toFixed(1)}秒` : ""}</span>${t.raw ? pre(t.raw) : '<div class="hint">（原文なし）</div>'}`;
+    + `<b>※2 画面に出した返事</b>${pre(shown)}`
+    + `<b>※3 AIの原文</b>　<span class="hint">${t.stop ? "止まった理由 " + esc(String(t.stop)) : ""}${t.usage ? `　入力 ${n(t.usage.input)}・出力 ${n(t.usage.output)}トークン` : ""}${t.ms ? `　${(t.ms / 1000).toFixed(1)}秒` : ""}</span>${t.raw ? pre(t.raw) : '<div class="hint">（原文なし）</div>'}`;
   bubble.appendChild(x);
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); saveSession(); }
@@ -889,19 +889,19 @@ function reopen(d) {
 
 // ---- 通った道（データの経路）と巻き戻し ----
 const PATH = [];
-const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+const NUM = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 記録の q で引く（NUM[q-1]）。表示は「何往復目か」＝q−1（① は土地評価データー）
 // 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
 function newRow(q) {
   const d = document.createElement("div"); d.className = "row";
   const prev = [...document.querySelectorAll("#talk .row")].pop();
   d.dataset.q = q || (prev ? +prev.dataset.q + 1 : 1);
   d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
-  if (d.dataset.q >= 4) d.innerHTML += `<span class="qround">${d.dataset.q - 3}／${LIMIT}往復</span>`; // ④が1往復目。あと何回で終わるかを数えずに分かるように
+  if (d.dataset.q >= 3) d.innerHTML += `<span class="qround">／${LIMIT + 2}往復</span>`; // 番号が何往復目か。総回数（①土地評価データー＋②設問＋ボタンの段＋フリートーク）
   return d;
 }
 function renderRoute() {
   const r = document.getElementById("route");
-  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => (p.q === 3 && !p.opt && p.press && p.press !== "送信" ? "①〜③" : NUM[p.q - 1]) + (p.opt ? `の${p.opt} ${p.press}${p.type ? "：" + esc(p.type) : ""}` : p.press && p.press !== "送信" ? ` ${esc(p.press)}${p.type ? "：" + esc(p.type) : ""}` : `「${esc(p.type)}」`)).join(" → ")
+  r.innerHTML = PATH.length ? "<b>通った道</b>　" + PATH.map(p => (p.q === 3 && !p.opt && p.press && p.press !== "送信" ? "②" : NUM[p.q - 1]) + (p.opt ? `の${p.opt} ${p.press}${p.type ? "：" + esc(p.type) : ""}` : p.press && p.press !== "送信" ? ` ${esc(p.press)}${p.type ? "：" + esc(p.type) : ""}` : `「${esc(p.type)}」`)).join(" → ")
  : "";
   saveSession();
 }
@@ -939,16 +939,16 @@ const DEMOS = {
     steps: [
       { press:"地図を開く", fill:{ prefName:"岐阜県", cityName:"岐阜市" }, note:"最初は都道府県と市区町村を入れる（空白から始まる）。デモでは岐阜県岐阜市。" },
       { press:"例：鷺山の旗竿地にピンを置く", note:"本番は地図をクリック。デモでは例の場所に置きます。" },
-      { press:"評価する", note:"公開データが機械的に出て、①が始まる。" },
-      { press:"細い道に面している", note:"①〜③は一枚の設問。一投目は値段でも店でもなく、地図では読めない土地の様子。持ち主なら見れば答えられる。" },
+      { press:"評価する", note:"①土地評価データーが機械的に出て、②の設問が始まる。" },
+      { press:"細い道に面している", note:"②は一枚の設問。一投目は値段でも店でもなく、地図では読めない土地の様子。持ち主なら見れば答えられる。" },
       { press:"細い通路の奥にある", note:"「細い道」を選ぶと、どんな細さかの欄が出る。" },
       { press:"2mない・狭い", note:"「細い通路の奥」を選ぶと、通路の幅の欄が出る（わかれば）。" },
       { press:"空き家・古い家がある", note:"いまの使われ方。道との関係とこれがそろえば送れる。" },
       { press:"送信", note:"一度だけ送る。AIは選んだ項目すべてに触れて返す（左の地図は、道から見た様子に切り替わっている）。" },
-      { press:"建てずに貸す（駐車場など）", note:"ここまでがロケーション。④から先は、店が管理画面に書いた選択肢（番号も管理画面と同じ）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
+      { press:"建てずに貸す（駐車場など）", note:"ここまでがロケーション。③から先は、店が管理画面に書いた選択肢（番号も管理画面と同じ）。選ぶ代わりに、下の欄に書いて送信してもよい。" },
+      { press:"送信", note:"「送信」で③の答えを送る。" },
+      { press:"費用の目安", note:"④。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
       { press:"送信", note:"「送信」で④の答えを送る。" },
-      { press:"費用の目安", note:"⑤。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
-      { press:"送信", note:"「送信」で⑤の答えを送る。" },
       { press:"これらの情報をもとにお問い合わせ", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
       { fill:{ fName:"岐阜 太郎", fTel:"058-000-0000", fWhen:"平日の夕方" }, press:"この内容で送る", note:"相談の記録は画面に出さず、送るときに店へ添える。" },
     ]
@@ -1035,9 +1035,9 @@ function restoreFromSnapshot(d) {
     renderRoute();
     // 画面：データの表と会話欄を、保存された中身から作り直す
     R.innerHTML = `
-      <h2>2. データ（公開データから機械的に）</h2>
+      <h2><span class="qnum">①</span>土地評価データー（公開データから機械的に）</h2>
       <div id="landData"></div>
-      <h2>3. AI</h2>
+      <h2>AI</h2>
       <div id="talk"></div>
       <div id="inq"></div>`;
     if (S.sheet.公開データ === "取得中") S.sheet.公開データ = null; // 取り終わる前に記録された体験
@@ -1066,7 +1066,7 @@ function restoreFromSnapshot(d) {
     }
     let sentBack = false;
     for (const it of sn.talk) if (it.t === "inq" && it.sent) { // 送ったお問い合わせ：欄はグレーのまま、中身は「記録していません」
-      const box = newRow(it.q); box.classList.add("inqrow"); box.insertAdjacentHTML("beforeend", INQ_FORM);
+      const box = newRow(it.q); box.classList.add("inqrow"); box.querySelectorAll(".qnum, .qround").forEach(x => x.remove()); // 問い合わせは往復ではないので番号を付けない box.insertAdjacentHTML("beforeend", INQ_FORM);
       box.querySelectorAll("input, textarea").forEach(x => { x.value = ""; x.placeholder = "（記録していません）"; });
       const w = box.querySelector("#fWay"); if (w && it.way) w.value = it.way;
       inqSentMark(box); talk.appendChild(box); sentBack = true;

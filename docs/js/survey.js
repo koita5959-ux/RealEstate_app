@@ -49,7 +49,7 @@ function surveyPicked(d) {
 const surveyItems = s => [s.N ? "" : s.A, s.N, s.W, ...s.B, s.C].filter(Boolean); // 細さを選んだら「細い道に面している」は重ねない
 function surveyRow() {
   const d = newRow(3); d.classList.add("survey");
-  d.querySelector(".qnum").textContent = "①〜③";
+  d.querySelector(".qnum").textContent = "②"; // ②＝2往復目（①は土地評価データー）
   for (const gr of SURVEY.groups) {
     const box = document.createElement("div"); box.className = "sgroup"; box.dataset.g = gr.g; if (gr.when) box.hidden = true;
     box.innerHTML = `<div class="sg-title">${gr.title}<span class="hint">（${gr.hint}）</span></div>`;

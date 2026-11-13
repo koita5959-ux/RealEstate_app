@@ -269,14 +269,15 @@ const END = "そのほか詳しいお話は、下記よりメールでお問い�
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
 const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:2 };
 // 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
-function lengthNote(rules, free) { // 規定回数（土地評価データの表示から、選択の欄があるところまで）＋追加（フリートーク）
-  return `土地評価データー表示から規定として <b>${rules.length}</b>回、追加（フリートーク）で <b>${free}</b>回`;
+function lengthNote(rules, free) { // 規定回数（①土地評価データー〜選択の欄があるところまで）＋追加（フリートーク）。番号＝何往復目か
+  const c = n => String.fromCharCode(0x2460 + n - 1), r = rules.length, range = (a, b) => a === b ? c(a) : c(a) + "〜" + c(b);
+  return `土地評価データー表示から規定として <b>${r}</b>回（${range(1, r)}）、追加（フリートーク）で <b>${free}</b>回（${range(r + 1, r + free)}）`;
 }
-const RULE_T = 2; // 規定回数：評価する→国交省のデータ／①〜③の設問→返事
+const RULE_T = 2; // 規定回数：①土地評価データー／②設問→返事
 const freeOf = () => { const v = parseInt($("free").value, 10); return isNaN(v) ? 2 : Math.max(1, v - RULE_T); }; // 総回数からフリートークの数（最低1）
 function showFree() {
   const f = freeOf();
-  $("freeNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事"], f);
+  $("freeNote").innerHTML = lengthNote(["①土地評価データー", "②設問→返事"], f);
 }
 function save() {
   showFree();

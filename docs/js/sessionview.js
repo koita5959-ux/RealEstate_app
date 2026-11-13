@@ -1,7 +1,7 @@
 // 「利用状況」の表示部品。利用者の利用状況の画面（自分の体験）と、開発利用状況の「再表示」（保存された他のセッション）で共有する。
 // 渡されるのは構造化した記録（state）。訪問者が書いた文字が入るので、HTML にするときは必ず escape する。
 window.SessionView = (function () {
-  const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+  const NUM = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 記録の q で引く。表示は何往復目か（q−1）
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
   const rate = st => (st.pub && st.pub.usdJpy) || 150;
   const yen = (st, usd) => (usd * rate(st)).toLocaleString("ja-JP", { maximumFractionDigits: usd * rate(st) < 10 ? 2 : 0 }) + "円";
@@ -15,7 +15,7 @@ window.SessionView = (function () {
     const u = st.usage || {};
     return u.n
       ? `AIとのやり取り：<b>${u.n}往復</b>（入力 ${(u.tin || 0).toLocaleString()}・出力 ${(u.tout || 0).toLocaleString()} トークン）<br>この体験でかかった費用の目安：<b>約${yen(st, u.costUsd || 0)}</b>（推定）`
-      : "まだAIとのやり取りはありません（④から先でAIが返事をします）。";
+      : "まだAIとのやり取りはありません（②から先でAIが返事をします）。";
   }
   function cost(st) {
     const p = st.pub;

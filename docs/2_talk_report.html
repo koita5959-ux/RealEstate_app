@@ -93,7 +93,7 @@ async function loadSaved() {
     $("toLive").onclick = () => showLive();
     paint(d.state); exportLink(replaySid);
     $("talkbox").hidden = !d.turns.length;
-    $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①②③④⑤⑥⑦⑧⑨"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
+    $("talk").innerHTML = d.turns.map(t => `<div class="turn"><div class="meta">${new Date(t.ts).toLocaleTimeString("ja-JP")}　${t.q ? (V.esc("①①②③④⑤⑥⑦⑧"[t.q - 1] || t.q)) + " " : ""}${t.status === "ok" ? "入" + (t.inTok || 0) + "・出" + (t.outTok || 0) + "・" + ((t.ms || 0) / 1000).toFixed(1) + "秒" : V.esc(t.status + (t.reason ? "：" + t.reason : ""))}</div><b>利用者：</b>${V.esc(t.user)}<br><b>AI：</b>${V.esc(t.reply || "（返事なし）")}</div>`).join("");
   } catch (e) {
     $("main").hidden = true; $("none").hidden = false;
     $("none").textContent = "このセッションの記録を読み込めませんでした（" + e.message + "）。";

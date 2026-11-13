@@ -2,6 +2,21 @@
 // 使い方：各画面に <header id="appbar" data-current="user|admin|report|dev" data-title="タイトル"> を置き、直後でこのファイルを読み込む。
 // 色の約束：青＝利用者の視点の画面／赤＝開発者の視点の画面。「利用状況」は、メイン画面にセッション（体験の記録）がなければグレー。
 (function () {
+  // 丸数字（何往復目か）は、どの画面でも赤。文の中に書いた丸数字も、出たそばから赤くする
+  const CN = /[①-⑳]/;
+  const st = document.createElement("style"); st.textContent = ".cnum{color:#c0392b}"; document.head.appendChild(st);
+  const paint = root => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n =>
+      CN.test(n.data) && !n.parentElement.closest("script,style,textarea,input,option,title,.cnum,.num,.qnum") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+    const list = []; while (w.nextNode()) list.push(w.currentNode);
+    for (const n of list) {
+      const f = document.createDocumentFragment();
+      n.data.split(/([①-⑳])/).forEach(t => { if (!t) return; if (CN.test(t)) { const s = document.createElement("span"); s.className = "cnum"; s.textContent = t; f.appendChild(s); } else f.appendChild(document.createTextNode(t)); });
+      n.replaceWith(f);
+    }
+  };
+  const start = () => { paint(document.body); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 ? paint(n) : n.nodeType === 3 && n.parentElement && paint(n.parentElement)))).observe(document.body, { childList:true, subtree:true }); };
+  if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
   const BASE = new URL("../", document.currentScript.src).href; // …/docs/
   // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
   const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];

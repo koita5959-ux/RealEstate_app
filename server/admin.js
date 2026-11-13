@@ -233,9 +233,9 @@ export function summarize(ctx) {
   const tally = (arr, keyf) => { const m = new Map(); for (const x of arr) { const k = keyf(x); if (k) m.set(k, (m.get(k) || 0) + 1); } return [...m.entries()].map(([k, n]) => ({ k, n })).sort((a, b) => b.n - a.n); };
   const chatMeta = turns.filter((t) => t.meta && t.status === "ok");
   const purposes = tally(chatMeta.filter((t) => +t.meta.q === 4), (t) => t.meta.press || "（書いた言葉のみ）");
-  const later = tally(chatMeta.filter((t) => +t.meta.q > 4), (t) => `⑤以降：${t.meta.press || "（書いた言葉のみ）"}`);
+  const later = tally(chatMeta.filter((t) => +t.meta.q > 4), (t) => `④以降：${t.meta.press || "（書いた言葉のみ）"}`);
   const branches = tally(chatMeta.filter((t) => +t.meta.q === 4), (t) => t.meta.branch);
-  const roads = tally(events.filter((e) => e.type === "choice" && +e.data?.q <= 3), (e) => `${["①", "②", "③"][e.data.q - 1]} ${e.data.press}`);
+  const roads = tally(events.filter((e) => e.type === "choice" && +e.data?.q <= 3), (e) => `${["①", "①", "②"][e.data.q - 1]} ${e.data.press}`);
   const places = tally(events.filter((e) => e.type === "evaluate"), (e) => e.data?.place); // 評価まで進んだ地域
   const near = tally(events.filter((e) => e.type === "evaluate"), (e) => e.data?.near);
   const texts = chatMeta.filter((t) => /書いた言葉：/.test(t.userText || "")).map((t) => ({ ts: t.ts, by: t.by, q: +t.meta.q || 0, text: (t.userText.split("書いた言葉：")[1] || "").trim(), theme: "" }));
@@ -384,7 +384,7 @@ export async function adminHandler(req, res, url, ctx) {
       "往復：" + logs.filter((r) => r.status === "ok").length,
       "利用者名：" + (first.by || "—"), "セッション：" + sid,
     ].filter(Boolean).join("／");
-    const num = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+    const num = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 記録の q で引く。表示は何往復目か（q−1）
     const body = logs.map((r) => `── ${r.meta?.q ? num[r.meta.q - 1] || r.meta.q : ""} ${new Date(r.ts).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo" })}${r.status === "ok" ? "" : "（" + r.status + (r.reason ? "：" + r.reason : "") + "）"}\n利用者：${r.userText || ""}\nAI：${r.reply || "（返事なし）"}`).join("\n\n");
     const ctxs = [["最初の返事", first], ...(last !== first ? [["最後の返事", last]] : [])];
     const tail = ctxs.map(([k, r]) => `── AIへ渡した説明（${k}・${r.meta?.q ? num[r.meta.q - 1] || "" : ""}）\n${r.contextFixed ? "【店のこと】\n" + r.contextFixed + "\n\n" : ""}${r.context || "（記録なし）"}${r.memo ? "\n\n【AIが書いたメモ】\n" + JSON.stringify(r.memo) : ""}`).join("\n\n");
