@@ -273,17 +273,12 @@ function draw() {
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
 const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:5 };
 // 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
-function lengthNote(rules, free, extra) {
-  const c = n => String.fromCharCode(0x2460 + n - 1), from = 4 + rules.length - 2, to = from + free - 1;
-  return `<div><b>規定回数 ${rules.length}往復</b>：${rules.join("／")}（必ず通ります。店は変えられません）</div>`
-    + (free > 0
-      ? `<div><b>フリートーク ${free}往復</b>：お客さんが書いて、AIが答える（${c(from)}${free > 1 ? "〜" + c(to) : ""}）。${c(to)}の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`
-      : `<div><b>フリートークなし</b>：規定回数の最後の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`)
-    + (extra || "") + `<div><b>合計 ${rules.length + free}往復</b></div>`;
+function lengthNote(rules, free) { // 規定回数（土地評価データの表示から、選択の欄があるところまで）＋追加（フリートーク）
+  return `土地評価データー表示から規定として <b>${rules.length}</b>回、追加（フリートーク）で <b>${free}</b>回`;
 }
 function showFree() {
   const f = $("free").value === "" ? 5 : Math.max(0, +$("free").value);
-  $("freeNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事"], f, "<div>途中で勧める場面に当たったら、問い合わせの欄を出し、話はフリートークの回数まで続きます。</div>");
+  $("freeNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事"], f);
 }
 function save() {
   showFree();
