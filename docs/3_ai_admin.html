@@ -105,7 +105,7 @@
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
     <h2>フリートークの回数 <span class="who shop">店が変えられる</span></h2>
-    <div class="box">フリートーク <input id="limit" type="number" min="0" max="20" style="width:4em"> 往復 <span class="hint">（初期値2）</span><div class="hint" id="limitNote" style="margin-top:6px;line-height:1.7"></div></div>
+    <div class="box">総回数 <input id="limit" type="number" style="width:4em"> 往復 <span class="hint" id="limitMin"></span><div class="hint" id="limitNote" style="margin-top:6px;line-height:1.7"></div></div>
 
     <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
@@ -313,12 +313,14 @@ function renderAdmin() {
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const lm = document.getElementById("limit");
   const showLimit = () => { // 規定回数：評価する・①〜③の設問・ボタンのあるステップ
-    lm.value = limit;
-    const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2463 + i) + "のボタン→返事");
+    const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2463 + i) + "のボタン→返事"), rule = 2 + btn.length;
+    if (document.activeElement !== lm) lm.value = rule + limit; // 入れている途中は書き換えない
+    lm.min = rule + 1;
+    document.getElementById("limitMin").textContent = `（初期値${rule + 2}＝規定＋2・最低${rule + 1}）`;
     document.getElementById("limitNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事", ...btn], limit);
   };
   showLimit();
-  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); showLimit(); };
+  lm.oninput = () => { const v = parseInt(lm.value, 10), rule = 2 + steps.filter(hasBtns).length; limit = isNaN(v) ? 2 : Math.max(1, v - rule); save(); showLimit(); }; // 総回数からフリートークの数（最低1）
   lm.onchange = showLimit;
   const stIn = document.getElementById("stance"), hiIn = document.getElementById("hint");
   stIn.value = stance; hiIn.value = hint;
@@ -420,7 +422,7 @@ function commit() {
 function loadSaved() {
   loadMode("m3");
   try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
-    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = sv.free ?? 2 + (sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0)); // 前の保存（追加・合計）はフリートークの回数に読み替える
+    modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = Math.max(1, sv.free ?? 2 + (sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0))); // 前の保存（追加・合計）はフリートークの回数に読み替える
     stance = sv.stance ?? MODES[sv.mode].stance; hint = sv.hint ?? MODES[sv.mode].hint;
     if (sv.stance === undefined) localStorage.setItem("reAdmin", JSON.stringify({ ...sv, name:MODES[sv.mode].name, stance, hint })); // 受け方を持たない古い保存は、初期値を足して保存し直す
   } } catch (e) {}
