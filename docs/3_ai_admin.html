@@ -243,7 +243,7 @@ const live = s => s.btns.map(b => b.trim()).filter(Boolean);
 // 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
 function lengthNote(rules, free) { // 規定回数（①土地評価データー〜選択の欄があるところまで）＋追加（フリートーク）。番号＝何往復目か
   const c = n => String.fromCharCode(0x2460 + n - 1), r = rules.length, range = (a, b) => a === b ? c(a) : c(a) + "〜" + c(b);
-  return `土地評価データー表示から規定として <b>${r}</b>回（${range(1, r)}）、追加（フリートーク）で <b>${free}</b>回（${range(r + 1, r + free)}）`;
+  return `土地評価データー表示から規定として <b>${r}</b>回（${range(1, r)}）、追加（フリートーク）で <b>${free}</b>回`;
 }
 const hasBtns = s => s.branches ? s.branches.some(b => live(b).length) : live(s).length > 0;
 const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
@@ -251,12 +251,13 @@ const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>
 
 // ボタンの枠（入力欄）を並べる。withBr：④用に枝の選択を付ける
 function slotsOf(el, s, withBr) {
+  const more = () => { const b = el.nextElementSibling; if (b && b.matches("button.small")) b.hidden = s.btns.some(x => !x.trim()); }; // 空いた枠が残っていれば「＋ 枠を足す」は出さない
   s.btns.forEach((b, j) => {
     const w = document.createElement("span");
     const inp = document.createElement("input");
     inp.value = b; inp.placeholder = "（空白）";
     inp.size = Math.max(b.length * 2, 8); // field-sizing が効かないブラウザ向け
-    inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); resetTry(); document.getElementById("limit").onchange(); };
+    inp.oninput = () => { s.btns[j] = inp.value; inp.size = Math.max(inp.value.length * 2, 8); more(); resetTry(); document.getElementById("limit").onchange(); };
     w.appendChild(inp);
     if (withBr) {
       const sel = document.createElement("select");
@@ -266,6 +267,7 @@ function slotsOf(el, s, withBr) {
     }
     el.appendChild(w);
   });
+  more();
 }
 
 // ---- 管理画面 ----

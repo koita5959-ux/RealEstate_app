@@ -893,12 +893,17 @@ function reopen(d) {
 const PATH = [];
 const NUM = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 記録の q で引く（NUM[q-1]）。表示は「何往復目か」＝q−1（① は土地評価データー）
 // 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
+const RULE_N = () => 2, FREE_N = () => FREE_T; // 規定の往復の数（①②）／フリートークの数
+// 行の番号：規定の往復（①土地評価データー・②設問・ボタンの段）だけ丸数字。フリートークは丸数字にせず「フリートーク 1／2」
+function rowLabel(q) {
+  const di = q - 1, R = RULE_N();
+  return di > R ? `<span class="qround">フリートーク ${di - R}／${FREE_N()}</span>` : `<span class="qnum">${NUM[q - 1] || q}</span>`;
+}
 function newRow(q) {
   const d = document.createElement("div"); d.className = "row";
   const prev = [...document.querySelectorAll("#talk .row")].pop();
   d.dataset.q = q || (prev ? +prev.dataset.q + 1 : 1);
-  d.innerHTML = `<span class="qnum">${NUM[d.dataset.q - 1]}</span>`;
-  if (d.dataset.q >= 3) d.innerHTML += `<span class="qround">／${FREE_T + 2}往復</span>`; // 番号が何往復目か。総回数（①土地評価データー＋②設問＋フリートーク）
+  d.innerHTML = rowLabel(+d.dataset.q);
   return d;
 }
 function renderRoute() {
@@ -1056,7 +1061,7 @@ function restoreFromSnapshot(d) {
         const el = document.createElement("div"); el.className = "me"; const sp = document.createElement("span"); sp.textContent = it.text; el.appendChild(sp); talk.appendChild(el);
       } else if (it.t === "row" && it.done) { // まだ答えていなかった最後の行は、戻した画面では操作できないので出さない
         const el = document.createElement("div"); el.className = "row done restored"; el.dataset.q = it.q; if (it.step !== null) el.dataset.step = it.step;
-        const q = document.createElement("span"); q.className = "qnum"; q.textContent = NUM[it.q - 1] || it.q; el.appendChild(q);
+        el.insertAdjacentHTML("beforeend", rowLabel(it.q));
         let line = null;
         for (const b of it.buttons) {
           const btn = document.createElement("button"); btn.dataset.c = b.c; if (b.opt) { btn.dataset.opt = b.opt; const o = document.createElement("span"); o.className = "opt"; o.textContent = b.opt; btn.appendChild(o); }
