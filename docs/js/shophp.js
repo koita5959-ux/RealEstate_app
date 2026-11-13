@@ -78,7 +78,7 @@ async function readShopHP(url) {
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
   const by = new URLSearchParams(location.search).get("by") || "visitor", force = READ_LAST_CACHED === url;
-  const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(85000) });
+  const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(150000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { err:true, msg:{ daily_cap:"今日の費用の上限に達しています。", rate_limited:"続けて押されています。少し待ってください。", busy:"混み合っています。少し待ってください。", disabled:"いまAIは止めてあります。", no_key:"APIの鍵が設定されていません。" }[j.error] || "読み取れませんでした（" + (j.detail || j.error || r.status) + "）" };
   const s = j.site || {}, p = s.picked || {};

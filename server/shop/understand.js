@@ -31,7 +31,7 @@ const SHAPE = `{
   "ads": ["除いた宣伝文句"]
 }`;
 
-export async function understand(client, opt, r) {
+export async function understand(create, opt, r) { // create＝サーバーのやり直し付きの呼び出し
   const pages = r.pages.filter(p => p.text).map(p => `【${KIND[p.kind] || p.kind}】${p.label ? "（" + p.label + "）" : ""} ${p.url}\n${p.text}`).join("\n\n");
   const pk = r.picked || {};
   const facts = [
@@ -44,7 +44,7 @@ export async function understand(client, opt, r) {
     "住所：" + ((pk.addr || []).join("、") || "見つからない"),
   ].join("\n");
   const msg = `次のホームページを読み、この形のJSONで返してください。\n${SHAPE}\n\n＜プログラムが拾った事実＞\n${facts}\n\n＜ページの本文＞\n${pages}`;
-  const res = await client.messages.create({
+  const res = await create({
     model: opt.model, max_tokens: opt.maxTokens, system: SYSTEM,
     output_config: { effort: opt.effort }, messages: [{ role: "user", content: msg }],
   });

@@ -68,21 +68,34 @@ try {
 }
 const client = apiKey ? new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }) : null;
 
-// AI側の一時的な不調（混雑・5xx・つながらない）は、画面の待ち時間（90秒）に収まる範囲で間をあけて繰り返す
+// AI側の一時的な不調（混雑・5xx・つながらない）と、まともでない返事（空・形が崩れた）は、
+// 70秒に収まる範囲で間をあけて繰り返す。70秒を超えて初めて失敗として画面に出す
 const RETRY_BUDGET_MS = 70_000;
 const retryable = (e) => !e.status || e.status === 429 || e.status >= 500;
-async function createWithRetry(params, rec) {
+const textOf = (r) => (r.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+async function createWithRetry(params, rec, good = (r) => textOf(r).trim() !== "") {
   const start = Date.now();
   for (let i = 0; ; i++) {
+    const left = RETRY_BUDGET_MS - (Date.now() - start);
+    const wait = Math.min(2000 * (i + 1), 8000);
+    let r;
     try {
-      return await client.messages.create(params, { maxRetries: 0, timeout: 60_000 });
+      r = await client.messages.create(params, { maxRetries: 0, timeout: Math.max(15_000, Math.min(60_000, left + 5_000)) });
     } catch (e) {
-      const wait = Math.min(2000 * (i + 1), 8000);
       if (!retryable(e) || Date.now() - start + wait > RETRY_BUDGET_MS) throw e;
       rec.retries = i + 1; rec.retryStatus = e.status || 0;
       await new Promise((ok) => setTimeout(ok, wait));
+      continue;
     }
+    if (good(r) || Date.now() - start + wait > RETRY_BUDGET_MS) return r; // 時間切れなら崩れた返事のまま返し、呼び元が扱う
+    const lost = estimateUsd(r.usage || {}); spentUsd += lost; // 捨てた返事の費用も数える
+    rec.retries = i + 1; rec.retryStatus = "bad_reply"; rec.retryLostUsd = (rec.retryLostUsd || 0) + lost;
+    await new Promise((ok) => setTimeout(ok, wait));
   }
+}
+function goodJson(r) { // 店の読み取り：JSONとして読めること
+  const m = textOf(r).match(/\{[\s\S]*\}/);
+  try { return !!(m && JSON.parse(m[0])); } catch { return false; }
 }
 function jaError(e, retries) {
   const n = retries ? `（${retries}回やり直しても応答なし）` : "";
@@ -337,7 +350,7 @@ async function handleChat(req, res) {
       outputTokens: usage.output_tokens || 0,
       cacheRead: usage.cache_read_input_tokens || 0,
       cacheCreate: usage.cache_creation_input_tokens || 0,
-      costUsd,
+      costUsd: costUsd + (rec.retryLostUsd || 0), // 捨てた返事の分も含める
       ms: Date.now() - t0,
       reply: text,
       memo: memo || undefined,
@@ -351,7 +364,7 @@ async function handleChat(req, res) {
       ms: Date.now() - t0,
     });
   } catch (e) {
-    writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
+    writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: rec.retryLostUsd || 0, ms: Date.now() - t0 });
     return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: jaError(e, rec.retries), retries: rec.retries || 0, trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
   } finally {
     release();
@@ -390,17 +403,17 @@ async function handleShopRead(req, res) {
   }
   if (!(await acquire())) return send(res, 429, { error: "busy" });
   try {
-    const u = await understand(client, { model: MODEL, maxTokens: 4000, effort: EFFORT }, r);
+    const u = await understand((p) => createWithRetry(p, base, goodJson), { model: MODEL, maxTokens: 4000, effort: EFFORT }, r);
     const costUsd = estimateUsd(u.usage); spentUsd += costUsd;
     if (u.shop && heavy.length) u.shop.unread = [...(Array.isArray(u.shop.unread) ? u.shop.unread : []),
       `画像の中の文字（${heavy.join("・")}のページ。本文より画像が多く、売り文句が画像の中にあると、AIにも検索にも読まれていない可能性があります）`];
-    writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd, ms: Date.now() - t0, reply: clip(u.text, 4000) });
+    writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd: costUsd + (base.retryLostUsd || 0), ms: Date.now() - t0, reply: clip(u.text, 4000) });
     const body = { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000) };
     if (u.shop) readCache.set(target, { day: today(), ts, body });
     return send(res, 200, { ...body, costUsdEstimate: costUsd, ms: Date.now() - t0 });
   } catch (e) {
-    writeLog({ ...base, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: 0, ms: Date.now() - t0 });
-    return send(res, 502, { error: "upstream", detail: clip(e.message, 300), site });
+    writeLog({ ...base, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: base.retryLostUsd || 0, ms: Date.now() - t0 });
+    return send(res, 502, { error: "upstream", detail: jaError(e, base.retries), site });
   } finally { release(); }
 }
 
