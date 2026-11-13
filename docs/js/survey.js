@@ -8,21 +8,23 @@
 const SURVEY = {
   lead: "値段より先に、この土地で何ができるかを決める条件があります。地図からは読めないので、この土地の様子を教えてください。",
   groups: [
-    { g:"A", title:"道との関係", hint:"1つ", one:true, opts:["道に広く面している", "2つの道に面している（角）", "細い通路の奥にある", "わからない"] },
+    { g:"A", title:"道との関係", hint:"1つ", one:true, opts:["広い道に面している", "細い道に面している", "わからない"] },
+    { g:"N", title:"どんな細さ", hint:"1つ", one:true, when:"細い道に面している", opts:["前の道が狭い（車がすれ違えない）", "細い通路の奥にある"] },
     { g:"W", title:"その通路の幅", hint:"1つ・わかれば", one:true, when:"細い通路の奥にある", opts:["2mある", "2mない・狭い", "測ったことがない"] },
-    { g:"B", title:"当てはまるもの", hint:"いくつでも・なくてもよい", one:false, opts:["前の道が狭い・車がすれ違えない", "坂や段差がある・道路より高い（低い）", "細長い・形がいびつ", "車を置きにくい", "隣との境目がはっきりしない"] },
+    { g:"B", title:"当てはまるもの", hint:"いくつでも・なくてもよい", one:false, opts:["2つの道に面している（角）", "坂や段差がある・道路より高い（低い）", "細長い・形がいびつ", "車を置きにくい", "隣との境目がはっきりしない"] },
     { g:"C", title:"いまの使われ方", hint:"1つ", one:true, opts:["住んでいる家がある", "空き家・古い家がある", "何もない（更地）", "駐車場・畑など"] },
   ],
   // AIへ渡す事実（項目ごと）。AIに決まりを考えさせず、ここにある事実だけで話させる
   facts: {
-    "道に広く面している": "建て直しの条件（幅4m以上の道に2m以上接する）は、接する長さの面では心配が少ない。残るのは前の道の幅。",
+    "広い道に面している": "建て直しの条件（幅4m以上の道に2m以上接する）は、接する長さの面では心配が少ない。残るのは前の道の幅。",
     "2つの道に面している（角）": "角地は使い勝手がよく、建ぺい率の緩和がある地域も多い（自治体の確認が必要）。",
+    "細い道に面している": "道の細さは、建て直すときの条件と使える面積に効く。",
     "細い通路の奥にある": "旗竿地。通路が2m以上あれば建て直せる。2m未満なら再建築不可として見られ、値打ちは「お隣と合わせたら何ができるか」で決まる。",
     "わからない": "道への接し方は、担当が現地を一度見ればすぐ分かる。",
     "2mある": "通路が2m以上なら、旗竿地でも建て直せる。",
     "2mない・狭い": "通路が2m未満なら再建築不可として見られる。値打ちは「お隣と合わせたら何ができるか」で決まる。",
     "測ったことがない": "通路の幅はメジャー一本で分かり、担当が見に行くこともできる。",
-    "前の道が狭い・車がすれ違えない": "4m未満の道なら、建て直すとき敷地を道側へ下げる（セットバック）ため、使える面積が減る。前の道の幅は、建てられる床面積の上限にも効く。",
+    "前の道が狭い（車がすれ違えない）": "4m未満の道なら、建て直すとき敷地を道側へ下げる（セットバック）ため、使える面積が減る。前の道の幅は、建てられる床面積の上限にも効く。",
     "坂や段差がある・道路より高い（低い）": "造成や擁壁の費用が、売るときも建てるときも効く。古い擁壁は作り直しが必要な場合がある。",
     "細長い・形がいびつ": "建てられる建物の形が限られ、値段の見え方に効く。",
     "車を置きにくい": "駐車できるかどうかは、貸すときも売るときも、買い手・借り手の判断を大きく分ける。",
@@ -42,9 +44,9 @@ function firstJudgment() {
 }
 function surveyPicked(d) {
   const g = k => [...d.querySelectorAll(`.sgroup[data-g="${k}"] button.sel, .sgroup[data-g="${k}"] button.chosen`)].map(b => b.dataset.c);
-  return { A:g("A")[0] || "", W:g("W")[0] || "", B:g("B"), C:g("C")[0] || "" };
+  return { A:g("A")[0] || "", N:g("N")[0] || "", W:g("W")[0] || "", B:g("B"), C:g("C")[0] || "" };
 }
-const surveyItems = s => [s.A, s.W, ...s.B, s.C].filter(Boolean);
+const surveyItems = s => [s.N ? "" : s.A, s.N, s.W, ...s.B, s.C].filter(Boolean); // 細さを選んだら「細い道に面している」は重ねない
 function surveyRow() {
   const d = newRow(3); d.classList.add("survey");
   d.querySelector(".qnum").textContent = "①〜③";
@@ -71,9 +73,10 @@ function surveyRow() {
   d.insertAdjacentHTML("beforeend", `<div class="textline"><textarea class="other" rows="1" placeholder="ほかに伝えたいことがあれば書いてください（なくても送れます）"></textarea><button data-c="送信">送信</button></div>`);
   const send = d.querySelector('button[data-c="送信"]'), inp = d.querySelector(".other");
   function sync() {
-    const s = surveyPicked(d), w = d.querySelector('.sgroup[data-g="W"]');
-    w.hidden = s.A !== "細い通路の奥にある";
-    if (w.hidden) w.querySelectorAll("button.sel").forEach(x => x.classList.remove("sel"));
+    const sub = (k, on) => { const el = d.querySelector(`.sgroup[data-g="${k}"]`); el.hidden = !on; if (!on) el.querySelectorAll("button.sel").forEach(x => x.classList.remove("sel")); };
+    sub("N", surveyPicked(d).A === "細い道に面している"); // 細い道 → どんな細さ → 通路の奥なら幅
+    sub("W", surveyPicked(d).N === "細い通路の奥にある");
+    const s = surveyPicked(d);
     lamp(send, !d.dataset.step && ((s.A && s.C) || !!inp.value.trim())); // 道との関係と使われ方がそろうか、書いた言葉があれば送れる
   }
   inp.addEventListener("input", sync); sync();
@@ -97,15 +100,16 @@ function surveyRow() {
 function applySurvey(s, t) {
   const sh = S.sheet, Y = "（お答えより）";
   sh.接道 = sh.形と向き = sh.高低差 = sh.車 = sh.境界 = null;
-  if (s.A === "道に広く面している") sh.接道 = "道に広く面している" + Y;
-  else if (s.A === "2つの道に面している（角）") sh.接道 = "角地・2つの道に面している" + Y;
-  else if (s.A === "細い通路の奥にある") {
+  if (s.A === "広い道に面している") sh.接道 = "広い道に面している" + Y;
+  else if (s.N === "前の道が狭い（車がすれ違えない）") sh.接道 = "前の道は4m未満の可能性" + Y;
+  else if (s.N === "細い通路の奥にある") {
     sh.形と向き = "奥まっている（旗竿地）" + Y;
     sh.接道 = s.W === "2mある" ? "旗竿地・通路2m以上" + Y : s.W === "2mない・狭い" ? "旗竿地・通路2m未満" + Y + "＝再建築不可の可能性" : "旗竿地" + Y + "・通路の幅は未確認";
     if (s.W !== "2mある" && s.W !== "2mない・狭い") S.signals.push("通路の幅：未確認（現地確認）");
-  } else if (s.A === "わからない") { sh.接道 = "未確認"; S.signals.push("接し方：客は分からない（現地確認）"); }
+  } else if (s.A === "細い道に面している") sh.接道 = "細い道に面している" + Y + "・細さは未確認";
+  else if (s.A === "わからない") { sh.接道 = "未確認"; S.signals.push("接し方：客は分からない（現地確認）"); }
   else sh.接道 = "（選ばずに書いて答えた）";
-  if (s.B.includes("前の道が狭い・車がすれ違えない")) sh.接道 += "／前の道は4m未満の可能性" + Y;
+  if (s.B.includes("2つの道に面している（角）")) sh.接道 += "／角地・2つの道に面している" + Y;
   if (s.B.includes("坂や段差がある・道路より高い（低い）")) sh.高低差 = "あり" + Y;
   if (s.B.includes("細長い・形がいびつ")) sh.形と向き = (sh.形と向き ? sh.形と向き + "・" : "") + "細長い・不整形" + Y;
   if (s.B.includes("車を置きにくい")) sh.車 = "置きにくい" + Y;
