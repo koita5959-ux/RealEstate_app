@@ -117,7 +117,7 @@
     <div class="seg" id="tone"></div>
 
     <h2><span class="n">5</span>フリートークの回数 <span class="who shop">店が変えられる</span></h2>
-    <div class="box">フリートーク <input id="free" type="number" min="0" max="20" value="5" style="width:4em"> 往復 <span class="hint">（初期値5）選択の欄までは、必ずお客さんに聞きます（数に入れません）。そのあと、書いて話せる回数です。終えると書き込めなくなり、「メールで問い合わせる」だけが残ります。勧める場面に当たったときは、問い合わせの欄を出し、話はこの回数まで続けられます。</span></div>
+    <div class="box">フリートーク <input id="free" type="number" min="0" max="20" value="5" style="width:4em"> 往復 <span class="hint">（初期値5）</span><div class="hint" id="freeNote" style="margin-top:6px;line-height:1.7"></div></div>
     <button id="reset" style="margin-top:14px">初期値（見本サイトの読み）に戻す</button>
   </main>
 
@@ -272,7 +272,21 @@ function draw() {
 }
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
 const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:5 };
+// 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
+function lengthNote(rules, free, extra) {
+  const c = n => String.fromCharCode(0x2460 + n - 1), from = 4 + rules.length - 2, to = from + free - 1;
+  return `<div><b>規定回数 ${rules.length}往復</b>：${rules.join("／")}（必ず通ります。店は変えられません）</div>`
+    + (free > 0
+      ? `<div><b>フリートーク ${free}往復</b>：お客さんが書いて、AIが答える（${c(from)}${free > 1 ? "〜" + c(to) : ""}）。${c(to)}の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`
+      : `<div><b>フリートークなし</b>：規定回数の最後の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`)
+    + (extra || "") + `<div><b>合計 ${rules.length + free}往復</b></div>`;
+}
+function showFree() {
+  const f = $("free").value === "" ? 5 : Math.max(0, +$("free").value);
+  $("freeNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事"], f, "<div>途中で勧める場面に当たったら、問い合わせの欄を出し、話はフリートークの回数まで続きます。</div>");
+}
 function save() {
+  showFree();
   const flat = Object.fromEntries(KNOW.map(([k]) => [k, eff(k).trim()])); // 今の目線で効いている値（メイン画面が読む）
   const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
     asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:$("free").value === "" ? 5 : Math.max(0, +$("free").value) };
@@ -293,6 +307,7 @@ function load(t) {
 }
 try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && (t.name || t.hp)) load(t); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
 $("free").oninput = save;
+showFree();
 $("memo").oninput = save;
 $("reset").onclick = () => {
   if (!confirm("初期値（見本サイトの読み・外野目線）に戻しますか？")) return;

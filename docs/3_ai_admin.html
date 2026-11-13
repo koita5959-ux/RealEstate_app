@@ -105,7 +105,7 @@
     <button class="plus" id="addStep">＋ ステップを足す</button>
 
     <h2>フリートークの回数 <span class="who shop">店が変えられる</span></h2>
-    <div class="box">フリートーク <input id="limit" type="number" min="0" max="20" style="width:4em"> 往復 <span class="hint">（初期値2）選択の欄（ボタンのあるステップ）までは、必ずお客さんに聞きます（数に入れません）。そのあと、書いて話せる回数です。終えると書き込めなくなり、「メールで問い合わせる」だけが残ります。</span></div>
+    <div class="box">フリートーク <input id="limit" type="number" min="0" max="20" style="width:4em"> 往復 <span class="hint">（初期値2）</span><div class="hint" id="limitNote" style="margin-top:6px;line-height:1.7"></div></div>
 
     <h2>問い合わせで出す店の一手（④を選ぶ前） <span class="who shop">店が書く</span></h2>
     <textarea id="close" rows="2"></textarea>
@@ -230,6 +230,15 @@ function loadMode(k) {
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
 const live = s => s.btns.map(b => b.trim()).filter(Boolean);
+// 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計
+function lengthNote(rules, free, extra) {
+  const c = n => String.fromCharCode(0x2460 + n - 1), from = 4 + rules.length - 2, to = from + free - 1;
+  return `<div><b>規定回数 ${rules.length}往復</b>：${rules.join("／")}（必ず通ります。店は変えられません）</div>`
+    + (free > 0
+      ? `<div><b>フリートーク ${free}往復</b>：お客さんが書いて、AIが答える（${c(from)}${free > 1 ? "〜" + c(to) : ""}）。${c(to)}の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`
+      : `<div><b>フリートークなし</b>：規定回数の最後の返事で締め、書き込めなくなります。あとは「メールで問い合わせる」だけです。</div>`)
+    + (extra || "") + `<div><b>合計 ${rules.length + free}往復</b></div>`;
+}
 const hasBtns = s => s.branches ? s.branches.some(b => live(b).length) : live(s).length > 0;
 const fixedBtns = list => list.map(b => `<span class="fixedbtn">${esc(b)}</span>`).join("");
 // 初期値：ボタンを書いたステップの数＋2（＋で足したステップも数える）
@@ -308,9 +317,13 @@ function renderAdmin() {
   });
   document.getElementById("addStep").textContent = `＋ ステップを足す（${NUM[FIRST + steps.length]}）`;
   const lm = document.getElementById("limit");
-  const showLimit = () => { lm.value = limit; };
+  const showLimit = () => { // 規定回数：評価する・①〜③の設問・ボタンのあるステップ
+    lm.value = limit;
+    const btn = steps.filter(hasBtns).map((s, i) => String.fromCharCode(0x2463 + i) + "のボタン→返事");
+    document.getElementById("limitNote").innerHTML = lengthNote(["評価する→国交省のデータ", "①〜③の設問→返事", ...btn], limit);
+  };
   showLimit();
-  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); };
+  lm.oninput = () => { const v = parseInt(lm.value, 10); limit = v > 0 ? v : 0; save(); showLimit(); };
   lm.onchange = showLimit;
   const stIn = document.getElementById("stance"), hiIn = document.getElementById("hint");
   stIn.value = stance; hiIn.value = hint;
