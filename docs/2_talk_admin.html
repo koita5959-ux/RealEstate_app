@@ -116,7 +116,7 @@
     <h2><span class="n">4</span>この人の距離感 <span class="who shop">店が選ぶ</span></h2>
     <div class="seg" id="tone"></div>
 
-    <h2><span class="n">5</span>フリートークの回数 <span class="who shop">店が変えられる</span></h2>
+    <h2><span class="n">5</span>話の総回数 <span class="who shop">店が変えられる</span></h2>
     <div class="box">総回数 <input id="free" type="number" min="3" max="22" value="4" style="width:4em"> 往復 <span class="hint">（初期値4＝規定＋2・最低3）</span><div class="hint" id="freeNote" style="margin-top:6px;line-height:1.7"></div></div>
     <button id="reset" style="margin-top:14px">初期値（見本サイトの読み）に戻す</button>
   </main>
@@ -286,7 +286,7 @@ function save() {
   showFree();
   const flat = Object.fromEntries(KNOW.map(([k]) => [k, eff(k).trim()])); // 今の目線で効いている値（メイン画面が読む）
   const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
-    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:freeOf() };
+    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:freeOf(), fv:2 };
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
   if (!hp.sample) setShopHP(hp); // 読んだHPはタイプ3とも共有
   setShopKnow({ own, extra }); // 店が直した欄・書いた欄もタイプ3と共有
@@ -300,7 +300,7 @@ function load(t) {
   const K = shopKnow(); if (Object.keys(K.own).length || Object.keys(K.extra).length) { own = K.own; extra = K.extra; } // タイプ3で書いた分も読む
   ASKS.splice(0, ASKS.length, ...(t.asks || [])); HANDS.splice(0, HANDS.length, ...(t.hands || []).map(h => h.slice()));
   tone = t.tone || "mid"; [...$("tone").children].forEach(l => { const i = l.querySelector("input"); i.checked = i.value === tone; l.classList.toggle("on", i.checked); });
-  $("free").value = RULE_T + (t.free != null ? Math.max(1, +t.free) : 2); // 前の「上限」「勧めたあと」の保存は使わない（考え方を変えたため）
+  $("free").value = RULE_T + (t.fv === 2 && t.free != null ? Math.max(1, +t.free) : 2); // fv:2 より前の保存（初期値5のころ）は使わず、規定＋2から // 前の「上限」「勧めたあと」の保存は使わない（考え方を変えたため）
 }
 try { const t = JSON.parse(localStorage.getItem("reTalk")); if (t && (t.name || t.hp)) load(t); } catch (e) { /* 初期値のまま */ } // 既定が8だった頃の保存（lvなし）は、上限なしで読む
 $("free").oninput = save;
