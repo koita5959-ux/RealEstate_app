@@ -56,6 +56,7 @@
   .ai { align-self:flex-end; max-width:92%; background:#fff; border:1px solid #cfe5d9; padding:8px 11px; border-radius:12px; font-size:14px; line-height:1.7; }
   .ai mark { background:none; color:var(--out); border-bottom:1px dotted var(--out); }
   .ai .tag { display:block; font-size:11px; color:var(--sub); margin-top:4px; }
+  .sys { font-size:12px; color:var(--sub); text-align:center; margin:4px 0 8px; }
   .ai.close { border-color:var(--out); background:var(--out-bg); }
   .shopbtn { display:inline-block; margin-top:6px; font-size:12px; padding:4px 10px; border-radius:6px; background:var(--accent); color:#fff; }
   .legend { font-size:11px; color:var(--sub); margin-top:14px; line-height:1.6; }
@@ -250,26 +251,17 @@ function draw() {
   const asks = ASKS.filter(Boolean), hand = HANDS.find(h => h[0]) || ["", ""];
   const good = first(eff("good")), what = eff("what").trim(), take = !out && (extra.take || "").trim();
   const m = (t) => `<mark>${escH(t)}</mark>`, who = out ? name + "は、HPによると" : "弊社は";
-  const chat = [
-    ["me", "親の実家が5年ほど空き家です。古いので、更地にして売るしかないと思っています。"],
-    ["ai", say("古い家だと、そう思いますよね。", "古い家だと、そう考える方は多いです。", "古いお家ですと、そのようにお考えになる方は多いです。")
-      + (good ? ` ただ、${who}${m(good)}の相談をよく受けていて、売る以外の道が出てくることもあります。` : "")
-      + " " + askLine(asks[0]), asks[0] ? "聞き出してほしいこと 1" : ""],
-    ["me", "まだ何も決めていません。隣も空き地になっています。"],
-    ["ai", say("隣が空いてるなら、話が変わるかもしれません。", "隣が空いているなら、合わせると話が変わることがあります。", "お隣が空いているのでしたら、合わせることで見方が変わる場合があります。")
-      + (what ? ` ${who}${m(what.replace(/。$/, ""))}なので、決めていない段階の方が合っています。` : "")
-      + " " + askLine(asks[1]), asks[1] ? "聞き出してほしいこと 2" : ""],
-    ["me", "隣の持ち主のことは、少し知っています。"],
-    ["ai close", hand[0]
-      ? (out
-        ? `まだ決まっていないのは、隣と合わせたときにどんな形の土地になるかです。それは現地を見ないと分かりません。${name}に「隣と合わせたらどうなるか、現地で見てもらえますか」と聞くと、話がはっきりします。`
-          + (hand[1] ? ` HPによると、${m(hand[1].replace(/ので$/, ""))}そうです。` : "")
-        : `まだ決まっていないのは、隣と合わせたときにどんな形の土地になるかです。そこは弊社が現地で確かめます。` + (take ? ` ${m(take)}。` : ""))
-        + `<br><span class="shopbtn">メールで問い合わせる</span>`
-      : "（勧める場面が書かれていないので、このAIは話を続けます）", hand[0] ? `勧める場面：${hand[0]}（締め：まだ決まっていない点を名指しする）` : ""],
+  const chat = [ // 最低の総回数（規定＋1）を想定し、最後の納め方を見せる
+    ["sys", "土地評価データー表示 → ①〜③の設問 → 返事（規定2回）"],
+    ["me", "親の実家が5年ほど空き家です。隣も空き地になっています。"],
+    ["ai close", say("隣が空いてるなら、合わせると話が変わるかもしれません。", "隣が空いているなら、合わせると話が変わることがあります。", "お隣が空いているのでしたら、合わせることで見方が変わる場合がございます。")
+      + (good ? ` ${who}${m(good)}の相談をよく受けています。` : "")
+      + `<br><b>${END}</b><br><span class="shopbtn">メールで問い合わせる</span>`,
+      "フリートーク1回（最低の場合）。太字の締めの一文はアプリが必ず付けます"],
   ];
   $("chat").innerHTML = chat.map(([c, t, tag]) => `<div class="${c}">${t}${tag ? `<span class="tag">${escH(tag)}</span>` : ""}</div>`).join("");
 }
+const END = "そのほか詳しいお話は、下記よりメールでお問い合わせください。"; // メイン画面と同じ締めの一文
 // 設定はこのブラウザに保存し、メイン画面（2_talk_main.html）が読む。書き換えるたびに保存する
 const DEF = { asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:2 };
 // 「話の長さ」の内訳：規定回数（評価する〜選択の欄があるところまで。必ず通る）＋フリートーク（店が入れる）＝合計

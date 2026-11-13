@@ -475,7 +475,7 @@ const ADMIN_DEFAULT = {
 const ADMIN = (() => { try { const a = JSON.parse(localStorage.getItem("reAdmin")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
 if (ADMIN.stance === undefined && (!ADMIN.mode || ADMIN.mode === "m3")) ["name", "stance", "hint"].forEach(k => { ADMIN[k] = ADMIN_DEFAULT[k]; }); // 受け方を持たない古い保存（総合系）は初期値で補う
 window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
-const END = "AIはここまでです。詳しいご相談はメールをお送りいただければ、担当者が対応します。";
+const END = "そのほか詳しいお話は、下記よりメールでお問い合わせください。"; // 最後の返事に必ず付ける締め（AIがうまく締められなくても、ここで終わることが分かる）
 const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
 const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
 const LIMIT = ADMIN.limit ?? ADMIN.steps.filter(hasOf).length + 2; // 往復の上限（④を1往復目と数える）
@@ -1158,7 +1158,7 @@ function aiContext(n) {
   const CLOSE = staff
     ? `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「そこは弊社が現地で確かめます」と引き受けます。引き受けの中身は「弊社が引き受けること」の範囲だけにします。`
     : `ここまでの土地の条件と利用者の話から、まだ決まっていないことを一つ名指しし（例：前の道の幅、境目が確定しているか、建物に評価がつくか）、それが現地を見ないと決まらない理由を一言添えて、「${nm}に『〜を現地で見てもらえますか』と聞くと、話がはっきりします」のように、${nm}へ持っていく問いを一つ渡します。${nm}の代わりに約束はしません。ホームページから読んだ合う相談とこの件が重なれば、出どころを付けてそれも添えます。`;
-  const CLOSE_LAST = "最初に、ここまでの話で分かったことを一言でまとめます。" + CLOSE + `最後に「ここまでの話を添えて、${me}にお問い合わせできます」のように、問い合わせへ案内します。「ここまでです」「お答えできるのは以上です」のような打ち切りの言葉は使いません。`;
+  const CLOSE_LAST = "最初に、ここまでの話で分かったことを一言でまとめます。" + CLOSE + `問い合わせの案内は画面が決まった一文で添えるので、書きません。「ここまでです」「お答えできるのは以上です」のような打ち切りの言葉は使いません。`;
   const hands = (TALK.hands || []).map((h, x) => ({ h, x })).filter(o => o.h[0] && o.h[0].trim());
   if (hands.length && !HANDED) c += `\n\n【${nm}を勧める場面】\n` + hands.map(o => `${o.x + 1}. ${o.h[0]}` + (o.h[1] ? `（理由：${o.h[1]}）` : "")).join("\n")
     + `\n利用者の話がこのどれかに当たったら、その返事で${staff ? "弊社が直接うかがう方がよいと" : `「ここから先は${nm}に聞いた方がいい」と`}理由を添えて勧めます。そのときの返事は、次の締めの形にします。${CLOSE}問いかけは付けません。返事の最後に、行を分けて【勧める:番号】とだけ書きます。当たらなければ書きません。`;
@@ -1175,9 +1175,9 @@ function goStep(i, lead, real) {
   if (m) lead = lead.slice(0, m.index);
   if (fresh) { HANDED = TALK.hands[+m[1] - 1]; HAND_AT = i; S.sheet.勧めた場面 = esc(HANDED[0]); }
   lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
-  if (isLast(i)) { // 締め：固定の打ち切り文は付けず、AIの最後の返事そのものを締めにする
+  if (isLast(i)) { // 締め：AIの最後の返事＋固定の締め（END）
     if (!HANDED) S.sheet.勧めた場面 = "（往復の上限まで話した）";
-    say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：フリートークの回数（${FREE_T}）`);
+    say(lead + "<br>" + END, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：フリートークの回数（${FREE_T}）`);
     STAGE = "店を勧めた"; inquiryBar(true); saveSession();
     return;
   }

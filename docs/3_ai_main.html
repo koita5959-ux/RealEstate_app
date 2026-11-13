@@ -456,7 +456,7 @@ const ADMIN_DEFAULT = {
 const ADMIN = (() => { try { const a = JSON.parse(localStorage.getItem("reAdmin")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
 if (ADMIN.stance === undefined && (!ADMIN.mode || ADMIN.mode === "m3")) ["name", "stance", "hint"].forEach(k => { ADMIN[k] = ADMIN_DEFAULT[k]; }); // 受け方を持たない古い保存（総合系）は初期値で補う
 window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
-const END = "AIはここまでです。詳しいご相談はメールをお送りいただければ、担当者が対応します。";
+const END = "そのほか詳しいお話は、下記よりメールでお問い合わせください。"; // 最後の返事に必ず付ける締め（AIがうまく締められなくても、ここで終わることが分かる）
 const liveOf = s => s ? s.btns.map(b => b.trim()).filter(Boolean) : [];
 const hasOf = s => s.branches ? s.branches.some(b => liveOf(b).length) : liveOf(s).length > 0;
 const LIMIT_BASE = ADMIN.steps.filter(hasOf).length; // 選択の欄（ボタンのあるステップ）の数。必ず聞く・数に入れない
@@ -615,7 +615,7 @@ function aiContext(n, ask) {
     if (BR_BY_BTN != null) c += `\nボタンからは方向${BR_BY_BTN + 1}にあたります。`;
     c += "\n利用者の書いた言葉を優先して、合う方向を一つ選び、" + UKE + "見立てを一言返してから、その方向のボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。"
       + "\n返事の最後に、行を分けて【方向1】か【方向2】とだけ書いてください。";
-  } else if (n >= LIMIT) c += "\n次はありません。これが最後の返事で、この返事が締めになります。直前の利用者の言葉に短く答えてから、ここまでの話で分かったことを一言でまとめ、まだ決まっていないことを一つ名指しして（例：前の道の幅、境目が確定しているか）、現地を見ないと決まらない理由を一言添え、「そこは弊社が現地で確かめます」と引き受けます。"
+  } else if (n >= LIMIT) c += "\n次はありません。これが最後の返事で、この返事が締めになります。直前の利用者の言葉に短く答えてから、ここまでの話で分かったことを一言でまとめ、まだ決まっていないことを一つ名指しして（例：前の道の幅、境目が確定しているか）、現地を見ないと決まらない理由を一言添え、「そこは弊社が現地で確かめます」と引き受けます。問い合わせの案内は画面が決まった一文で添えるので、書きません。"
     + (K.extra.way && K.extra.way.trim() ? "引き受け方は、弊社の「相談を受けたら、最初にすること」に沿って具体的に言います。" : closeNow() ? "弊社の一手の例：" + closeNow() : "")
     + "最後に「ここまでの話を添えて、弊社にお問い合わせできます」のように案内します。全体で4文まで。問いかけは付けません。「ここまでです」「お答えできるのは以上です」のような打ち切りの言葉は使いません。";
   else if (nb.length) c += "\n次に利用者へ出るボタン：" + nb.join(" / ") + "\n返事は、" + UKE + "、この土地・この相談の見立てを一言で返してから、このボタンのどれかで答えられる問いで終えてください。ボタンの名前を並べて読み上げないでください。";
@@ -682,8 +682,8 @@ function topicsOf(list) {
   return list.length === 1 ? `「${list[0]}」について` : `「${list[0]}」や「${list.slice(1).join("」・「")}」などについて`;
 }
 function goStep(i, lead, real) {
-  if (i >= LIMIT) { // 締め：AIの最後の返事そのもの。固定の打ち切り文は付けない（AIにつながらなかったときだけ END）
-    say(real ? lead : lead + "<br>" + END, real ? "渡したもの：締めの返事" : "渡したもの：台本", "店へ渡した：往復の上限（" + LIMIT + "）");
+  if (i >= LIMIT) { // 締め：AIの最後の返事＋固定の締め（END）
+    say(lead + "<br>" + END, real ? "渡したもの：締めの返事" : "渡したもの：台本", "店へ渡した：往復の上限（" + LIMIT + "）");
     inquiryBar(true); saveSession(); return;
   }
   const st = i === 1 ? BRANCH : ADMIN.steps[i];
