@@ -55,7 +55,8 @@ for p in sorted(R,key=lambda p:pcode[p]):
     for i,(nm,cs) in enumerate(rs):
         rid=f"{pcode[p]}-{i+1}"
         sh=SHOW[(p,nm)]
-        out.append([p,rid,nm,"・".join(sh)+("ほか" if cnt[i]>len(sh) else "")+" 地域密着の遠見不動産",cnt[i],base+rid])
-w=csv.writer(open("地区一覧.csv","w",encoding="utf-8-sig",newline=""));w.writerow(["都道府県","地区ID","地区名","タイトル","市区町村数","送るURL"]);w.writerows(out)
+        members=[x[2] for x in look if x[3]==rid]
+        out.append([p,rid,nm,"・".join(sh),cnt[i],"・".join(members),base+rid])
+w=csv.writer(open("地区一覧.csv","w",encoding="utf-8-sig",newline=""));w.writerow(["都道府県","地区ID","地区名","代表の市","市区町村数","入る市区町村（全部）","送るURL"]);w.writerows(out)
 w=csv.writer(open("逆引き.csv","w",encoding="utf-8-sig",newline=""));w.writerow(["団体コード","都道府県","市区町村","地区ID","地区名","タイトルの市","送るURL"]);w.writerows(sorted(look))
 print(len(out),len(look),"位置なし",nox)
