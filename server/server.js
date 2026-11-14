@@ -305,7 +305,7 @@ async function handleChat(req, res) {
 
   seen(input.sid);
   const userText = input.messages[input.messages.length - 1].content;
-  const turn = input.messages.filter((m) => m.role === "user").length;
+  const turn = input.said ? input.said.length : input.messages.filter((m) => m.role === "user").length; // AIへは直近だけ送るので、said があればそちらで数える
   const reject = (code, reason) => {
     const k = who + reason;
     if (Date.now() - (rejLogged.get(k) || 0) > 60_000) {
@@ -328,6 +328,14 @@ async function handleChat(req, res) {
   if (input.context) system.push({ type: "text", text: `【画面から渡された状況】\n${input.context}` });
   const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, contextFixed: input.contextFixed || undefined, userText, meta: input.meta };
   rec.triggers = detectTriggers(input.said ? input.said.map((content) => ({ role: "user", content })) : input.messages); // 会話の途中が省かれていても、最初からの発言で判定する // AIには渡さない。発動したかを見るだけ
+  // 発動したら、AIへの説明に一行足す（試験用・2026-11-14）。こちらから言い出さないため、保留・不発では何も足さない
+  const fired = rec.triggers.find((g) => g.name === "代替え地" && g.decision === "発動");
+  if (fired) {
+    const want = { "農地": "畑・農地", "住宅地_庭": "庭", "住宅地_二世帯": "二世帯で住める広さ", "住宅地_広さ": "広さ", "事業用": "作業場・置き場" };
+    const w = fired.purposes.map((p) => want[p] || p).join("・") || "広さ・郊外";
+    system.push({ type: "text", text: `【きっかけ：代替え地】
+利用者は自分から、今の住まいを手放して移ることと、移り先の望み（${w}）を話しました。今の家は土地（古家付き）として扱い、建物の評価ではなく土地の評価を軸に話します（築年数や修繕歴を聞き返して話を止めない）。今の土地の評価と移り先の土地を並べる形で、代替え地の話を具体的に一つ示してかまいません。値段は約束せず、渡されたデータにない数字は作りません。` });
+  }
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
