@@ -344,6 +344,14 @@ async function handleChat(req, res) {
       system.push({ type: "text", text: altlandText(r) });
     }
   }
+  // 保留でも表は用意する（2026-11-14 ユーザーのテスト：「売る」と言わずに「土地代金で100坪」「価格差で広さ」と聞く客がいた）
+  // こちらから言い出さないため、利用者が自分から聞いたときだけ使わせる
+  const held = !fired && rec.triggers.find((g) => g.name === "代替え地" && g.decision === "保留");
+  if (held && input.pin && input.pin.area > 0) {
+    const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area, input.said), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
+    held.alt = r || { none: "探し中（次の往復で使います）" };
+    system.push({ type: "text", text: altlandText(r) + "\n※この表は、利用者が自分から、移り先の場所・広さ・今の土地との値段の差を聞いたときだけ使います。聞かれていなければ、こちらから持ち出しません。聞かれたら、地域名を挙げて具体的に答えます。" });
+  }
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
