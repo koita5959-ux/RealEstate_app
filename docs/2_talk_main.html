@@ -572,7 +572,7 @@ function buildState() {
   const sheet = {};
   for (const [k, v] of Object.entries(S.sheet)) sheet[k] = v == null ? null : plain(String(v)); // 事情などの escape を元の文字に戻す（表示側で改めて無害化する）
   return {
-    updated: Date.now(), stage: STAGE, place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "",
+    updated: Date.now(), stage: STAGE, place: PLACE, near: S.near.name, localKnowledge: (localNear(S.near) ? PREF.localKnowledge[S.near.name] : "") || "", revised: S.revised || "", ...(S.extT ? { extT:S.extT } : {}),
     path: PATH.map(p => ({ press:p.press, q:p.q, opt:p.opt || 0, type:p.type || "", ...(p.br != null ? { br:p.br } : {}) })),
     sheet, signals: S.signals.slice(),
     usage: { n:a.length, tin:a.reduce((x, r) => x + (r.usage ? r.usage.input : 0), 0), tout:a.reduce((x, r) => x + (r.usage ? r.usage.output : 0), 0), costUsd:a.reduce((x, r) => x + (r.costUsd || 0), 0) },
@@ -906,7 +906,7 @@ function reopen(d) {
 const PATH = [];
 const NUM = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 記録の q で引く（NUM[q-1]）。表示は「何往復目か」＝q−1（① は土地評価データー）
 // 問いごとの行。番号（①②③）は会話の中の何番目の問いか。「②の3を押すと」と言えるように常に出す。
-const RULE_N = () => 2, FREE_N = () => FREE_T; // 規定の往復の数（①②）／フリートークの数
+const RULE_N = () => 2, FREE_N = () => FREE_T + extT(); // 規定の往復の数（①②）／フリートークの数
 // 行の番号：規定の往復（①土地評価データー・②設問・ボタンの段）だけ丸数字。フリートークは丸数字にせず「フリートーク 1／2」
 function rowLabel(q) {
   const di = q - 1, R = RULE_N();
@@ -1044,7 +1044,7 @@ function restoreFromSnapshot(d) {
     const oks = (d.turns || []).filter(t => t.status === "ok" && t.reply);
     for (const t of oks) AI_HIST.push({ role:"user", content:t.user || "" }, { role:"assistant", content:takeBranch(t.reply).text });
     const sheet = {}; for (const [k, v] of Object.entries(sh)) sheet[k] = v == null || v === "" ? null : esc(String(v));
-    S = { sheet, near, area:sn.area || 120, log:[], signals:(st.signals || []).slice(), revised:st.revised || null, used:[],
+    S = { sheet, near, area:sn.area || 120, log:[], signals:(st.signals || []).slice(), revised:st.revised || null, used:[], ...(st.extT ? { extT:st.extT } : {}),
       api: oks.map((t, i) => ({ step:i + 1, usage:{ input:t.inTok || 0, output:t.outTok || 0 }, costUsd:t.costUsd || 0, ms:t.ms || 0 })) };
     const p4 = PATH.find(x => x.q === 4);
     if (p4 && ADMIN.steps[1] && ADMIN.steps[1].branches) { // 枝：記録にある番号 → ④の返事の【方向N】 → ④のボタン の順
@@ -1131,7 +1131,9 @@ const TONE_TXT = { near:"話し方は、知り合いの先輩くらいの近さ�
 const FREE_T = TALK.fv === 2 && TALK.free != null && TALK.free !== "" ? Math.max(1, +TALK.free) : 2; // フリートークの回数（管理画面。初期値2＝総回数は規定＋2）。選択の欄（①〜③）の返事は数に入れない
 const LIMIT_T = FREE_T + 1; // 返事の数の上限（①〜③への返事を含む）
 let HANDED = null, HAND_AT = 0; // 勧めた場面 [話題, 理由] と、勧めた返事の往復目
-const isLast = n => n >= LIMIT_T - 1; // 勧める場面に当たっても、話はフリートークの回数まで続く // n 往復目の返事で終えるか
+// きっかけ（試験用）：発動したら、往復を2つ足す（1回だけ。S.extT に保存して、再表示でも同じに）。2026-11-14
+const EXT_ADD = 2, extT = () => (S && S.extT) || 0;
+const isLast = n => n >= LIMIT_T - 1 + extT(); // 勧める場面に当たっても、話はフリートークの回数まで続く // n 往復目の返事で終えるか
 // 店のこと（1セッションの中で変わらない）。contextFixed として送り、サーバーがキャッシュに載せる
 function talkShopBlock() {
   const nm = TALK.name, staff = TALK.mode === "staff";
@@ -1195,12 +1197,12 @@ function goStep(i, lead, real) {
   lead = String(lead).replace(/【勧める[:：]?\s*\d*】/g, "");
   if (isLast(i)) { // 締め：AIの最後の返事＋固定の締め（END）
     if (!HANDED) S.sheet.勧めた場面 = "（往復の上限まで話した）";
-    say(lead + "<br>" + END, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：フリートークの回数（${FREE_T}）`);
+    say(lead + "<br>" + END, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本", HANDED ? `店へ渡した：勧める場面「${esc(HANDED[0])}」` : `店へ渡した：フリートークの回数（${FREE_T + extT()}）`);
     STAGE = "店を勧めた"; inquiryBar(true); saveSession();
     return;
   }
   say(lead, real ? "渡したもの：一つ前の言葉へのAIの返事" : "渡したもの：台本",
-    fresh ? `店へ渡した：勧める場面「${esc(HANDED[0])}」（フリートークは ${FREE_T} 往復まで）` : `開けた穴：書き欄で続ける（${FREE_T} 往復の ${i + 1} 往復目）`);
+    fresh ? `店へ渡した：勧める場面「${esc(HANDED[0])}」（フリートークは ${FREE_T + extT()} 往復まで）` : `開けた穴：書き欄で続ける（${FREE_T + extT()} 往復の ${i + 1} 往復目）${extT() ? `（きっかけで ${EXT_ADD} 往復足した）` : ""}`);
   if (fresh) { STAGE = "店を勧めた"; inquiryBar(); }
   choices([], null, t => {
     if (!t) return;
@@ -1214,6 +1216,7 @@ function goStep(i, lead, real) {
       return;
     }
     askAI(i + 1, false, userText, { q:4 + i, press:"", typed:true, branch:"", branchBy:"", place:PLACE, near:S.near.name, road:S.sheet.接道 || "", intent:S.sheet.持ち主の意向 || "", kind:"対話" })
+      .then(r => { if (r && !extT() && (TRACE?.triggers || []).some(g => g.decision === "発動")) { S.extT = EXT_ADD; saveSession(); } return r; })
       .then(r => goStep(i + 1, r ? r : '<span class="hint">（返事を作れませんでした）</span>' + AI_FAIL, !!r));
   }, 4 + i, "ここに書いて送ってください");
 }
