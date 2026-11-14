@@ -1,4 +1,7 @@
-import re,glob,csv,math,openpyxl,collections
+import re,glob,csv,math,openpyxl,collections,json
+A=json.load(open("area.json"))
+C15={k[:5]:v["parent"] for k,v in A["class20s"].items()}
+C15["04216"]=C15.get("04423");C15["40231"]=C15.get("40305")
 pos={};xy={}
 for f in glob.glob("p34/P34-14_*.xml"):
     s=open(f,encoding="utf-8").read()
@@ -39,6 +42,16 @@ base="https://taskboard.asuscomm.com/RealEstate_app/sample/?r="
 out=[];look=[];nox=[]
 for p in sorted(R,key=lambda p:pcode[p]):
     rs=R[p];cnt=collections.Counter()
+    vote=collections.defaultdict(collections.Counter)
+    for i,(nm,cs) in enumerate(rs):
+        for c in cs:
+            mm=byname.get((p,c))
+            if mm and C15.get(mm["code"]): vote[C15[mm["code"]]][i]+=1
+    anchor_i={}
+    for i,(nm,cs) in enumerate(rs):
+        for c in cs:
+            mm=byname.get((p,c))
+            if mm: anchor_i[mm["code"]]=i
     for m in [m for m in mun if m["pref"]==p]:
         if m["code"] not in xy: nox.append(m["name"]); i=0
         else:
@@ -50,6 +63,10 @@ for p in sorted(R,key=lambda p:pcode[p]):
                     d=math.hypot(a[0]-b[0],(a[1]-b[1])*math.cos(math.radians(a[0])))
                     if best is None or d<best[0]: best=(d,i)
             i=best[1]
+            g=C15.get(m["code"])
+            if m["code"] in anchor_i: i=anchor_i[m["code"]]
+            elif g in vote and len(vote[g])==1: i=list(vote[g])[0]
+            elif g in vote: i=vote[g].most_common(1)[0][0] if best is None else (best[1] if best[1] in vote[g] else vote[g].most_common(1)[0][0])
         rid=f"{pcode[p]}-{i+1}";nm,cs=rs[i];cnt[i]+=1
         look.append([m["code"],p,m["name"],rid,nm,"・".join(SHOW[(p,nm)]),base+rid])
     for i,(nm,cs) in enumerate(rs):
