@@ -24,6 +24,8 @@ const LABEL = { RELEASE: "手放す", SPACE: "広さ", SUBURB_OK: "郊外でも"
 // 意思の否定（つもり／気／予定＋ない）。手放す系・郊外系にだけ当てる
 const NEGATION = /^.{0,2}(つもり|気|予定)?(は|も)?(ない|たくない|ません)/;
 const NEGATABLE = new Set(["RELEASE", "SUBURB_OK"]);
+// 逆向きの言葉に否定が続くと意味が反対になる（「ここに住み続ける必要はなく」「駅近じゃなくてもいい」）。2026-11-14 のテストで見つけた外れ
+const BLOCK_NEGATION = /^.{0,4}(必要は?な|なくても|じゃなくても|でなくても|にこだわらな|こだわらな)/;
 const WEIGHTS = { RELEASE: 2, SPACE: 2, SUBURB_OK: 1, BLOCK: -4 };
 const FIRE_SCORE = 4;
 
@@ -32,7 +34,9 @@ function match(text, cat) {
   for (const p of SIGNALS[cat]) {
     const [re, tag] = Array.isArray(p) ? p : [p, null];
     for (const m of text.matchAll(re)) {
-      if (NEGATABLE.has(cat) && NEGATION.test(text.slice(m.index + m[0].length))) continue; // 「売るつもりはない」等
+      const tail = text.slice(m.index + m[0].length);
+      if (NEGATABLE.has(cat) && NEGATION.test(tail)) continue; // 「売るつもりはない」等
+      if (cat === "BLOCK" && BLOCK_NEGATION.test(tail)) continue;
       found.push({ word: m[0], tag, at: m.index });
     }
   }
