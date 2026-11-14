@@ -1,4 +1,4 @@
-TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, triggers:d.triggers,<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -655,7 +655,7 @@ async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明を�
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
       body: JSON.stringify({ type:"talk", mode:TALK.mode === "staff" ? "staff" : "out", sid:SID, by:BY, contextFixed:talkShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI(), said:AI_HIST.filter(m => m.role === "user").map(m => m.content) }) });  // said：きっかけの察知用（試験用）。客の発言の全部。AIには送らない
     const d = await r.json();
-    TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error === "upstream" && d.detail ? d.detail : (d.error || r.status) + (d.detail ? "：" + d.detail : "")) };
+    TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, triggers:d.triggers, stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error === "upstream" && d.detail ? d.detail : (d.error || r.status) + (d.detail ? "：" + d.detail : "")) };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
     if (d.memo) { S.memo = d.memo; S.sheet.AIのメモ = Object.entries(d.memo).filter(([, v]) => v).map(([k, v]) => k + "：" + v).join(" ／ "); } // AIが書いた引き継ぐメモ。次の往復に渡し、店への記録にも残す
     const tb = takeBranch(d.text);
