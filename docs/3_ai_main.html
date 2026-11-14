@@ -650,7 +650,7 @@ async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明を�
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ sid:SID, by:BY, contextFixed:aiShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI() }) });
+      body: JSON.stringify({ sid:SID, by:BY, contextFixed:aiShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI(), said:AI_HIST.filter(m => m.role === "user").map(m => m.content) }) });  // said：きっかけの察知用（試験用）。客の発言の全部。AIには送らない
     const d = await r.json();
     TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error === "upstream" && d.detail ? d.detail : (d.error || r.status) + (d.detail ? "：" + d.detail : "")) };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);

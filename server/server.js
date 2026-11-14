@@ -266,6 +266,7 @@ function parseBody(body) {
     contextFixed: clip(body.contextFixed, 6000), // 1セッションの中で変わらない説明（店のこと）。キャッシュに載せる
     context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
     messages: clean,
+    said: Array.isArray(body.said) ? body.said.filter((s) => typeof s === "string").slice(-60).map((s) => s.slice(0, 2000)) : null, // きっかけの察知用（試験用）。客の発言の全部
   };
 }
 
@@ -326,7 +327,7 @@ async function handleChat(req, res) {
   if (input.contextFixed) system.push({ type: "text", text: `【店のこと】\n${input.contextFixed}`, cache_control: { type: "ephemeral" } });
   if (input.context) system.push({ type: "text", text: `【画面から渡された状況】\n${input.context}` });
   const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, contextFixed: input.contextFixed || undefined, userText, meta: input.meta };
-  rec.triggers = detectTriggers(input.messages); // AIには渡さない。発動したかを見るだけ
+  rec.triggers = detectTriggers(input.said ? input.said.map((content) => ({ role: "user", content })) : input.messages); // 会話の途中が省かれていても、最初からの発言で判定する // AIには渡さない。発動したかを見るだけ
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
