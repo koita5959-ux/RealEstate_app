@@ -837,8 +837,8 @@ function addTrig(bubble, list) {
     d.innerHTML = `<b>きっかけ（試験用）${esc(g.name)}：${esc(g.decision)}</b>　${g.score}点・${esc(g.reason)}${g.purposes?.length ? "　目的 " + esc(g.purposes.join("・")) : ""}${w ? `<div>${esc(w)}</div>` : ""}`;
     const a = g.alt;
     if (a) d.insertAdjacentHTML("beforeend", a.none ? `<div>例えば：${esc(a.none)}</div>`
-      : `<div>今の土地の目安 ${a.here.price.toLocaleString()}円/㎡×${a.area}㎡＝約${Math.round(a.value / 1e4).toLocaleString()}万円（標準地${a.n}点から）</div>`
-        + (a.cands.length ? a.cands.map(c => `<div>例えば：${esc(c.dir)}約${c.km}km ${esc(c.where)}（${esc(c.use)}）${c.price.toLocaleString()}円/㎡ → 約${c.buy.toLocaleString()}㎡（${c.times}倍）</div>`).join("") : "<div>例えば：半分以下の値の標準地なし</div>"));
+      : `<div>今の土地の目安 約${Math.round(a.value / 1e4).toLocaleString()}万円（標準地${a.n}点から）／探す条件：${Math.round(a.want.budget / 1e4).toLocaleString()}万円で約${Math.round(a.want.area / 3.30578)}坪（${esc(a.want.from)}）</div>`
+        + (a.show.length ? (a.near ? "<div>条件に届く所なし。近い値：</div>" : "") + a.show.map(l => `<div>例えば：${esc(l)}</div>`).join("") : "<div>例えば：標準地なし</div>"));
     bubble.appendChild(d);
   }
 }
