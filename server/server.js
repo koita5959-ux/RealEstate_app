@@ -11,6 +11,7 @@ import { landSetup } from "./land.js";
 import { aroundSetup } from "./around.js";
 import { read as readSite } from "./shop/read.js";
 import { understand } from "./shop/understand.js";
+import { detectTriggers } from "./trigger.js"; // きっかけの察知（試験用・リリースでは外す）
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -325,6 +326,7 @@ async function handleChat(req, res) {
   if (input.contextFixed) system.push({ type: "text", text: `【店のこと】\n${input.contextFixed}`, cache_control: { type: "ephemeral" } });
   if (input.context) system.push({ type: "text", text: `【画面から渡された状況】\n${input.context}` });
   const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, contextFixed: input.contextFixed || undefined, userText, meta: input.meta };
+  rec.triggers = detectTriggers(input.messages); // AIには渡さない。発動したかを見るだけ
 
   const waitFrom = Date.now();
   if (!(await acquire())) return reject(429, "busy");
@@ -356,7 +358,7 @@ async function handleChat(req, res) {
       memo: memo || undefined,
     });
     return send(res, 200, {
-      text, memo, raw,
+      text, memo, raw, triggers: rec.triggers,
       trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS, queuedMs: rec.queuedMs }, // 試験用：送ったものをそのまま返す（原文は text）
       stopReason: r.stop_reason,
       usage: { input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheCreate: usage.cache_creation_input_tokens || 0 },
@@ -365,7 +367,7 @@ async function handleChat(req, res) {
     });
   } catch (e) {
     writeLog({ ...rec, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: rec.retryLostUsd || 0, ms: Date.now() - t0 });
-    return send(res, 502, { error: "upstream", httpStatus: e.status || 0, detail: jaError(e, rec.retries), retries: rec.retries || 0, trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
+    return send(res, 502, { error: "upstream", triggers: rec.triggers, httpStatus: e.status || 0, detail: jaError(e, rec.retries), retries: rec.retries || 0, trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS } });
   } finally {
     release();
   }

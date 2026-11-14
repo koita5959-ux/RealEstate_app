@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, triggers:d.triggers,<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -42,6 +42,9 @@
   details.trace summary { cursor:pointer; color:var(--sub); }
   details.trace pre { white-space:pre-wrap; word-break:break-all; background:#fff; border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin:3px 0 8px; max-height:260px; overflow:auto; font-size:11.5px; }
   details.trace .tw { color:#b4472b; }
+  .trig { margin-top:6px; font-size:12px; line-height:1.5; color:var(--sub); border-left:3px solid var(--line); padding:2px 8px; }
+  .trig.mid { border-left-color:#d9a13b; }
+  .trig.on { border-left-color:#c0392b; color:#8a2a1e; background:#fdf0ee; }
   .ai { background:var(--ai); border-left:4px solid var(--ai-line); padding:10px 12px; margin:10px 0 4px; font-size:15px; line-height:1.7; border-radius:4px; }
   .ai .tag { font-size:11px; color:#a0701a; display:block; margin-bottom:2px; }
   .me { text-align:right; margin:8px 0; font-size:14px; }
@@ -521,7 +524,7 @@ function snapshotNow() {
   const talk = [];
   for (const el of document.getElementById("talk").children) {
     if (el.classList.contains("ai")) {
-      const c = el.cloneNode(true); c.querySelectorAll(".trace").forEach(x => x.remove()); const w = c.querySelector(".will"), tg = c.querySelector(".tag");
+      const c = el.cloneNode(true); c.querySelectorAll(".trace, .trig").forEach(x => x.remove()); const w = c.querySelector(".will"), tg = c.querySelector(".tag");
       const will = w ? w.innerHTML : ""; if (w) w.remove(); if (tg) tg.remove();
       talk.push({ t:"ai", html:c.innerHTML, will });
     } else if (el.classList.contains("me")) talk.push({ t:"me", text:el.textContent });
@@ -822,6 +825,16 @@ function addTrace(bubble, t) {
     + `<b>※2 画面に出した返事</b>${pre(shown)}`
     + `<b>※3 AIの原文</b>　<span class="hint">${t.stop ? "止まった理由 " + esc(String(t.stop)) : ""}${t.usage ? `　入力 ${n(t.usage.input)}・出力 ${n(t.usage.output)}トークン` : ""}${t.ms ? `　${(t.ms / 1000).toFixed(1)}秒` : ""}</span>${t.raw ? pre(t.raw) : '<div class="hint">（原文なし）</div>'}`;
   bubble.appendChild(x);
+  addTrig(bubble, t.triggers);
+}
+// ---- 試験用（リリースでは外す）：きっかけの察知。客の言葉をルールで判定した結果を、返事ごとに一行で見せる。AIには渡していない ----
+function addTrig(bubble, list) {
+  for (const g of list || []) {
+    const w = Object.entries(g.hits || {}).map(([k, v]) => `${k}「${v.join("」「")}」`).join("　");
+    const d = document.createElement("div"); d.className = "trig" + (g.decision === "発動" ? " on" : g.decision === "保留" ? " mid" : "");
+    d.innerHTML = `<b>きっかけ（試験用）${esc(g.name)}：${esc(g.decision)}</b>　${g.score}点・${esc(g.reason)}${g.purposes?.length ? "　目的 " + esc(g.purposes.join("・")) : ""}${w ? `<div>${esc(w)}</div>` : ""}`;
+    bubble.appendChild(d);
+  }
 }
 function me(t) { const d = document.createElement("div"); d.className = "me"; d.innerHTML = "<span></span>"; d.firstChild.textContent = t; document.getElementById("talk").appendChild(d); saveSession(); }
 // 押した後も選択肢を残す。選ばなかったボタンを押すと、そこまで巻き戻して別の道を試す。
