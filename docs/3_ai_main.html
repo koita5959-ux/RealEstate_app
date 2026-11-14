@@ -650,7 +650,7 @@ async function askAI(n, ask, userText, meta, ctx) { // ctx：渡すと説明を�
   document.body.classList.add("ai-wait"); // 返事を待つ間は、上の行の薄いボタン（別の道を試す）を押せない
   try {
     const r = await fetch(AI_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, signal:ctl.signal,
-      body: JSON.stringify({ sid:SID, by:BY, contextFixed:aiShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI(), said:AI_HIST.filter(m => m.role === "user").map(m => m.content) }) });  // said：きっかけの察知用（試験用）。客の発言の全部。AIには送らない
+      body: JSON.stringify({ sid:SID, by:BY, contextFixed:aiShopBlock(), context:(ctx || aiContext(n, ask)) + memoBlock(), meta, messages:histForAI(), said:AI_HIST.filter(m => m.role === "user").map(m => m.content), pin:pinOf() }) });  // said：きっかけの察知用（試験用）。客の発言の全部。AIには送らない
     const d = await r.json();
     TRACE = { sent:d.trace, raw:d.raw || d.text || "", memo:d.memo, triggers:d.triggers, stop:d.stopReason, usage:d.usage, ms:d.ms, err:r.ok ? "" : (d.error === "upstream" && d.detail ? d.detail : (d.error || r.status) + (d.detail ? "：" + d.detail : "")) };
     if (!r.ok || !d.text) throw new Error(d.error || r.status);
@@ -828,11 +828,17 @@ function addTrace(bubble, t) {
   addTrig(bubble, t.triggers);
 }
 // ---- 試験用（リリースでは外す）：きっかけの察知。客の言葉をルールで判定した結果を、返事ごとに一行で見せる。AIには渡していない ----
+// 代替え地の「例えば」用：ピン（表の所在から）と面積
+function pinOf() { const m = String(S && S.sheet && S.sheet.所在 || "").match(/(-?d+.d+),s*(-?d+.d+)/); return m ? { lat:+m[1], lng:+m[2], area:S.area || 0 } : null; }
 function addTrig(bubble, list) {
   for (const g of list || []) {
     const w = Object.entries(g.hits || {}).map(([k, v]) => `${k}「${v.join("」「")}」`).join("　");
     const d = document.createElement("div"); d.className = "trig" + (g.decision === "発動" ? " on" : g.decision === "保留" ? " mid" : "");
     d.innerHTML = `<b>きっかけ（試験用）${esc(g.name)}：${esc(g.decision)}</b>　${g.score}点・${esc(g.reason)}${g.purposes?.length ? "　目的 " + esc(g.purposes.join("・")) : ""}${w ? `<div>${esc(w)}</div>` : ""}`;
+    const a = g.alt;
+    if (a) d.insertAdjacentHTML("beforeend", a.none ? `<div>例えば：${esc(a.none)}</div>`
+      : `<div>今の土地の目安 ${a.here.price.toLocaleString()}円/㎡×${a.area}㎡＝約${Math.round(a.value / 1e4).toLocaleString()}万円（標準地${a.n}点から）</div>`
+        + (a.cands.length ? a.cands.map(c => `<div>例えば：${esc(c.dir)}約${c.km}km ${esc(c.where)}（${esc(c.use)}）${c.price.toLocaleString()}円/㎡ → 約${c.buy.toLocaleString()}㎡（${c.times}倍）</div>`).join("") : "<div>例えば：半分以下の値の標準地なし</div>"));
     bubble.appendChild(d);
   }
 }

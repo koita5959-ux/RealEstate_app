@@ -11,7 +11,8 @@ import { landSetup } from "./land.js";
 import { aroundSetup } from "./around.js";
 import { read as readSite } from "./shop/read.js";
 import { understand } from "./shop/understand.js";
-import { detectTriggers } from "./trigger.js"; // きっかけの察知（試験用・リリースでは外す）
+import { detectTriggers } from "./trigger.js";
+import { altlandSetup, altlandText } from "./altland.js"; // 代替え地の「例えば」（試験用） // きっかけの察知（試験用・リリースでは外す）
 
 const env = process.env;
 const PORT = Number(env.PORT || 3000);
@@ -266,6 +267,7 @@ function parseBody(body) {
     contextFixed: clip(body.contextFixed, 6000), // 1セッションの中で変わらない説明（店のこと）。キャッシュに載せる
     context: clip(body.context, 6000), // 公開データの表（19行）＋書いた言葉＋指示。2000では末尾の指示が切れることがあった
     messages: clean,
+    pin: body.pin && isFinite(body.pin.lat) && isFinite(body.pin.lng) ? { lat: +body.pin.lat, lng: +body.pin.lng, area: Math.max(0, Math.min(1e6, +body.pin.area || 0)) } : null, // 代替え地の「例えば」用（試験用）
     said: Array.isArray(body.said) ? body.said.filter((s) => typeof s === "string").slice(-60).map((s) => s.slice(0, 2000)) : null, // きっかけの察知用（試験用）。客の発言の全部
   };
 }
@@ -335,6 +337,12 @@ async function handleChat(req, res) {
     const w = fired.purposes.map((p) => want[p] || p).join("・") || "広さ・郊外";
     system.push({ type: "text", text: `【きっかけ：代替え地】
 利用者は自分から、今の住まいを手放して移ることと、移り先の望み（${w}）を話しました。今の家は土地（古家付き）として扱い、建物の評価ではなく土地の評価を軸に話します（築年数や修繕歴を聞き返して話を止めない）。今の土地の評価と移り先の土地を並べる形で、代替え地の話を具体的に一つ示してかまいません。値段は約束せず、渡されたデータにない数字は作りません。この返事が最後の返事でも、締めや店を勧める話より先に、代替え地の具体を一つ示します。「今はお答えできません」だけで終えません。` });
+    // 代替え地の「例えば」：20km圏の標準地から（初回はタイル取得で時間がかかるので25秒まで待ち、間に合わなければ次の往復で使う）
+    if (input.pin && input.pin.area > 0) {
+      const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
+      fired.alt = r || { none: "探し中（次の往復で使います）" };
+      system.push({ type: "text", text: altlandText(r) });
+    }
   }
 
   const waitFrom = Date.now();
@@ -523,6 +531,7 @@ setInterval(() => { if (today() !== snapDay) rebuild(); }, 5 * 60_000); // 日�
 
 // ---- 公開データ（不動産情報ライブラリ）：GET /api/land?lat=..&lng=.. ----
 const land = landSetup({ keyFile: LAND_KEY_FILE, dataDir: DATA_DIR });
+const altland = altlandSetup(land);
 const around = aroundSetup({ tile: land.tile, dataDir: DATA_DIR });
 // 周り（作業用データ）：GET /api/around?lat=..&lng=..。画面の表には出さず、AIへの説明に入れる。キーがなければ空
 async function handleAround(req, res, url) {
