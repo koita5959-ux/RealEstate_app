@@ -45,18 +45,22 @@ export function altlandSetup(land) {
       const p = f.properties || {}, [o, a] = f.geometry.coordinates;
       return { d: distM(lat, lng, a, o), lat: a, lng: o, price: yen(p.u_current_years_price_ja), use: p.use_category_name_ja || "",
         addr: p.location || p.residence_display_name_ja || "", surround: p.current_usage_status_of_surrounding_land_name_ja || "",
-        division: p.area_division_name_ja || "", station: p.nearest_station_name_ja || "" };
+        division: p.area_division_name_ja || "", station: p.nearest_station_name_ja || "",
+        roadM: p.front_road_width ? Number(String(p.front_road_width).replace(/,/g, "")) / 10 : 0, corner: !!(p.side_road_name_ja || p.side_road_azimuth_name_ja) };
     }).filter((x) => x.price > 0).sort((a, b) => a.d - b.d);
     const here = list[0];
     if (!here || here.d > 5000) return { none: "ピンの近く（5km以内）に標準地がなく、今の土地の目安を出せません" };
     const dir = (x) => bearing(lat, lng, x.lat, x.lng);
-    return { dir, here: { where: here.addr, price: here.price, d: Math.round(here.d) }, area, value: here.price * area, list, n: list.length };
+    return { dir, here: { where: here.addr, price: here.price, d: Math.round(here.d), roadM: here.roadM, corner: here.corner }, area, value: here.price * area, list, n: list.length };
   }
 
   // 同じセッションでは一度だけ探す（失敗したら次の往復で探し直す）
-  async function forSid(sid, lat, lng, area, said) {
+  async function forSid(sid, lat, lng, area, said, subj) {
     const base = await baseFor(sid, lat, lng, area);
-    return base.none ? base : choose(base, readWish(said, base.value));
+    if (base.none) return base;
+    const adj = appraise(base.here, subj);
+    const b = { ...base, raw: base.value, value: Math.round(base.value * (1 + adj.rate)), adj };
+    return choose(b, readWish(said, b.value));
   }
   function baseFor(sid, lat, lng, area) {
     const k = `${sid}|${lat.toFixed(4)},${lng.toFixed(4)}|${area}`;
@@ -77,6 +81,22 @@ const num = (t) => Number(String(t).replace(/[,，]/g, "").replace(/[０-９．]
 const fmtArea = (m2, unit) => { const a = `約${Math.round(m2).toLocaleString()}㎡`, b = `約${Math.round(m2 / TSUBO).toLocaleString()}坪`; return unit === "坪" ? `${b}（${a}）` : `${a}（${b}）`; };
 const fmtUnit = (p, unit) => { const a = `${Math.round(p).toLocaleString()}円/㎡`, b = `約${(Math.round(p * TSUBO / 1000) / 10).toLocaleString()}万円/坪`; return unit === "坪" ? `${b}（${a}）` : `${a}（${b}）`; };
 const man = (v) => Math.round(v / 10000).toLocaleString() + "万円";
+
+// 基本の査定：最寄りの標準地と、売る土地（設問の答え）の違いを、決まった率で足し引きする（土地価格比準表の考え方の、おおよそ）
+// 上げる要素も下げる要素も同じく入れる。分からない項目は0（足し引きしない）。分からないことで止めない
+export function appraise(std, subj) {
+  const road = String((subj && subj.road) || ""), shape = String((subj && subj.shape) || "");
+  const items = [];
+  const isCorner = /角地/.test(road);
+  if (isCorner && !std.corner) items.push(["角地（標準地は角地でない）", 0.04]);
+  if (!isCorner && std.corner && road && !/選ばず|未確認/.test(road)) items.push(["角地でない（標準地は角地）", -0.04]);
+  if (/旗竿地・通路2m未満/.test(road)) items.push(["旗竿地・通路2m未満（建て直しに制限の可能性）", -0.3]);
+  else if (/旗竿地/.test(road + shape)) items.push(["旗竿地（奥まっている）", -0.15]);
+  else if (/広い道/.test(road) && std.roadM && std.roadM < 4) items.push([`広い道に面している（標準地の前の道は${std.roadM}m）`, 0.03]);
+  else if (/4m未満|細い道/.test(road) && (!std.roadM || std.roadM >= 4)) items.push(["前の道が細い（4m未満の可能性）", -0.05]);
+  if (/細長い|不整形/.test(shape)) items.push(["細長い・形がいびつ", -0.05]);
+  return { items, rate: items.reduce((s, [, r]) => s + r, 0) };
+}
 
 // 客の発言から、移り先の広さ・予算・よく使う単位を読む（後の発言ほど優先。おおよそで良い）
 export function readWish(said, value) {
@@ -113,9 +133,10 @@ export function altlandText(r) {
   if (!r || r.none) return `【代替え地の例えば】${r ? r.none : "探し中"}。数字は出さず、どんな所を探すかの形で話します。`;
   const u = r.want.unit;
   return `【代替え地の例えば（国の標準地の値での単純計算。どれも別の土地の値で、売り物ではありません）】
-今の土地の目安：最寄りの標準地 ${fmtUnit(r.here.price, u)} × ${fmtArea(r.area, u)} ＝ 約${man(r.value)}
+今の土地の目安：最寄りの標準地 ${fmtUnit(r.here.price, u)} × ${fmtArea(r.area, u)} ＝ 約${man(r.raw)}${r.adj.items.length ? `
+基本の査定（標準地との違いを、公の比べ方のおおよその率で足し引き）：${r.adj.items.map(([t, v]) => `${t} ${v > 0 ? "+" : ""}${Math.round(v * 100)}%`).join("、")} → 約${man(r.value)}` : "（標準地との違いで足し引きする材料はまだありません。分かった分から足し引きします）"}
 探す条件（${r.want.from}）：${man(r.want.budget)}で${fmtArea(r.want.area, u)} → 単価 ${fmtUnit(r.want.limit, u)} 以下の所
 ${r.near ? "20km圏に条件に届く標準地はありませんでした。いちばん近い値の所：" : "20km圏で条件に合う地点（近い順）："}
 ${r.show.map((l, i) => `${i + 1}. ${l}`).join("\n")}
-使い方：地域名（市町村と町・字まで。番地は言わない）を先に出し、「例えば◯◯のあたり（方角・距離）なら、国の標準地の値で単純に計算すると、${man(r.want.budget)}で約◯坪（◯㎡）」の形で、一つか二つ挙げます。利用者が坪で話していれば坪を先に、㎡なら㎡を先に言います。地目や用途が違っても構いません。値段や買えることは約束しません。条件に届かないときは、そう正直に言い、どのくらい足りないかを示します。`;
+使い方：地域名（市町村と町・字まで。番地は言わない）を先に出し、「例えば◯◯のあたり（方角・距離）なら、国の標準地の値で単純に計算すると、${man(r.want.budget)}で約◯坪（◯㎡）」の形で、一つか二つ挙げます。利用者が坪で話していれば坪を先に、㎡なら㎡を先に言います。地目や用途が違っても構いません。値段や買えることは約束しません。条件に届かないときは、そう正直に言い、どのくらい足りないかを示します。基本の査定で上げた・下げた所は、理由を一言で言います（「角地なので数％高く見て」）。査定の材料が足りなくても、今ある分で計算した額で候補を出します。材料が足りないことを、候補を出さない理由にしません。`;
 }

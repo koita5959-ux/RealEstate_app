@@ -829,7 +829,7 @@ function addTrace(bubble, t) {
 }
 // ---- 試験用（リリースでは外す）：きっかけの察知。客の言葉をルールで判定した結果を、返事ごとに一行で見せる。AIには渡していない ----
 // 代替え地の「例えば」用：ピン（表の所在から）と面積
-function pinOf() { const m = String(S && S.sheet && S.sheet.所在 || "").match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/); return m ? { lat:+m[1], lng:+m[2], area:S.area || 0 } : null; }
+function pinOf() { const m = String(S && S.sheet && S.sheet.所在 || "").match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/); return m ? { lat:+m[1], lng:+m[2], area:S.area || 0, road:S.sheet.接道 || "", shape:S.sheet.形と向き || "" } : null; } // road・shape：基本の査定用（設問の答え）
 function addTrig(bubble, list) {
   for (const g of list || []) {
     const w = Object.entries(g.hits || {}).map(([k, v]) => `${k}「${v.join("」「")}」`).join("　");

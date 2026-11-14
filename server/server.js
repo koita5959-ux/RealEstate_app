@@ -339,7 +339,7 @@ async function handleChat(req, res) {
 利用者は自分から、今の住まいを手放して移ることと、移り先の望み（${w}）を話しました。今の家は土地（古家付き）として扱い、建物の評価ではなく土地の評価を軸に話します（築年数や修繕歴を聞き返して話を止めない）。今の土地の評価と移り先の土地を並べる形で、代替え地の話を具体的に一つ示してかまいません。値段は約束せず、渡されたデータにない数字は作りません。この返事が最後の返事でも、締めや店を勧める話より先に、代替え地の具体を一つ示します。「今はお答えできません」だけで終えません。` });
     // 代替え地の「例えば」：20km圏の標準地から（初回はタイル取得で時間がかかるので25秒まで待ち、間に合わなければ次の往復で使う）
     if (input.pin && input.pin.area > 0) {
-      const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area, input.said), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
+      const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area, input.said, input.pin), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
       fired.alt = r || { none: "探し中（次の往復で使います）" };
       system.push({ type: "text", text: altlandText(r) });
     }
@@ -348,7 +348,7 @@ async function handleChat(req, res) {
   // こちらから言い出さないため、利用者が自分から聞いたときだけ使わせる
   const held = !fired && rec.triggers.find((g) => g.name === "代替え地" && g.decision === "保留");
   if (held && input.pin && input.pin.area > 0) {
-    const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area, input.said), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
+    const r = await Promise.race([altland.forSid(input.sid, input.pin.lat, input.pin.lng, input.pin.area, input.said, input.pin), new Promise((ok) => setTimeout(() => ok(null), 25_000))]);
     held.alt = r || { none: "探し中（次の往復で使います）" };
     system.push({ type: "text", text: altlandText(r) + "\n※この表は、利用者が自分から、移り先の場所・広さ・今の土地との値段の差を聞いたときだけ使います。聞かれていなければ、こちらから持ち出しません。聞かれたら、地域名を挙げて具体的に答えます。" });
   }
