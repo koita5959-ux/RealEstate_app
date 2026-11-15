@@ -120,7 +120,7 @@ async function read(url) {
   return out;
 }
 
-export { read };
+export { read, get, parse };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [csv, dst] = process.argv.slice(2);

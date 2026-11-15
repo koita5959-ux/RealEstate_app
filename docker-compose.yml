@@ -29,6 +29,7 @@ services:
     volumes:
       - ./data:/data
       - ./RealEstate_Site:/site:ro # サンプルHP（?r= で地区名を差し込む）
+      - ./docs/data/muni.json:/app/muni.json:ro # 物件の町名を拾う（shop/listings.js）
       - ./_works/2026-11-14_ClaudeCode_送付用の地区一覧:/regions:ro
     mem_limit: 256m
     restart: unless-stopped

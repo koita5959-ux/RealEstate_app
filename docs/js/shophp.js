@@ -21,7 +21,8 @@ const SHOP_KNOW = [
   ["fit", "この店に向く相談", "例：売るか残すか決めていない空き家", "HP全体から"],
   ["unfit", "この店では受けにくい相談", "例：賃貸の部屋探し", "HP全体から"],
   ["strong", "事例から言える強み", "例：旗竿地の通路を測り直し、建築会社に先に見せて売った", "事例・仕組みから（宣伝文句は使いません）"],
-  ["area", "対応している地域", "例：岐阜市と周辺の市町", "会社概要から"]];
+  ["area", "対応している地域", "例：岐阜市と周辺の市町", "会社概要から"],
+  ["areas", "扱う地区と物件", "例：明倫学区：古家付きの土地・農地／西舞鶴駅周辺：土地", "売買の物件ページから（プログラムが数えます。実在の町名は学区・駅にぼかします）"]];
 const SHOP_EXTRA = [
   ["way", "相談を受けたら、最初にすること", "例：買取ならいくら、仲介で時間をかけたらいくらを並べてお見せし、そこから一緒に決めます", "締めの「店の一手」になります。どの店でも言える言葉が、この店の言葉に変わります"],
   ["take", "引き受けること", "例：現地を見るのは無料。連絡から3日以内に、宅建士が伺います", "締めの「現地で確かめます」が具体になります。書いたことは約束になります"],
@@ -39,7 +40,9 @@ function shopKnowText(hp, know) {
   const line = (l, k) => v(k) ? `\n・${l}：${v(k)}` + (why[k] && know.own[k] == null ? `（HPの根拠：${why[k]}）` : "") : "";
   let c = line("どんな会社か", "what") + line("立場と理由", "stance") + line("店の考え（話し方の芯にします）", "voice") + line("よく受けている相談", "good")
     + line("よくあるお客さんの悩み", "worries") + line("弊社に合う相談", "fit") + line("弊社に合いにくい相談", "unfit") + line("弊社の強み", "strong")
-    + line("連携している専門家", "team") + line("対応している地域", "area");
+    + line("連携している専門家", "team") + line("対応している地域", "area")
+  if (v("areas")) c += `
+・弊社が扱う地区と物件（売買の物件から）：${v("areas")}。客の土地がこの地区に近いときや、同じ種類の土地のときに「この辺り（この種類）は弊社もよく扱います」と一言添えます。個別の物件は紹介しません。`;
   for (const [k, l] of SHOP_EXTRA) if (x(k)) c += `\n・${k === "ng" ? "言ってほしくないこと（触れません）" : k === "take" ? "弊社が引き受けること（約束してよいのはここに書かれた範囲だけ）" : l}：${x(k)}`;
   if (!x("take")) c += "\n・弊社が引き受けること：書かれていません。現地を見る・調べる以上の約束（値段・日程・費用）はしません。";
   const un = (hp.unread || []).filter(Boolean);
@@ -89,8 +92,8 @@ async function readShopHP0(url) {
   }
   const sh = j.shop, join = a => Array.isArray(a) ? a.filter(Boolean).join("、") : String(a || "");
   const hp = { url:s.final || url, name:sh.name || s.title || "", shogo:sh.shogo || "", form:sh.form || "", what:sh.what || "", good:join(sh.good), team:join(sh.team),
-    fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", stance:sh.stance || "", voice:sh.voice || "", worries:join(sh.worries), lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
-    why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
+    fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", stance:sh.stance || "", voice:sh.voice || "", worries:join(sh.worries), areas:(s.listings || {}).text || "", lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
+    why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}), ...((s.listings || {}).text ? { areas:`売買の物件ページ ${s.listings.pages}つから、プログラムが数えたもの` } : {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
   const pages = (s.pages || []).filter(x => !x.error).map(x => ({ top:"トップ", profile:"会社概要", case:"事例" }[x.kind] || x.kind));
   READ_LAST_CACHED = j.cached ? url : "";
   if (j.cached) return { hp, msg:`今日 ${new Date(j.cached).toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit" })} に読み取った結果を使いました（費用0）。HPを直したときは、もう一度押すと読み直します。` };

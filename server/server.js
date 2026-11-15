@@ -11,6 +11,7 @@ import { landSetup } from "./land.js";
 import { aroundSetup } from "./around.js";
 import { read as readSite } from "./shop/read.js";
 import { understand } from "./shop/understand.js";
+import { listings, areasText } from "./shop/listings.js";
 import { detectTriggers } from "./trigger.js";
 import { altlandSetup, altlandText } from "./altland.js"; // 代替え地の「例えば」（試験用） // きっかけの察知（試験用・リリースでは外す）
 
@@ -381,9 +382,10 @@ async function handleChat(req, res) {
       ms: Date.now() - t0,
       reply: text,
       memo: memo || undefined,
+      shopAreas: areasUsed(input.contextFixed, text),
     });
     return send(res, 200, {
-      text, memo, raw, triggers: rec.triggers,
+      text, memo, raw, triggers: rec.triggers, shopAreas: areasUsed(input.contextFixed, text),
       trace: { system: system.map((b) => b.text).join("\n\n"), messages: input.messages, cut: input.cut, maxTokens: MAX_TOKENS, queuedMs: rec.queuedMs }, // 試験用：送ったものをそのまま返す（原文は text）
       stopReason: r.stop_reason,
       usage: { input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheCreate: usage.cache_creation_input_tokens || 0 },
@@ -420,8 +422,9 @@ async function handleShopRead(req, res) {
   if (today() !== spentDate) loadSpent();
   if (spentUsd >= limits().dailyCap) return send(res, 429, { error: "daily_cap" });
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
-  const r = await readSite(target);
+  const [r, li] = await Promise.all([readSite(target), listings(target, { lookup: (la, ln) => around.lookup(la, ln), dataDir: DATA_DIR }).catch((e) => ({ error: e.message, areas: [] }))]);
   const site = { final: r.final, title: r.title, js_only: !!r.js_only, picked: r.picked, error: r.error,
+    listings: { text: areasText(li), areas: li.areas, pages: (li.found || []).length, external: li.external, error: li.error },
     pages: r.pages.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, imgs: p.imgs, imgHeavy: p.imgHeavy, error: p.error })) };
   const heavy = r.pages.filter(p => p.imgHeavy).map(p => ({ top: "トップ", profile: "会社概要", case: "事例" }[p.kind] || p.kind));
   if (r.error || r.js_only) { // 読めないHPには API を使わない。読めないこと自体を店に見せる
@@ -442,6 +445,16 @@ async function handleShopRead(req, res) {
     writeLog({ ...base, status: "error", httpStatus: e.status || 0, error: clip(e.message, 300), costUsd: base.retryLostUsd || 0, ms: Date.now() - t0 });
     return send(res, 502, { error: "upstream", detail: jaError(e, base.retries), site });
   } finally { release(); }
+}
+
+
+// 店のこと「扱う地区と物件」を、AIが返事で使ったか（ログ検証用）。渡した地区のうち、返事に名前が出たもの
+function areasUsed(fixed, reply) {
+  const m = String(fixed || "").match(/(?:扱う地区と物件（売買の物件から）|物件が出ている地区と種類（[^）]*）)：(.+?)。/);
+  if (!m) return undefined;
+  const given = m[1].split("／").map((x) => x.split("：")[0].trim()).filter(Boolean);
+  const core = (a) => a.replace(/(学区|駅徒歩圏|駅周辺|周辺)$/, "");
+  return { given, used: given.filter((a) => core(a).length >= 2 && String(reply || "").includes(core(a))) };
 }
 
 // ---- 画面の動き（開いた・地図・ピン・押したボタン・閉じた）。AI を呼ばない①〜③も含め、どこまで進んだかを残す ----
