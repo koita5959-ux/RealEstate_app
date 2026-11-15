@@ -60,6 +60,7 @@ Claude.ai の直し（小さなもの）は `RealEstate_Site/README.md` の末�
   （`#bot` の中に `section` の入れ子はない。ボットを組み込んだあとも入れ子にならないよう注意。入れ子になるなら、印のコメント `<!--read:skip-->…<!--/read:skip-->` に切り替える）
 - 画像の `alt`（「売却を検討する一戸建てのイメージ」など）は今の仕組みで材料に混ざる。害はないので、そのままでよい
 - 確認：読み取りの結果に「24時間いつでも」「公開データをもとに」が出てこないこと
+- 試験台：`_works/2026-11-15_ClaudeAI_確認用_サンプルHP_尾張23-1.html` を raw.githack で公開URLにしたもの（https://raw.githack.com/koita5959-ux/RealEstate_app/main/_works/2026-11-15_ClaudeAI_確認用_サンプルHP_尾張23-1.html ）を管理画面の指定URLに入れて読み取る。除外を入れる前と後で比べ、あわせて免許番号・担当地域・買取の3項目が拾えるかを見る
 
 ### 2-5 `{{DEVELOPER}}`
 
