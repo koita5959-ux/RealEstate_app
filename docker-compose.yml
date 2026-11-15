@@ -8,6 +8,7 @@ services:
       - "127.0.0.1:8110:80"
     volumes:
       - ./docs:/usr/share/nginx/html/docs:ro
+      - ./RealEstate_Site:/usr/share/nginx/html/sample:ro # サンプルHP（地区名の差し込みは後で api へ）
       - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
