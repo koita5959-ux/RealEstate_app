@@ -560,6 +560,8 @@ async function handleLand(req, res, url) {
   catch (e) { console.error("land:", e.message); return send(res, 502, { error: "land" }); }
 }
 
+import { renderSample, logSample, regionKnown } from "./sample.js";
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
@@ -571,6 +573,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);
+    if (req.method === "GET" && url.pathname === "/api/sample") {
+      const clip2 = (v) => String(v ?? "").slice(0, 32).replace(/[^\w.-]/g, "");
+      const r = clip2(url.searchParams.get("r")), k = clip2(url.searchParams.get("k")), by = clip2(url.searchParams.get("by"));
+      let html; try { html = renderSample(r); } catch { return send(res, 500, { error: "sample_missing" }); }
+      logSample(DATA_DIR, req, r, k, by, regionKnown(r));
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+      return res.end(html);
+    }
     if (req.method === "GET" && url.pathname === "/api/land") return await handleLand(req, res, url);
     if (req.method === "GET" && url.pathname === "/api/around") return await handleAround(req, res, url);
     if (req.method === "GET" && url.pathname === "/api/mapkey") { let key = ""; try { key = fs.readFileSync(MAP_KEY_FILE, "utf8").trim(); } catch { /* なければ「道から見る」を出さない */ } return send(res, 200, { key }); }
