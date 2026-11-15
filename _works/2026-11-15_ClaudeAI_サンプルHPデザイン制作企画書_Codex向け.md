@@ -169,4 +169,5 @@ RealEstate_Site/
 ## 付記：この後の流れ（Codexは読まなくてよい）
 
 - 完成後、Claude.ai が監修し、Claude Code 向けの実装解説を本書の末尾（または別紙）に追記する
+- 監修の返し方（2026-11-15 ユーザー了承）：小さな直し（文言・余白・色の微調整など）は Claude.ai が `RealEstate_Site/` を直接直し、commit の頭に `[ClaudeAI]` を付ける。判断が要る点は直さずに `_works/` の書面にまとめる。Claude Code は「直し終えた器＋判断の記録」を受け取る
 - Claude Code は `RealEstate_Site/` を元に、`/sample/` での配信（サーバーが `?r=` を見て `{{REGION}}` を書き込む）、`#bot-slot` へのタイプ2・3の組み込み、`data-inquiry` の送信、`data-read="skip"` の読み取り除外を行う
