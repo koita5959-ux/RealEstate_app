@@ -3,7 +3,7 @@
 - 作成：Claude.ai（構想立案プロジェクト）　2026-11-15
 - 宛先：Codex（デザイン制作）
 - 次の流れ：Codexの完成品 → Claude.ai が監修 → Claude.ai が Claude Code への解説を追記 → Claude Code が実装（配線）
-- 作業場所：`HTML_Site/RealEstate_Site/`（Linuxサーバー）。この企画書も同じフォルダに写しを置く。**このフォルダの中だけで完結する**
+- 作業場所：GitHub `koita5959-ux/RealEstate_app` リポジトリの `RealEstate_Site/` フォルダ（作成済み）。この企画書は `_works/` にあるものが正本
 - 土台：`_works/2026-11-14_ClaudeCode_AIボット不動産_HP制作企画書.md`（ページ構成）、`_works/2026-11-14_ClaudeAI_サンプルHP画像生成の依頼.md`（画像）
 
 ---
@@ -18,7 +18,7 @@
 - 送信処理・地図・チャット画面・ダミーの会話を作らない
 - フレームワーク・ビルド（React、Tailwind、npm など）を使わない
 - 外部の読み込み（Google Fonts、CDN、アイコンフォント、外部画像）を使わない
-- `RealEstate_Site/` の外に触れない。同じ `HTML_Site/` にある `RealEstate/`（旧サンプル「遠見不動産」）、`RealEstate_app【OLD】/`、ほかのサイトは**読むのも参考にするのもやめる**（名前が似ているが別物。古い作りに引っ張られないため）
+- 変更してよいのは `RealEstate_Site/` の中だけ。`server/`、`docs/`、`tools/`、`deploy/` などは基幹部なので変更禁止。`docs/` の既存画面（旧サンプル「遠見不動産」を含む）は、見た目を**参考にしない**（古い作りに引っ張られないため）
 
 配線（地区名の差し込み、ボット本体の埋め込み、メール送信、記録）は、あとで Claude Code が行います。あなたは、そのための **「受け口の印」** を決まった形で置いておくだけで構いません（4章）。
 
@@ -142,14 +142,14 @@
 
 ```
 RealEstate_Site/
-  （この企画書の写し … 置いてあるものはそのまま）
   index.html     … 1ページ全部
   style.css      … スタイル全部
   img/           … 空のフォルダ（.gitkeep だけ置く）
   README.md      … 下の報告
 ```
 
-- Git は使わない（このフォルダはリポジトリの外。あとで Claude Code がリポジトリへ取り込む）
+- `main` に commit・push してよい。ただし1つの commit に `RealEstate_Site/` の外の変更を混ぜない。commit メッセージの頭に `[Codex]` を付ける
+- `img/.gitkeep` と `README.md`（仮）は作成済み。README は6章の報告で上書きしてよい
 - `README.md` に書いてほしいこと：
   1. 使った配色（色コード）と、その色にした理由を一言
   2. 印（4章）を置いた場所の一覧
@@ -169,4 +169,4 @@ RealEstate_Site/
 ## 付記：この後の流れ（Codexは読まなくてよい）
 
 - 完成後、Claude.ai が監修し、Claude Code 向けの実装解説を本書の末尾（または別紙）に追記する
-- Claude Code は `RealEstate_Site/` をリポジトリ（例 `sample_design/`）へ取り込み、それを元に、`/sample/` での配信（サーバーが `?r=` を見て `{{REGION}}` を書き込む）、`#bot-slot` へのタイプ2・3の組み込み、`data-inquiry` の送信、`data-read="skip"` の読み取り除外を行う
+- Claude Code は `RealEstate_Site/` を元に、`/sample/` での配信（サーバーが `?r=` を見て `{{REGION}}` を書き込む）、`#bot-slot` へのタイプ2・3の組み込み、`data-inquiry` の送信、`data-read="skip"` の読み取り除外を行う
