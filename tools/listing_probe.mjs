@@ -70,9 +70,9 @@ async function probe(top) {
       r.geo.push({ town: k, n, hit: hit.properties.title, school: a.schools?.elementary || a.elementary || "", station: (a.stations || [])[0]?.name || "", d: (a.stations || [])[0]?.d ?? null });
     } catch (e) { r.geo.push({ town: k, n, error: e.message }); }
   }
-  // ぼかした呼び名：学区があれば「〇〇小学校区」、なければ駅（800m以内＝徒歩圏、2kmまで＝周辺、その先は使わない）、どちらもなければ郵便番号で丸めた名前
+  // ぼかした呼び名：学区があれば「〇〇学区」、なければ駅（800m以内＝徒歩圏、2kmまで＝周辺、その先は使わない）、どちらもなければ郵便番号で丸めた名前
   const blur = {};
-  for (const g of r.geo) { const b = g.school ? g.school.replace(/学校$/, "") + "学校区" : g.station && g.d <= 800 ? g.station + "駅徒歩圏" : g.station && g.d <= 2000 ? g.station + "駅周辺" : (r.rounded.find((x) => g.town in x.towns || Object.keys(x.towns).some((t) => g.town.endsWith(t)))?.label || null); if (b) blur[b] = (blur[b] || 0) + g.n; }
+  for (const g of r.geo) { const b = g.school ? g.school.replace(/(市立|町立|村立)?(小学校|学校)$/, "") + "学区" : g.station && g.d <= 800 ? g.station + "駅徒歩圏" : g.station && g.d <= 2000 ? g.station + "駅周辺" : (r.rounded.find((x) => g.town in x.towns || Object.keys(x.towns).some((t) => g.town.endsWith(t)))?.label || null); if (b) blur[b] = (blur[b] || 0) + g.n; }
   r.blur = Object.entries(blur).sort((a, b) => b[1] - a[1]);
   return r;
 }
