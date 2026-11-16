@@ -103,7 +103,7 @@ function t1Fill(text, land) {
 function t1Compose(land, biz, cats) { // cats（小分類）を渡すと、業態の代わりに道の表（type1_paths.csv）から作る
   const D = T1D, O = D.options, R = D.rules, ids = [], origin = {};
   if (cats) {
-    for (const c of cats) for (const r of T1P.rows) if (r.小分類 === c && r.opt && r.土地の種類.split(/s+/).includes(land.cat) && !(r.opt in origin)) { ids.push(r.opt); origin[r.opt] = T1P.small[c].biz; } // 道の表の上から、この土地の種類に合う④
+    for (const c of cats) for (const r of T1P.rows) if (r.小分類 === c && r.opt && r.土地の種類.split(/\s+/).includes(land.cat) && !(r.opt in origin)) { ids.push(r.opt); origin[r.opt] = T1P.small[c].biz; } // 道の表の上から、この土地の種類に合う④
   } else for (const b of biz) for (const i of (D.sets[b] || {})[land.cat] || []) if (!(i in origin)) { ids.push(i); origin[i] = b; } // 1番から埋め、重なりは一つに
   for (const r of R.tagBrings) if (land.tags.includes(r.tag) && !(r.option in origin)) { ids.push(r.option); origin[r.option] = "札"; } // 条件札が連れてくる
   const ok = ids.filter(i => (O[i].needs || []).every(h => land.data[h])); // 材料のない選択肢は出さない
