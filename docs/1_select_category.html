@@ -17,7 +17,6 @@
   th .ar { color:var(--red); }
   tr.f th { background:#fff; cursor:default; padding:2px; }
   tr.f input { width:100%; box-sizing:border-box; font:inherit; font-size:12px; padding:3px 4px; border:1px solid var(--line); border-radius:4px; }
-  td.w { color:#3a4452; }
   td.same { color:#b8c0ca; }
   .none { color:var(--sub); }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
@@ -26,6 +25,15 @@
   button.lite { background:#fff; color:var(--red); }
   .x { color:var(--sub); text-decoration:line-through; }
   .count { margin-left:8px; font-size:13px; color:var(--sub); }
+  .sim { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:8px; }
+  @media (max-width:900px) { .sim { grid-template-columns:1fr; } }
+  .col { border:1px solid var(--line); border-radius:6px; padding:8px; min-height:80px; }
+  .col h3 { font-size:14px; margin:0 0 6px; color:var(--red); }
+  .ch { display:block; width:100%; text-align:left; background:#fff; color:#1d2430; border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin:4px 0; cursor:pointer; }
+  .ch.sel { border-color:var(--blue); background:#eef4fb; }
+  .ch .why { display:block; font-size:11px; color:var(--sub); }
+  .ch .sc { float:right; font-size:11px; color:var(--red); }
+  .ctx { font-size:12px; color:var(--sub); margin-top:6px; }
 </style>
 </head>
 <body>
@@ -34,24 +42,33 @@
 <main>
   <section>
     <h2>この表について</h2>
-    <div class="hint">1行＝1つの道（大分類・小分類・④・⑤）。③のボタン（HPの見出し）は「手がかりの言葉」で小分類に当て、その小分類の行から④⑤を組みます。木は持たず、行の絞り込みで組むので、⑤から逆に③④を引くこともできます。<br>
-      ④は「土地の種類」に入っている土地でだけ出ます（K1 家がある／K2 空き家・古い家／K3 更地／K4 駐車場・畑など）。一般語の小分類（売却など）は、具体的な小分類と同じ見出しに当たれば外します。<br>
-      表の直しは Claude Code が行います（docs/data/type1_paths.csv。表計算ソフトでもそのまま開けます）。</div>
+    <div class="hint">③のボタンはHPの言葉のまま、内部で<b>小分類</b>に当てます（下の「③の当て方」）。④⑤はHPの言葉ではなく、<b>小分類と、それまでに押したボタンの言葉</b>から、次に出す選択肢を「④⑤の候補の表」から選びます。木は持たず、文脈で次が入れ替わります（同じ選択肢が別の小分類に出ても、④と⑤に重なってもよい）。<br>
+      選び方：同じ小分類の行は「重み」の順。「前の言葉」がある行は、押したボタンの言葉に当たったときだけ出して一つ上げる。別の小分類の行も、前の言葉が当たれば一つ下げて混ぜる。一度選んだものは出さない。前の段で見せて選ばれなかったものは二つ下げる。<br>
+      表の直しは Claude Code が行います（docs/data/type1_paths.csv・type1_choices.csv。表計算ソフトでもそのまま開けます）。</div>
   </section>
   <section>
-    <h2>URLで試す</h2>
-    <div class="hint">HPのURLを入れると、メニューから拾った見出しと、この表での当て方を並べます（AIなし。管理画面の組み立てには触りません）。</div>
-    <div class="row"><input type="url" id="url" placeholder="https://…（HPのトップのURL）"><button id="go">分類する</button></div>
-    <div id="try"></div>
+    <h2>選択の試し</h2>
+    <div class="hint">HPのURLを入れて「分類する」と、③のボタンが並びます（URLなしでも、小分類の一覧から試せます）。③→④→⑤と押すと、次の候補が順位つきで出ます。右上の数字は点数、下の小さな字はなぜ出たかです。</div>
+    <div class="row"><input type="url" id="url" placeholder="https://…（HPのトップのURL。空なら小分類の一覧で試す）"><button id="go">分類する</button></div>
+    <div id="picked" class="hint"></div>
+    <div class="sim">
+      <div class="col"><h3>③ のボタン</h3><div id="s3"></div></div>
+      <div class="col"><h3>④ の候補</h3><div id="s4"><span class="none">③を押すと出ます</span></div></div>
+      <div class="col"><h3>⑤ の候補</h3><div id="s5"><span class="none">④を押すと出ます</span></div></div>
+    </div>
+    <div class="ctx" id="ctx"></div>
   </section>
   <section>
-    <h2>道の表<span class="count" id="count"></span></h2>
-    <div class="hint">見出しを押すと並べ替え（もう一度で逆順）。下の欄に文字を入れると、その列で絞り込みます（複数の列を組み合わせられます）。上の行と同じ値は薄く出します。</div>
-    <div class="row"><button class="lite" id="clear">絞り込みを消す</button></div>
-    <div id="paths"></div>
+    <h2>④⑤の候補の表<span class="count" id="countQ"></span></h2>
+    <div class="hint">見出しを押すと並べ替え（もう一度で逆順）。下の欄に文字を入れると、その列で絞り込みます。小分類の「|」は「または」、前の言葉の「|」は「どれかが含まれれば」。</div>
+    <div class="row"><button class="lite" data-clear="Q">絞り込みを消す</button></div>
+    <div id="tQ"></div>
   </section>
   <section>
-    <h2>③の当て方の規則</h2>
+    <h2>③の当て方（小分類）<span class="count" id="countS"></span></h2>
+    <div class="hint">手がかりの言葉は上から順に当てます（上ほど細かい）。一般語の小分類（売却など）は、具体的な小分類と同じ見出しに当たれば外します。</div>
+    <div class="row"><button class="lite" data-clear="S">絞り込みを消す</button></div>
+    <div id="tS"></div>
     <div id="rules"></div>
   </section>
 </main>
@@ -59,49 +76,79 @@
 <script>
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
 const words = s => String(s || "").split("|").map(esc).join("・");
-let SORT = null, DESC = false; const FIL = {};
-function renderPaths() {
-  const H = T1P.head;
-  let rows = T1P.rows.map((r, i) => ({ ...r, "#":i + 1 }));
-  for (const [k, v] of Object.entries(FIL)) if (v) rows = rows.filter(r => String(r[k]).includes(v));
-  if (SORT) rows.sort((a, b) => { const x = a[SORT], y = b[SORT]; const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "ja"); return DESC ? -c : c; });
-  const cols = ["#", ...H];
-  const fl = document.activeElement && document.activeElement.dataset.fk; // 打っている欄を描き直し後も保つ
-  document.getElementById("paths").innerHTML = `<table><tr>${cols.map(k => `<th data-s="${esc(k)}">${esc(k)}${SORT === k ? `<span class="ar">${DESC ? "▼" : "▲"}</span>` : ""}</th>`).join("")}</tr>`
-    + `<tr class="f">${cols.map(k => k === "#" ? "<th></th>" : `<th><input data-fk="${esc(k)}" value="${esc(FIL[k] || "")}"></th>`).join("")}</tr>`
-    + rows.map((r, i) => `<tr>${cols.map(k => { const same = k !== "#" && i > 0 && rows[i - 1][k] === r[k] && cols.indexOf(k) <= 3;
-      return `<td class="${k === "手がかりの言葉" ? "w" : ""}${same ? " same" : ""}">${r[k] ? (k === "手がかりの言葉" ? words(r[k]) : esc(r[k])) : `<span class="none">—</span>`}</td>`; }).join("")}</tr>`).join("") + `</table>`;
-  document.getElementById("count").textContent = `${rows.length} / ${T1P.rows.length} 行`;
-  if (fl) { const e = document.querySelector(`[data-fk="${fl}"]`); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }
+// 並べ替え・絞り込みのできる表（Q＝候補の表、S＝小分類）
+const TB = {};
+function table(id, head, rows, opt) {
+  const st = TB[id] = TB[id] || { sort:null, desc:false, fil:{} }; st.head = head; st.rows = rows; st.opt = opt || {}; drawTable(id);
 }
-function renderRules() {
-  document.getElementById("rules").innerHTML = `<table><tr><th>規則</th><th>中身</th></tr>`
-    + `<tr><td>大枠の見出し</td><td>${words(T1C.broad.words)}<br>→ 小分類「${T1C.broad.into.map(esc).join("」「")}」を合わせる</td></tr>`
-    + `<tr><td>業務でない見出し（外す）</td><td class="w">${words(T1C.drop)}</td></tr>`
-    + `<tr><td>不動産以外の事業（外す）</td><td class="w">${words(T1C.outside)}</td></tr>`
-    + `<tr><td>同じ小分類が重なる</td><td>短い見出しを一つだけ残す。合わせ物は、中身が全部単独で出ていれば外す</td></tr></table>`;
+function drawTable(id) {
+  const st = TB[id], cols = ["#", ...st.head];
+  let rows = st.rows.map((r, i) => ({ ...r, "#":i + 1 }));
+  for (const [k, v] of Object.entries(st.fil)) if (v) rows = rows.filter(r => String(r[k] ?? "").includes(v));
+  if (st.sort) rows.sort((a, b) => { const k = st.sort, x = a[k], y = b[k]; const c = typeof x === "number" || /^\d+$/.test(x) && /^\d+$/.test(y) ? +x - +y : String(x).localeCompare(String(y), "ja"); return st.desc ? -c : c; });
+  const fl = document.activeElement && document.activeElement.dataset.fk && document.activeElement.dataset.tb === id ? document.activeElement.dataset.fk : null;
+  const same = st.opt.same || [];
+  document.getElementById("t" + id).innerHTML = `<table><tr>${cols.map(k => `<th data-tb="${id}" data-s="${esc(k)}">${esc(k)}${st.sort === k ? `<span class="ar">${st.desc ? "▼" : "▲"}</span>` : ""}</th>`).join("")}</tr>`
+    + `<tr class="f">${cols.map(k => k === "#" ? "<th></th>" : `<th><input data-tb="${id}" data-fk="${esc(k)}" value="${esc(st.fil[k] || "")}"></th>`).join("")}</tr>`
+    + rows.map((r, i) => `<tr>${cols.map(k => { const dim = same.includes(k) && i > 0 && rows[i - 1][k] === r[k];
+      const v = r[k]; return `<td class="${dim ? "same" : ""}">${v !== "" && v != null ? (st.opt.words || []).includes(k) ? words(v) : esc(v) : `<span class="none">—</span>`}</td>`; }).join("")}</tr>`).join("") + `</table>`;
+  document.getElementById("count" + id).textContent = `${rows.length} / ${st.rows.length} 行`;
+  if (fl) { const e = document.querySelector(`[data-tb="${id}"][data-fk="${fl}"]`); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }
 }
 document.addEventListener("click", e => {
-  const s = e.target.closest("th[data-s]"); if (s) { const k = s.dataset.s; DESC = SORT === k ? !DESC : false; SORT = k; renderPaths(); }
+  const s = e.target.closest("th[data-s]"); if (s) { const st = TB[s.dataset.tb], k = s.dataset.s; st.desc = st.sort === k ? !st.desc : false; st.sort = k; drawTable(s.dataset.tb); }
+  const c = e.target.closest("[data-clear]"); if (c) { const st = TB[c.dataset.clear]; st.fil = {}; st.sort = null; drawTable(c.dataset.clear); }
 });
-document.addEventListener("input", e => { const k = e.target.dataset.fk; if (k) { FIL[k] = e.target.value.trim(); renderPaths(); } });
-document.getElementById("clear").onclick = () => { for (const k in FIL) delete FIL[k]; SORT = null; renderPaths(); };
+document.addEventListener("input", e => { const id = e.target.dataset.tb, k = e.target.dataset.fk; if (id && k) { TB[id].fil[k] = e.target.value.trim(); drawTable(id); } });
+
+// ---- 選択の試し ----
+let SIM = { b3:null, b4:null }, LIST3 = [];
+const smallName = c => (T1P.small[c] ? T1P.small[c].big + "／" : "") + c;
+function chHtml(x, sel, key, i) { return `<button class="ch${sel ? " sel" : ""}" data-${key}="${i}">${x.score != null ? `<span class="sc">${x.score}</span>` : ""}${esc(x.label)}<span class="why">${esc(x.why || "")}</span></button>`; }
+function drawSim() {
+  document.getElementById("s3").innerHTML = LIST3.map((n, i) => chHtml({ label:n.label, why:n.cats.map(smallName).join("＋") }, SIM.b3 === i, "b3", i)).join("") || `<span class="none">なし</span>`;
+  const n3 = LIST3[SIM.b3];
+  if (!n3) { document.getElementById("s4").innerHTML = `<span class="none">③を押すと出ます</span>`; document.getElementById("s5").innerHTML = `<span class="none">④を押すと出ます</span>`; document.getElementById("ctx").textContent = ""; return; }
+  const c4 = t1Next(n3.cats, [n3.label], [], 6);
+  document.getElementById("s4").innerHTML = c4.map((x, i) => chHtml(x, SIM.b4 === i, "b4", i)).join("") || `<span class="none">候補なし（店が足す）</span>`;
+  const x4 = c4[SIM.b4];
+  if (!x4) { document.getElementById("s5").innerHTML = `<span class="none">④を押すと出ます</span>`; document.getElementById("ctx").textContent = `文脈：小分類 ${n3.cats.join("＋")}／言葉「${n3.label}」`; return; }
+  const c5 = t1Next(n3.cats, [n3.label, x4.label], [x4.label], 6, c4.map(x => x.label));
+  document.getElementById("s5").innerHTML = c5.map(x => chHtml(x, false, "b5", 0)).join("") || `<span class="none">候補なし（問い合わせだけ）</span>`;
+  document.getElementById("ctx").textContent = `文脈：小分類 ${n3.cats.join("＋")}／言葉「${n3.label}」「${x4.label}」`;
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-b3]"); if (a) { SIM = { b3:+a.dataset.b3, b4:null }; drawSim(); }
+  const b = e.target.closest("[data-b4]"); if (b) { SIM.b4 = +b.dataset.b4; drawSim(); }
+});
+function allSmall() { return Object.keys(T1P.small).map(k => ({ label:k, cats:[k] })); }
 document.getElementById("go").onclick = async () => {
-  const url = document.getElementById("url").value.trim(), box = document.getElementById("try");
-  if (!url) return;
-  box.innerHTML = `<p class="hint">HPを読んでいます…</p>`;
+  const url = document.getElementById("url").value.trim(), box = document.getElementById("picked");
+  SIM = { b3:null, b4:null };
+  if (!url) { LIST3 = allSmall(); box.textContent = "URLなし：小分類の名前をそのまま③のボタンにしています。"; return drawSim(); }
+  box.textContent = "HPを読んでいます…";
   try {
     const by = new URLSearchParams(location.search).get("by") || "visitor";
     const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
-    if (r.error) { box.innerHTML = `<p class="hint">HPを開けませんでした（${esc(r.error)}）。</p>`; return; }
-    const labels = (r.items || []).map(i => i.label), got = t1Classify(labels), kept = new Set(got.map(n => n.label));
-    const norm = l => String(l).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1");
-    box.innerHTML = `<table><tr><th>③のボタン（HPの言葉）</th><th>大分類／小分類</th></tr>`
-      + (got.length ? got.map(n => `<tr><td><b>${esc(n.label)}</b></td><td>${n.cats.map(c => esc((T1P.small[c] ? T1P.small[c].big + "／" : "") + c)).join("＋")}</td></tr>`).join("") : `<tr><td colspan="2" class="none">拾えた見出しがありません（初期の4業態が出ます）</td></tr>`)
-      + `</table><p class="hint">拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）</p>`;
-  } catch (e) { box.innerHTML = `<p class="hint">HPを読めませんでした（時間切れか通信の失敗）。</p>`; }
+    if (r.error) { box.textContent = `HPを開けませんでした（${r.error}）。`; LIST3 = []; return drawSim(); }
+    const labels = (r.items || []).map(i => i.label); LIST3 = t1Classify(labels);
+    const kept = new Set(LIST3.map(n => n.label)), norm = l => String(l).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1");
+    box.innerHTML = `拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）`;
+  } catch (e) { box.textContent = "HPを読めませんでした（時間切れか通信の失敗）。"; LIST3 = []; }
+  drawSim();
 };
-t1Load().then(() => { renderPaths(); renderRules(); });
+
+t1Load().then(() => {
+  table("Q", T1Q.head, T1Q.rows, { words:["前の言葉", "小分類"] });
+  const S = Object.entries(T1P.small).map(([k, v]) => ({ 大分類:v.big, 小分類:k, 手がかりの言葉:v.words, 一般語:v.generic ? "一般語" : "", 候補の数:T1Q.rows.filter(r => r.小分類.split("|").includes(k)).length }));
+  table("S", ["大分類", "小分類", "手がかりの言葉", "一般語", "候補の数"], S, { words:["手がかりの言葉"], same:["大分類"] });
+  document.getElementById("rules").innerHTML = `<table><tr><th>規則</th><th>中身</th></tr>`
+    + `<tr><td>大枠の見出し</td><td>${words(T1C.broad.words)}<br>→ 小分類「${T1C.broad.into.map(esc).join("」「")}」を合わせる</td></tr>`
+    + `<tr><td>業務でない見出し（外す）</td><td>${words(T1C.drop)}</td></tr>`
+    + `<tr><td>不動産以外の事業（外す）</td><td>${words(T1C.outside)}</td></tr>`
+    + `<tr><td>同じ小分類が重なる</td><td>短い見出しを一つだけ残す。合わせ物は、中身が全部単独で出ていれば外す</td></tr></table>`;
+  LIST3 = allSmall(); drawSim();
+});
 </script>
 </body>
 </html>

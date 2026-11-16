@@ -2,7 +2,7 @@
 // 決まりは _works/2026-11-16_ClaudeAI_タイプ1初期設定/tryout.py の compose・fill・reply をそのまま移したもの。
 // アプリの一式は data/type1_defaults.json（読むだけ）。店の設定（重視する業務内容・受けの差分）は localStorage「reType1」。
 // 当てはめ案：_works/2026-11-16_ClaudeCode_タイプ1の当てはめ案.md
-let T1D = null, T1C = null, T1P = null; // アプリの一式／③の当て方の規則／道の表（type1_paths.csv）
+let T1D = null, T1C = null, T1P = null, T1Q = null; // アプリの一式／③の当て方の規則／道の表（type1_paths.csv）／選択肢の候補の表（type1_choices.csv）
 // 道の表：1行＝1つの道（大分類・小分類・手がかりの言葉・一般語・④・⑤・土地の種類・業態）。木は持たず、行の絞り込みで③④⑤を組む
 function t1Csv(text) {
   const rows = []; let row = [], cell = "", q = false;
@@ -19,14 +19,29 @@ function t1Csv(text) {
 }
 async function t1Load() {
   if (!T1D) {
-    const [d, c, p] = await Promise.all(["data/type1_defaults.json", "data/type1_categories.json", "data/type1_paths.csv"].map(u => fetch(u, { cache:"no-cache" }).then(r => u.endsWith(".csv") ? r.text() : r.json())));
-    T1D = d; T1C = c; T1P = t1Csv(p);
+    const [d, c, p, q] = await Promise.all(["data/type1_defaults.json", "data/type1_categories.json", "data/type1_paths.csv", "data/type1_choices.csv"].map(u => fetch(u, { cache:"no-cache" }).then(r => u.endsWith(".csv") ? r.text() : r.json())));
+    T1D = d; T1C = c; T1P = t1Csv(p); T1Q = t1Csv(q);
     const bizOf = Object.fromEntries(Object.entries(T1D.businesses).map(([b, x]) => [x.sub, b]));
     const optOf = Object.fromEntries(Object.entries(T1D.options).map(([id, o]) => [o.label, id]));
     T1P.small = {}; // 小分類ごと：手がかりの言葉・一般語・業態（表の上にあるものほど先に当てる）
     for (const r of T1P.rows) { r.opt = optOf[r["④"]] || null; if (!T1P.small[r.小分類]) T1P.small[r.小分類] = { big:r.大分類, words:r.手がかりの言葉, generic:!!r.一般語, biz:bizOf[r.業態] || "b3" }; }
   }
   return T1D;
+}
+// 次の選択肢：小分類（cats）と、通ってきた言葉（③のボタン・④の選択…）から、候補の表の行を選ぶ。言語エンジンのように、文脈で次が入れ替わる
+// 同じ小分類の行は重みの順。「前の言葉」のある行は、文脈に当たったときだけ出して一つ上げる。別の小分類の行も、前の言葉が当たれば一つ下げて混ぜる。選んだものは出さない
+function t1Next(cats, ctx, chosen, n, shown) { // shown：前の段で見せて選ばれなかったもの（一つ下げる。次の段に新しいものが上がるように）
+  const text = [].concat(ctx).join(" "), out = [];
+  for (const r of T1Q.rows) {
+    if (!r.選択肢 || (chosen || []).includes(r.選択肢)) continue;
+    const mine = r.小分類.split("|").some(c => cats.includes(c)), cond = r.前の言葉, hit = cond && new RegExp(cond).test(text);
+    if (cond && !hit) continue;
+    if (!mine && !hit) continue;
+    const score = (+r.重み || 1) + (mine ? (hit ? 1 : 0) : -1) - ((shown || []).includes(r.選択肢) ? 2 : 0);
+    out.push({ label:r.選択肢, score, why:mine ? (hit ? "小分類＋前の言葉「" + text.match(new RegExp(cond))[0] + "」" : "小分類") : "前の言葉「" + text.match(new RegExp(cond))[0] + "」（ほかの小分類から）", row:r });
+  }
+  const seen = new Set();
+  return out.sort((a, b) => b.score - a.score).filter(x => !seen.has(x.label) && seen.add(x.label)).slice(0, n || 5);
 }
 // HPの見出しを小分類に当てる。ボタン名は見出しのまま、内部は cats（小分類の名前）。同じ小分類は短い見出し一つに、大枠は規則の小分類を合わせる
 function t1Classify(labels) {
