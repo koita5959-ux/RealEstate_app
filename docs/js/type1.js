@@ -97,7 +97,11 @@ function t1Fix(node, land, trail) {
   if (!node.kids) node.kids = t1Kids(node, land, trail).map(({ why, ...n }) => n);
   return node.kids;
 }
-function t1Tpl(node) { return node.text != null ? node.text : ""; }
+function t1Tpl(node) { // 店が書いた文があればそれ。なければ初期の文（③は小分類ごと、④⑤は候補の表の「返す文」）
+  if (node.text != null) return node.text;
+  if (node.cats) return (T1C.reply3 || {})[node.cats[0]] || "";
+  const r = T1Q.rows.find(x => x.選択肢 === node.label); return r ? r.返す文 || "" : "";
+}
 function t1Text(node, land) { return t1Fill(t1Tpl(node), land); }
 function t1AskOf(node, depth) { return node.ask != null ? node.ask : depth === 0 ? T1_ASK3 : T1_ASK4; }
 const T1_HOLE = /\{([^}]+)\}/g;
