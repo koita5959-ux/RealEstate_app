@@ -23,32 +23,26 @@ async function goStep(i, lead) {
   T1O = t1Shop();
   T1L = landOf(T1S, S.sheet, S.landRaw, S.around, S.area, t1Place());
   S.sheet.タイプ1の分け = `${T1D.categories[T1L.cat]}／条件札：${T1L.tags.map(t => T1D.tags[t]).join("・") || "なし"}`;
-  step(T1O.top, 4, null);
+  step(T1O.top, 4, []);
   inquiryBar();
   saveSession();
   function inq(row, q, kind) {
     const b = t1Btn(T1_INQ, "ピンの場所・土地の様子・選んだ道を添えます", kind === "final" ? "final" : "mail");
     b.onclick = () => { t1Done(row, b); t1Mail(NUM[q - 1], kind); }; row.appendChild(b);
   }
-  function step(list, q, biz) { // q は記録の番号（表示は q−1：4＝③）
+  function step(list, q, trail) { // q は記録の番号（表示は q−1：4＝③）。trail＝③からここまでに選んだ節
     const row = newRow(q); row.classList.add("t1row");
-    list.forEach((n, k) => {
-      const b = t1Btn(n.label, n.grey ? `${n.grey.reason} →「${T1D.options[n.grey.goto].label}」を見る` : n.opt ? t1Sub(T1L, n.opt) : "", n.grey ? "grey" : n.first ? "first" : "");
-      if (n.first && !n.grey) b.insertAdjacentHTML("afterbegin", `<span class="t1m">${esc(T1D.rules.firstMarkLabel)}（${esc(n.first)}）</span>`);
-      b.dataset.opt = n.opt || "";
-      b.onclick = () => n.grey ? row.querySelector(`button[data-opt="${n.grey.goto}"]`)?.click() : pick(n, k, b);
-      row.appendChild(b);
-    });
+    list.forEach((n, k) => { const b = t1Btn(n.label, ""); b.onclick = () => pick(n, k, b); row.appendChild(b); });
     if (q > 4 || !list.length) inq(row, q, list.length ? "mail" : "final");
     document.getElementById("talk").appendChild(row);
     function pick(n, k, b) {
       t1Done(row, b);
       PATH.push({ press:n.label, q, opt:k + 1 }); renderRoute();
-      ev("choice", { q, press:n.label, id:n.opt || (n.nx && n.nx.id) || null, biz:n.biz || biz });
+      ev("choice", { q, press:n.label, cats:(trail[0] || n).cats || null });
       if (q === 4) S.sheet.相談目的 = esc(n.label);
       me(n.label);
-      const bz = n.biz || biz, kids = t1Kids(n, T1L), text = t1Text(n, T1L, bz);
-      if (kids.length) { say([text, t1AskOf(n)].filter(Boolean).map(esc).join("<br>") || esc(T1_ASK3)); step(kids, q + 1, bz); }
+      const t = trail.concat(n), kids = t1Kids(n, T1L, t), text = t1Text(n, T1L);
+      if (kids.length) { say([text, t1AskOf(n, t.length - 1)].filter(Boolean).map(esc).join("<br>")); step(kids, q + 1, t); }
       else { say([text, T1D.rules.close].filter(Boolean).map(esc).join("<br>")); const fin = newRow(q + 1); fin.classList.add("t1row"); inq(fin, q + 1, "final"); document.getElementById("talk").appendChild(fin); }
       saveSession();
     }

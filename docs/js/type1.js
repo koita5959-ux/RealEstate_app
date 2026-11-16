@@ -61,53 +61,45 @@ function t1Classify(labels) {
   return [...by.values()].filter(n => n.cats.length === 1 || !n.cats.every(c => one.has(c))) // 合わせ物は、中身が全部単独で出ていれば外す
     .sort((a, b) => a.at - b.at).map(({ at, ...n }) => n);
 }
-// ---- 店が組む選択の木（③から先）。保存は localStorage「reType1」（v:2。v:1 の「重視する業務内容」は読まない） ----
-// 節：{ label, cats?（③：小分類。④⑤は道の表から）, biz?（返事の受けの業態）, opt?（④：一式の options のキー）, nx?（⑤：options の next の一つ）,
-//       text?（選んだときの返事を店が書いた文）, ask?（次の問いを店が書いた文）, kids?（ない＝初期値のまま。[]＝子なし＝問い合わせだけ） }
+// ---- 店が組む選択の木（③から先）。保存は localStorage「reType1」（v:3。前の版の保存は読まない） ----
+// 節：{ label, cats?（③：小分類）, gen?（④⑤：候補の表から出したもの。4 か 5）, text?（選んだ客に返す文。店が書く）, ask?（次の問い）,
+//       kids?（ない＝初期値のまま＝候補の表から文脈で出す。[]＝子なし＝問い合わせだけ） }
+// trail＝③からその節までの並び（文脈）。④⑤は小分類と trail の言葉で決まる（言語エンジンのように）。土地では変わらない
 const T1_ASK3 = "この土地で考えられる道です。気になるものを選んでください。";
+const T1_ASK4 = "もう少し詳しく、どれが気になりますか。";
 const T1_INQ = "ここまでの情報で問い合わせを送る";
-function t1Default(items) { // HPから拾った見出し（小分類に当てたもの。なければ4業態）が③になる
+const T1_N = 5; // 一つの段に出す候補の数
+const T1_BASE = [ // HPから何も拾えないときの③
+  { label:"売りたい", cats:["売却（仲介）"] }, { label:"早く手放したい", cats:["早く売る・買取"] },
+  { label:"土地を活かしたい", cats:["土地活用", "空き家・空き地"] }, { label:"相続した・相続する", cats:["相続"] },
+];
+function t1Default(items) { // HPから拾った見出し（小分類に当てたもの。なければ T1_BASE）が③になる
   const cl = items && items.length ? t1Classify(items.map(i => i.label)) : [];
-  const top = cl.length ? cl
-    : ["b3", "b1", "b2", "b4"].map(b => ({ label:T1D.businesses[b].name, biz:b }));
-  return { v:2, url:"", top };
+  return { v:3, url:"", top:(cl.length ? cl : T1_BASE).map(n => ({ label:n.label, cats:n.cats })) };
 }
 function t1Shop() {
-  try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 2 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
+  try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 3 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
   return t1Default();
 }
-// 子の一覧。初期値のままの節は、道の表（なければ一式）から作る（③の子は試しの土地で入れ替わる）
-function t1Kids(node, land) {
+// 子の一覧。trail は③からこの節まで（この節を含む）
+function t1Kids(node, land, trail) {
   if (node.kids) return node.kids;
-  if (node.opt) {
-    const o = T1D.options[node.opt], next = o.next || [];
-    const want = node.cats ? [...new Set(T1P.rows.filter(r => node.cats.includes(r.小分類) && r.opt === node.opt && r["⑤"]).map(r => r["⑤"]))] : null; // 表に行がない④（条件札が連れてきたもの）は、一式の⑤をそのまま
-    return (want && want.length ? want.map(l => next.find(n => n.label === l)).filter(Boolean) : next).map(n => ({ label:n.label, nx:n, kids:[] }));
-  }
-  if (node.cats || node.biz) {
-    const c = node.cats ? t1Compose(land, null, node.cats) : t1Compose(land, [node.biz]);
-    return c.main.concat(c.more).map(id => ({ label:T1D.options[id].label, opt:id, cats:node.cats,
-      first:c.first && c.first.id === id ? c.first.why : undefined, grey:c.grey[id] ? { reason:c.grey[id].reason, goto:c.grey[id].goto } : undefined }));
+  const t = trail || [node], cats = t[0].cats || [], words = t.map(n => n.label);
+  if (t.length === 1) return t1Next(cats, words, [], T1_N).map(x => ({ label:x.label, gen:4, why:x.why }));
+  if (t.length === 2 && node.gen === 4) {
+    const shown = t1Next(cats, [t[0].label], [], T1_N).map(x => x.label);
+    return t1Next(cats, words, words.slice(1), T1_N, shown).map(x => ({ label:x.label, gen:5, why:x.why, kids:[] }));
   }
   return [];
 }
-// 初期値のままの子を、今の一覧で固める（店が直すときだけ。土地しだいの印は外す）
-function t1Fix(node, land) {
-  if (!node.kids) node.kids = t1Kids(node, land).map(({ first, grey, ...n }) => n);
+// 初期値のままの子を、今の一覧で固める（店が直すときだけ）
+function t1Fix(node, land, trail) {
+  if (!node.kids) node.kids = t1Kids(node, land, trail).map(({ why, ...n }) => n);
   return node.kids;
 }
-// 選んだときの返事（書かれた文があればそれ。穴は土地の値で埋める）
-function t1Tpl(node, biz) {
-  if (node.text != null) return node.text;
-  if (node.opt) { const o = T1D.options[node.opt]; return [o.uke[biz] || o.uke._ || "", o.num || o.plain || ""].join(""); }
-  if (node.nx) return node.nx.reply || "";
-  return "";
-}
-function t1Text(node, land, biz) {
-  if (node.text == null && node.opt) { const r = t1Reply(land, [biz], node.opt, { [node.opt]:biz }, null); return [r.uke, r.facts, r.body].join(""); }
-  return t1Fill(t1Tpl(node, biz), land);
-}
-function t1AskOf(node) { return node.ask != null ? node.ask : node.opt ? T1D.options[node.opt].ask || "" : node.biz ? T1_ASK3 : ""; }
+function t1Tpl(node) { return node.text != null ? node.text : ""; }
+function t1Text(node, land) { return t1Fill(t1Tpl(node), land); }
+function t1AskOf(node, depth) { return node.ask != null ? node.ask : depth === 0 ? T1_ASK3 : T1_ASK4; }
 const T1_HOLE = /\{([^}]+)\}/g;
 // 穴に値を入れる。値のない穴を含む文は、その一文ごと落とす（「現地で確認」には差し替えない）
 function t1Fill(text, land) {
