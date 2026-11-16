@@ -88,7 +88,7 @@ const isAuto = d => d > 0 && !nodeAt(d - 1).kids;
 
 function itemHtml(n, d, i, sel) {
   const kids = t1Kids(n, land());
-  const sub = n.grey ? `${n.grey.reason} →「${T1D.options[n.grey.goto].label}」` : n.opt ? t1Sub(land(), n.opt) : "";
+  const sub = n.grey ? `${n.grey.reason} →「${T1D.options[n.grey.goto].label}」` : n.opt ? t1Sub(land(), n.opt) : n.cats ? "内部の分類：" + n.cats.map(c => T1C.cats[c].name).join("＋") : "";
   const k = kids.length ? `<span class="k">→ ${QN[d + 1]} 選択肢 ${kids.length}つ</span>` : `<span class="k leaf">→ 子なし（問い合わせだけ出ます）</span>`;
   const label = EDIT === `${d}:${i}` ? `<input data-in="${d}:${i}" value="${esc(n.label)}">` : `<span class="l">${esc(n.label)}</span>`;
   return `<div class="item${sel ? " sel" : ""}${n.grey ? " grey" : ""}" data-go="${d}:${i}"><span class="no">${i + 1}</span><span class="body">`

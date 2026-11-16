@@ -2,18 +2,37 @@
 // 決まりは _works/2026-11-16_ClaudeAI_タイプ1初期設定/tryout.py の compose・fill・reply をそのまま移したもの。
 // アプリの一式は data/type1_defaults.json（読むだけ）。店の設定（重視する業務内容・受けの差分）は localStorage「reType1」。
 // 当てはめ案：_works/2026-11-16_ClaudeCode_タイプ1の当てはめ案.md
-let T1D = null; // アプリの一式
+let T1D = null, T1C = null; // アプリの一式／③のカテゴリーの表
 async function t1Load() {
-  if (!T1D) T1D = await (await fetch("data/type1_defaults.json", { cache:"no-cache" })).json();
+  if (!T1D) [T1D, T1C] = await Promise.all(["data/type1_defaults.json", "data/type1_categories.json"].map(async u => (await fetch(u, { cache:"no-cache" })).json()));
   return T1D;
+}
+// HPの見出しをカテゴリーに当てる。ボタン名は見出しのまま、内部は cats。同じカテゴリーは短い見出し一つに、大枠は2〜3カテゴリーを合わせる
+function t1Classify(labels) {
+  const re = s => new RegExp(s, "i"), drop = re(T1C.drop), out = re(T1C.outside), keys = Object.keys(T1C.cats);
+  const by = new Map();
+  for (const raw of labels) {
+    const label = String(raw).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim();
+    if (!label || drop.test(label) || out.test(label)) continue;
+    let cats = keys.filter(k => k !== "consult" && re(T1C.cats[k].words).test(label));
+    const sp = cats.filter(k => !T1C.generic.includes(k));
+    cats = (sp.length ? sp : cats.slice(0, 1)).slice(0, 3); // 一般的な言葉（売却など）は、具体的なカテゴリーがあれば外す
+    if (!cats.length) { if (!re(T1C.cats.consult.words).test(label)) continue; cats = T1C.cats.consult.multi.slice(); }
+    const key = cats.join("+"), had = by.get(key);
+    if (!had || label.length < had.label.length) by.set(key, { label, cats, biz:T1C.cats[cats[0]].biz, at:had ? had.at : by.size });
+  }
+  const one = new Set([...by.values()].filter(n => n.cats.length === 1).map(n => n.cats[0]));
+  return [...by.values()].filter(n => n.cats.length === 1 || !n.cats.every(c => one.has(c))) // 合わせ物は、中身が全部単独で出ていれば外す
+    .sort((a, b) => a.at - b.at).map(({ at, ...n }) => n);
 }
 // ---- 店が組む選択の木（③から先）。保存は localStorage「reType1」（v:2。v:1 の「重視する業務内容」は読まない） ----
 // 節：{ label, biz?（③：④⑤の初期値を借りる業態）, opt?（④：一式の options のキー）, nx?（⑤：options の next の一つ）,
 //       text?（選んだときの返事を店が書いた文）, ask?（次の問いを店が書いた文）, kids?（ない＝初期値のまま。[]＝子なし＝問い合わせだけ） }
 const T1_ASK3 = "この土地で考えられる道です。気になるものを選んでください。";
 const T1_INQ = "ここまでの情報で問い合わせを送る";
-function t1Default(items) { // HPから拾った見出し（なければ4業態）が③になる
-  const top = items && items.length ? items.map(i => ({ label:i.label, biz:i.biz }))
+function t1Default(items) { // HPから拾った見出し（カテゴリーに当てたもの。なければ4業態）が③になる
+  const cl = items && items.length ? t1Classify(items.map(i => i.label)) : [];
+  const top = cl.length ? cl
     : ["b3", "b1", "b2", "b4"].map(b => ({ label:T1D.businesses[b].name, biz:b }));
   return { v:2, url:"", top };
 }
@@ -24,8 +43,8 @@ function t1Shop() {
 // 子の一覧。初期値のままの節は、一式から作る（③の子は試しの土地で入れ替わる）
 function t1Kids(node, land) {
   if (node.kids) return node.kids;
-  if (node.biz) {
-    const c = t1Compose(land, [node.biz]);
+  if (node.cats || node.biz) {
+    const c = node.cats ? t1Compose(land, null, node.cats) : t1Compose(land, [node.biz]);
     return c.main.concat(c.more).map(id => ({ label:T1D.options[id].label, opt:id,
       first:c.first && c.first.id === id ? c.first.why : undefined, grey:c.grey[id] ? { reason:c.grey[id].reason, goto:c.grey[id].goto } : undefined }));
   }
@@ -56,9 +75,12 @@ function t1Fill(text, land) {
     .map(s => s.replace(T1_HOLE, (_, h) => String(land.data[h]))).join("");
 }
 // ④の顔ぶれ。biz は重視する業務内容（順番つき）
-function t1Compose(land, biz) {
+function t1Compose(land, biz, cats) { // cats を渡すと、業態の代わりにカテゴリーの表（type1_categories.json）の opts から作る
   const D = T1D, O = D.options, R = D.rules, ids = [], origin = {};
-  for (const b of biz) for (const i of (D.sets[b] || {})[land.cat] || []) if (!(i in origin)) { ids.push(i); origin[i] = b; } // 1番から埋め、重なりは一つに
+  if (cats) {
+    const fit = new Set(Object.values(D.sets).flatMap(s => s[land.cat] || [])); // この土地の種類に合う選択肢
+    for (const c of cats) for (const i of T1C.cats[c].opts || []) if (fit.has(i) && !(i in origin)) { ids.push(i); origin[i] = T1C.cats[c].biz; }
+  } else for (const b of biz) for (const i of (D.sets[b] || {})[land.cat] || []) if (!(i in origin)) { ids.push(i); origin[i] = b; } // 1番から埋め、重なりは一つに
   for (const r of R.tagBrings) if (land.tags.includes(r.tag) && !(r.option in origin)) { ids.push(r.option); origin[r.option] = "札"; } // 条件札が連れてくる
   const ok = ids.filter(i => (O[i].needs || []).every(h => land.data[h])); // 材料のない選択肢は出さない
   const grey = {};

@@ -1,0 +1,28 @@
+{
+  "version": "0.1",
+  "note": "タイプ1の③：HPのメニュー見出し（ボタン名はHPの言葉のまま）を、内部のカテゴリーに当てる表。Claude Code 2026-11-16。材料＝Places URL探しの93社（見出しが拾えたのは55社）＋サンプル10社。words は上から順に当てる（先に書いたものほど細かい）。一つの見出しが2〜3のカテゴリーに当たれば、それらを合わせた選択肢になる。同じ店で同じカテゴリーが重なれば、短い見出しを一つだけ残す。opts＝④の初期値（type1_defaults.json の options のキー、上から並ぶ）。土地の種類に合わない選択肢は出ない。opts が空のカテゴリーは④を店が足す。不足はURLをもらって、この表を直す。",
+  "generic": ["sell", "appraise", "cost"],
+  "genericNote": "一般的な言葉のカテゴリー。具体的なカテゴリーと一緒に当たれば外す（アパート売却＝収益物件）。一般的なものだけなら、上にある一つ（売却査定＝査定・相場）",
+  "drop": "事例|体験談|知恵袋|関連記事|コラム|フォーム|Q&A|Ｑ＆Ａ|講座|勉強会|価値観|お勧め|おすすめ|基礎知識|業者の方へ|来店予約|実績|背景|ノウハウ|の流れへ|事業内容へ",
+  "outside": "公共工事|基礎工事|土木|生コン|石材|鉄鋼|太陽光|ソーラー|リゾート|物品販売|保検|保険|不用品|一般管理",
+  "cats": {
+    "fast":     { "name":"早く売る・買取",        "biz":"b2", "words":"買取|買い取|早く売りたい|期間重視|狭小地", "opts":["dev_sell","sell","demolish","neighbor"] },
+    "leaseback":{ "name":"売っても住み続ける",    "biz":"b2", "words":"リースバック|住み続けたい", "opts":["sell","keep","sell_later"] },
+    "loan":     { "name":"ローン・返済の悩み",    "biz":"b3", "words":"任意売却|返済|ローン|資金計画|差押|差し押さえ", "opts":["sell","move","keep"] },
+    "inherit":  { "name":"相続",                  "biz":"b4", "words":"相続|遺産|遺言|贈与", "opts":["inherit_got","inherit_plan","sell","keep"] },
+    "vacant":   { "name":"空き家・空き地",        "biz":"b3", "words":"空き家|空家|空き地|空地", "opts":["asis_rent","demolish","sell","park_rent","neighbor"] },
+    "demolish": { "name":"解体",                  "biz":"b3", "words":"解体", "opts":["demolish","sell","park_rent","build_rent"] },
+    "move":     { "name":"住み替え",              "biz":"b3", "words":"住み替え|住替え", "opts":["move","sell","rebuild","keep"] },
+    "landuse":  { "name":"土地活用",              "biz":"b3", "words":"土地活用|活用", "opts":["build_rent","park_rent","change_use","asis_rent","neighbor"] },
+    "develop":  { "name":"開発・分譲・建築",      "biz":"b2", "words":"分譲|開発|新築|注文住宅|建築|建設事業", "opts":["dev_sell","build_rent","neighbor"] },
+    "reno":     { "name":"リフォーム・リノベーション","biz":"b2", "words":"リフォーム|リノベ", "opts":["rebuild","asis_rent","sell"] },
+    "income":   { "name":"収益物件・アパート",    "biz":"b1", "words":"アパート|収益|投資|ワンルーム", "opts":["sell","build_rent","keep"] },
+    "rent":     { "name":"賃貸・管理",            "biz":"b1", "words":"賃貸|管理", "opts":["asis_rent","build_rent","park_rent","keep"] },
+    "cost":     { "name":"費用・税金",            "biz":"b4", "words":"諸費用|費用|税金|税", "opts":["sell","sell_later","keep"] },
+    "appraise": { "name":"査定・相場",            "biz":"b1", "words":"査定|相場", "opts":["sell_later","sell","keep"] },
+    "sell":     { "name":"売却（仲介）",          "biz":"b1", "words":"売却|売りたい|売る|仲介|売主", "opts":["sell","sell_later","neighbor","keep"] },
+    "buy":      { "name":"購入・物件探し",        "biz":"b1", "words":"購入|物件探し|買いたい|物件情報", "opts":[] },
+    "after":    { "name":"アフターサポート",      "biz":"b1", "words":"アフター|保証|お引渡し後", "opts":[] },
+    "consult":  { "name":"総合相談（大枠）",      "biz":"b3", "words":"事業内容|事業紹介|事業案内|サービス|サポート|ご相談|相談|しごと|コンサル|business|service", "multi":["sell","landuse","inherit"] }
+  }
+}
