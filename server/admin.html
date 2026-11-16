@@ -50,6 +50,9 @@
   table.sess th .rz:hover, table.sess th .rz.on { background:#9db7d6; }
   table.sess a.btn-user-link, table.sess a.btn-user-link.replay { font-size:10px; padding:0 2px; line-height:1.35; border-radius:2px; white-space:nowrap; } /* 再表示・渡す：文字ぎりぎりの反転の箱 */
   table.sess td.btnc, table.sess th:nth-last-child(-n+2) { text-align:right; padding:4px 2px; } table.sess td.btnc:last-child, table.sess th:last-child { padding-right:6px; }
+  /* 表の箱：決めた行数を超えたら箱の中でスクロール（見出しは上に残る） */
+  .scroll[data-rows] { overflow-y:auto; border-radius:8px; }
+  .scroll[data-rows] th { position:sticky; top:0; z-index:2; }
 </style>
 </head>
 <body>
@@ -194,20 +197,20 @@ function viewCost() {
   </div>
   <div class="two">
     <div><h2>日ごとの推定費用（直近14日）</h2>${bars(dayRows, r => r.est, r => r.day, r => `${usd(r.est)}（${jpy(r.est)}）`)}</div>
-    <div><h2>誰の利用か</h2><div class="scroll"><table><tr><th>名前（?by=）</th><th class="n">セッション</th><th class="n">AIと対話</th><th class="n">往復</th><th class="n">推定費用</th></tr>
+    <div><h2>誰の利用か</h2><div class="scroll" data-rows="40"><table><tr><th>名前（?by=）</th><th class="n">セッション</th><th class="n">AIと対話</th><th class="n">往復</th><th class="n">推定費用</th></tr>
       ${D.actors.sort((a, b) => b.est - a.est).map(a => `<tr><td>${esc(a.by)}</td><td class="n">${a.sessions}</td><td class="n">${a.withAi}</td><td class="n">${a.rounds}</td><td class="n">${money(a.est)}</td></tr>`).join("")}</table></div>
       <div class="note">visitor＝一般の訪問者。claude-code・owner など名前を付けた利用は、テストとして分けて見られます。</div></div>
   </div>
   <h2>セッションと費用（${top.length}件・開いた時点から）</h2>
   <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は②で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面・管理画面・利用状況の画面。確認なし）。列の幅は見出しの右端をドラッグで変えられます。　<label style="white-space:nowrap"><input type="checkbox" id="paid"${window.paidOnly ? " checked" : ""}> 費用が発生したものだけ</label>　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順（始めた時刻）</option><option value="last" ${costSort === "last" ? "selected" : ""}>最後に動いた順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
-  <div class="scroll"><table class="sess" style="width:100%">${sessCols()}<tr>${["時刻", "誰", "進んだ所", "往復", "入力", "出力", "推定", "実績", "最初の言葉", "再表示", "GitHub"].map((h, i) => `<th${i >= 3 && i <= 7 || i >= 9 ? ' class="n"' : ""}>${h}${i === 8 || i === 10 ? "" : `<span class="rz" data-i="${i}"></span>`}</th>`).join("")}</tr>
+  <div class="scroll" data-rows="80"><table class="sess" style="width:100%">${sessCols()}<tr>${["時刻", "誰", "進んだ所", "往復", "入力", "出力", "推定", "実績", "最初の言葉", "再表示", "GitHub"].map((h, i) => `<th${i >= 3 && i <= 7 || i >= 9 ? ' class="n"' : ""}>${h}${i === 8 || i === 10 ? "" : `<span class="rz" data-i="${i}"></span>`}</th>`).join("")}</tr>
   ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? " <span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td title="${esc(s.by)}">${esc(s.by)}</td><td title="${esc(stageOf(s))}">${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td title="${esc((s.first || "").replace(/\n/g, " "))}">${esc((s.first || "").replace(/\n/g, " "))}</td><td class="btnc">${replayCell(s)}</td><td class="btnc">${shareCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>Console との突き合わせ（日ごと・Console の日の区切り：${D.lots.tz === "UTC" ? "UTC＝日本時間9時切り替え" : "日本時間"}）</h2>
   <div class="note">トークン数は、こちらの記録と Console が同じものを数えているので、ぴったり合うはずです（合わなければ記録の漏れ）。金額は推定なので、ずれは単価の見直し材料です。Console の数字は「設定」で入れます。</div>
-  <div class="scroll"><table><tr><th>日</th><th class="n">往復</th><th class="n">入力（こちら）</th><th class="n">入力（Console）</th><th class="n">出力（こちら）</th><th class="n">出力（Console）</th><th class="n">推定</th><th class="n">実績（Console）</th><th class="n">比（実績÷推定）</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>日</th><th class="n">往復</th><th class="n">入力（こちら）</th><th class="n">入力（Console）</th><th class="n">出力（こちら）</th><th class="n">出力（Console）</th><th class="n">推定</th><th class="n">実績（Console）</th><th class="n">比（実績÷推定）</th></tr>
   ${D.lots.days.map(x => { const L = x.console, tk = (a, b) => b == null ? '<span class="note">未入力</span>' : num(b) + (b === a ? ' <span class="pill ok">一致</span>' : ' <span class="pill warn">差 ' + num(b - a) + '</span>'); return `<tr><td>${x.day}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}${x.cacheRead || x.cacheCreate ? `<br><span class="note">キャッシュ 読${num(x.cacheRead)}・書${num(x.cacheCreate)}</span>` : ""}</td><td class="n">${L ? tk(x.inTok, L.inTok) : '<span class="note">—</span>'}</td><td class="n">${num(x.outTok)}</td><td class="n">${L ? tk(x.outTok, L.outTok) : '<span class="note">—</span>'}</td><td class="n">${money(x.est)}</td><td class="n">${L ? money(L.usd) : '<span class="note">未入力</span>'}</td><td class="n">${x.ratio == null ? "—" : x.ratio.toFixed(2)}</td></tr>`; }).join("") || `<tr><td colspan="9" class="note">まだありません</td></tr>`}</table></div>
   <h2>日別の内訳（日本時間・誰の利用か別）</h2>
-  <div class="scroll"><table><tr><th>日</th><th>誰</th><th class="n">セッション</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">金額</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>日</th><th>誰</th><th class="n">セッション</th><th class="n">往復</th><th class="n">入力</th><th class="n">出力</th><th class="n">推定</th><th class="n">金額</th></tr>
   ${D.days.slice(0, 40).map(x => `<tr><td>${x.day}</td><td>${esc(x.by)}</td><td class="n">${x.sessions}</td><td class="n">${x.rounds}</td><td class="n">${num(x.inTok)}</td><td class="n">${num(x.outTok)}</td><td class="n">${money(x.est)}</td><td class="n">${x.fixed ? money(x.usd) + ' <span class="pill ok">確定</span>' : '<span class="note">推定のみ</span>'}</td></tr>`).join("")}</table></div>`;
 }
 
@@ -226,11 +229,11 @@ function viewExplain() {
     <div class="card"><div class="t">1件あたりの往復数</div><div class="v">${base.avgRounds.toFixed(1)}回</div><div class="s">入力 ${num(base.avgIn)} / 出力 ${num(base.avgOut)} トークン</div></div>
   </div>
   <h2>導入後の月額の試算（AI利用分のみ）</h2>
-  <div class="scroll"><table><tr><th>1か月の相談件数</th><th class="n">平均で見ると</th><th class="n">多めで見ると</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>1か月の相談件数</th><th class="n">平均で見ると</th><th class="n">多めで見ると</th></tr>
   ${scen.map(n => `<tr><td>${n.toLocaleString()}件</td><td class="n">${jpy(base.avgUsd * n)}</td><td class="n">${jpy(base.p90 * n)}</td></tr>`).join("")}</table></div>
   <div class="note">為替は 1ドル＝${E.usdJpy}円（設定で変更）。サーバー・保守などの費用は含みません。推定値で、実額との差は「設定」の区間比較で確認します。</div>
   <h2>モデルを変えた場合の目安（同じトークン量で単価だけ置き換えた試算）</h2>
-  <div class="scroll"><table><tr><th>モデル</th><th class="n">相談1件</th><th class="n">月300件</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>モデル</th><th class="n">相談1件</th><th class="n">月300件</th></tr>
   ${E.models.map(m => `<tr><td>${esc(m.model)}${m.model === E.model ? ' <span class="pill ok">今の設定</span>' : ""}</td><td class="n">${jpy(m.perSessionUsd)}</td><td class="n">${jpy(m.perSessionUsd * 300)}</td></tr>`).join("")}</table></div>
   <div class="note">返事の質・長さはモデルで変わるため、実際に試して決める前提の参考値です。</div>`;
 }
@@ -254,7 +257,7 @@ function viewTested() {
   <div class="two"><div>${list(T.themes, "書かれた言葉はまだありません")}</div>
   <details><summary class="note">分類の規則を見る（正規表現）</summary>${D.themeRules.map(r => `<div class="note">${esc(r.name)}：${esc(r.rule)}</div>`).join("")}<div class="note">どれにも当たらないものは「その他」。</div></details></div>
   <h2>書かれた言葉（新しい順・最大150件）</h2>
-  <div class="scroll"><table><tr><th>時刻</th><th>誰</th><th>段階</th><th>分類</th><th>書かれた言葉</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>時刻</th><th>誰</th><th>段階</th><th>分類</th><th>書かれた言葉</th></tr>
   ${T.texts.map(x => `<tr><td>${tm(x.ts)}</td><td>${esc(x.by)}</td><td>${"①①②③④⑤⑥⑦⑧"[x.q - 1] || x.q}</td><td><span class="pill">${esc(x.theme)}</span></td><td>${esc(x.text)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだありません</td></tr>`}</table></div>`;
 }
 
@@ -265,7 +268,7 @@ function viewSessions() {
   <h2>セッション（新しい順・最大300件）</h2>
   <div class="note">${actorSelect()}</div>
   <div class="note">進行中＝最後の動きから30分以内。終了＝画面を閉じた記録あり。離脱＝閉じた記録なしで30分以上動きなし。</div>
-  <div class="scroll"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
+  <div class="scroll" data-rows="40"><table><tr><th>最後の動き</th><th>状態</th><th>誰</th><th>場所</th><th>到達</th><th>方向</th><th class="n">往復</th><th class="n">止/エラー</th><th class="n">推定費用</th><th>最初の言葉</th><th>再表示</th></tr>
   ${D.sessions.filter(actorOk).map(s => `<tr${rowAttr(s)}><td>${tm(s.last)}</td><td>${st(s)}</td><td>${esc(s.by)}</td><td>${esc(s.place)}</td><td>${esc(stageOf(s))}</td><td>${esc(s.branch)}</td><td class="n">${s.rounds}</td><td class="n">${s.rejected + s.errors}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td>${esc((s.first || "").replace(/\n/g, " ").slice(0, 50))}</td><td>${replayCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>最近のやり取り（200件まで・本文つき）</h2>
   ${D.turns.map(t => `<details><summary>${tm(t.ts)} ／ ${esc(t.by)} ／ ${t.status === "ok" ? "" : `<span class="pill warn">${esc(t.status)}${t.reason ? "：" + esc(REASON[t.reason] || t.reason) : ""}</span> ／ `}${t.q ? "①②③④⑤⑥⑦⑧"[t.q - 1] + " " : ""}${t.typed && !t.press ? '<span class="pill">書いて送った</span> ' : ""}${t.branchBy === "ai" ? '<span class="pill">枝はAI</span> ' : ""}${(t.trig || []).filter(g => g.decision === "発動" || g.decision === "保留").map(g => `<span class="pill${g.decision === "発動" ? " warn" : ""}">きっかけ ${esc(g.name)}：${esc(g.decision)}</span> `).join("")}${esc((t.user || "").replace(/\n/g, " ").slice(0, 70))} <span class="note">${t.status === "ok" ? `入${num(t.inTok)}・出${num(t.outTok)}・${usd(t.est)}・${((t.ms || 0) / 1000).toFixed(1)}秒` : ""}</span></summary><pre><b>利用者:</b> ${esc(t.user)}\n<b>AI:</b> ${esc(t.reply || "（返事なし）")}${(t.trig || []).map(g => `
@@ -280,24 +283,24 @@ function viewSettings() {
   <div class="note">Console の「コスト」「使用量」の画面に出ている、日ごとの金額（必須）と、入力・出力トークン（あれば）を写してください。入れた日は、その日の往復へ推定の割合で割り振られて「確定」になります。金額を空にして保存すると、その日の記録を消します。</div>
   <p>Console の日の区切り：<select id="lotTz"><option value="UTC" ${D.lots.tz === "UTC" ? "selected" : ""}>UTC（日本時間 9:00 に日が変わる）</option><option value="JST" ${D.lots.tz === "JST" ? "selected" : ""}>日本時間（0:00 に日が変わる）</option></select> <button class="act" id="tzSave">保存</button> <span id="tzMsg" class="note"></span></p>
   <p><input id="lotDay" type="date" value="${esc(days[0] || "")}" style="width:150px"> 金額 <input id="lotUsd" type="number" step="0.0001" min="0" placeholder="例：0.0610" style="width:110px"> ドル　入力 <input id="lotIn" type="number" min="0" step="1" placeholder="トークン" style="width:110px">　出力 <input id="lotOut" type="number" min="0" step="1" placeholder="トークン" style="width:110px"> <button class="act" id="lotSave">保存</button> <span id="lotMsg" class="note"></span></p>
-  <div class="scroll"><table><tr><th>日</th><th class="n">金額</th><th class="n">入力</th><th class="n">出力</th><th>入れた時刻</th></tr>${D.lots.days.filter(x => x.console).map(x => `<tr><td>${x.day}</td><td class="n">${usd(x.console.usd)}</td><td class="n">${x.console.inTok == null ? "—" : num(x.console.inTok)}</td><td class="n">${x.console.outTok == null ? "—" : num(x.console.outTok)}</td><td>${tm(x.console.ts)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだ入れていません</td></tr>`}</table></div>
+  <div class="scroll" data-rows="40"><table><tr><th>日</th><th class="n">金額</th><th class="n">入力</th><th class="n">出力</th><th>入れた時刻</th></tr>${D.lots.days.filter(x => x.console).map(x => `<tr><td>${x.day}</td><td class="n">${usd(x.console.usd)}</td><td class="n">${x.console.inTok == null ? "—" : num(x.console.inTok)}</td><td class="n">${x.console.outTok == null ? "—" : num(x.console.outTok)}</td><td>${tm(x.console.ts)}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだ入れていません</td></tr>`}</table></div>
   <h2>残高の記録（実額との突き合わせ）</h2>
   <div class="note">Console の「組織のクレジット」の金額を入れてください。記録の間の実際の減少額が、その間の往復へ推定額の割合で割り振られ（確定）、実額と推定の差が下に出ます。ずれは調査データです。</div>
   <p><input id="balAmt" type="number" step="0.01" min="0" placeholder="例：9.62" style="width:120px"> ドル <input id="balNote" type="text" placeholder="メモ（例：初回確認）" style="width:260px"> <button class="act" id="balSave">記録する</button> <span id="balMsg" class="note"></span></p>
-  <div class="scroll"><table><tr><th>記録した時刻</th><th class="n">残高</th><th>メモ</th></tr>${D.balances.slice().reverse().map(b => `<tr><td>${tm(b.ts)}</td><td class="n">${usd(b.amount_usd, 2)}</td><td>${esc(b.note)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">まだ記録がありません</td></tr>`}</table></div>
+  <div class="scroll" data-rows="40"><table><tr><th>記録した時刻</th><th class="n">残高</th><th>メモ</th></tr>${D.balances.slice().reverse().map(b => `<tr><td>${tm(b.ts)}</td><td class="n">${usd(b.amount_usd, 2)}</td><td>${esc(b.note)}</td></tr>`).join("") || `<tr><td colspan="3" class="note">まだ記録がありません</td></tr>`}</table></div>
   <h3>区間ごとの実額と推定</h3>
-  <div class="scroll"><table><tr><th>区間</th><th class="n">実際に減った額</th><th class="n">推定</th><th class="n">差</th><th class="n">比（実額÷推定）</th><th class="n">往復</th></tr>${D.segments.map(s => `<tr><td>${tm(s.from)} → ${tm(s.to)}</td><td class="n">${usd(s.spent)}</td><td class="n">${usd(s.est)}</td><td class="n">${usd(s.diff)}</td><td class="n">${s.ratio == null ? "—" : s.ratio.toFixed(2)}</td><td class="n">${s.rounds}</td></tr>`).join("") || `<tr><td colspan="6" class="note">残高を2回以上記録すると出ます</td></tr>`}</table></div>
+  <div class="scroll" data-rows="40"><table><tr><th>区間</th><th class="n">実際に減った額</th><th class="n">推定</th><th class="n">差</th><th class="n">比（実額÷推定）</th><th class="n">往復</th></tr>${D.segments.map(s => `<tr><td>${tm(s.from)} → ${tm(s.to)}</td><td class="n">${usd(s.spent)}</td><td class="n">${usd(s.est)}</td><td class="n">${usd(s.diff)}</td><td class="n">${s.ratio == null ? "—" : s.ratio.toFixed(2)}</td><td class="n">${s.rounds}</td></tr>`).join("") || `<tr><td colspan="6" class="note">残高を2回以上記録すると出ます</td></tr>`}</table></div>
   <h2>公開テストの歯止め</h2>
   <div class="note">入口：「地図を開く」を押した時点で、使用中（最後の操作から15分以内）のセッションが上限なら、または今日入ったセッションが上限なら、「利用数の上限に達しているため、しばらく時間をおいてから操作してください。」と出して止めます。一度入ったセッションは止めません。</div>
   <p>同時に使える人数 <input id="capUsers" type="number" min="1" max="100" step="1" value="${D.config.maxUsers}" style="width:60px"> 人　1日のセッション数 <input id="capDaily" type="number" min="1" max="1000" step="1" value="${D.config.dailySessions}" style="width:70px"> 件　<span class="note">いま使用中 ${D.config.admit.active}人 ／ 今日入った ${D.config.admit.today}件 ／ 今日止めた ${D.config.admit.denied.users + D.config.admit.denied.daily}件（同時 ${D.config.admit.denied.users}・1日 ${D.config.admit.denied.daily}）</span></p>
   <div class="note">保存すると、再起動なしで次の問い合わせから効きます。人が多い日は上げ、終わったら戻してください。1日の費用上限に達すると、その日は AI が止まり、台本の文だけになります。同時に処理する数を超えた分は、断らずに最大25秒、順番を待ちます。打ち間違いに備えて、上限は $20・20件までです。同時に処理する数の本当の天井は、Anthropic の Console の「Limits」にある、1分あたりの回数です。</div>
   <p>1日の費用上限 $<input id="capUsd" type="number" min="0.1" max="20" step="0.5" value="${D.config.dailyCap}" style="width:80px">（約${Math.round(D.config.dailyCap * D.config.usdJpy).toLocaleString()}円）　同時に処理するAIの数 <input id="capInf" type="number" min="1" max="20" step="1" value="${D.config.maxInflight}" style="width:60px"> 件 <button class="act" id="capSave">保存</button> <span id="capMsg" class="note"></span></p>
-  <div class="scroll"><table><tr><th>変えた時刻</th><th class="n">同時に使える人数</th><th class="n">1日のセッション数</th><th class="n">1日の費用上限</th><th class="n">同時に処理するAIの数</th></tr>${(D.config.limitsHistory || []).map(h => `<tr><td>${tm(h.ts)}</td><td class="n">${h.before.maxUsers ?? "—"} → ${h.maxUsers ?? "—"}</td><td class="n">${h.before.dailySessions ?? "—"} → ${h.dailySessions ?? "—"}</td><td class="n">${usd(h.before.dailyCap, 2)} → ${usd(h.dailyCap, 2)}</td><td class="n">${h.before.maxInflight} → ${h.maxInflight}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだ変えていません（初期値：10人・50件・$2・4件）</td></tr>`}</table></div>
+  <div class="scroll" data-rows="40"><table><tr><th>変えた時刻</th><th class="n">同時に使える人数</th><th class="n">1日のセッション数</th><th class="n">1日の費用上限</th><th class="n">同時に処理するAIの数</th></tr>${(D.config.limitsHistory || []).map(h => `<tr><td>${tm(h.ts)}</td><td class="n">${h.before.maxUsers ?? "—"} → ${h.maxUsers ?? "—"}</td><td class="n">${h.before.dailySessions ?? "—"} → ${h.dailySessions ?? "—"}</td><td class="n">${usd(h.before.dailyCap, 2)} → ${usd(h.dailyCap, 2)}</td><td class="n">${h.before.maxInflight} → ${h.maxInflight}</td></tr>`).join("") || `<tr><td colspan="5" class="note">まだ変えていません（初期値：10人・50件・$2・4件）</td></tr>`}</table></div>
   <h2>為替</h2>
   <p>1ドル = <input id="rate" type="number" min="50" max="500" step="0.1" value="${D.config.usdJpy}" style="width:90px"> 円 <button class="act" id="rateSave">保存</button> <span id="rateMsg" class="note"></span></p>
   <h2>単価（USD / 100万トークン）</h2>
   <div class="note">保存すると「今から有効な新しい版」になり、過去の往復は当時の単価のままです。キャッシュ読み出しは未設定なら入力の0.1倍（仮説）。</div>
-  <div class="scroll"><table id="ptable"><tr><th>モデル名（前方一致）</th><th class="n">入力</th><th class="n">出力</th></tr>${v.models.map(m => `<tr><td><input class="pm" value="${esc(m.model)}" style="width:220px"></td><td class="n"><input class="pi" type="number" step="0.01" value="${m.input}" style="width:80px"></td><td class="n"><input class="po" type="number" step="0.01" value="${m.output}" style="width:80px"></td></tr>`).join("")}</table></div>
+  <div class="scroll" data-rows="40"><table id="ptable"><tr><th>モデル名（前方一致）</th><th class="n">入力</th><th class="n">出力</th></tr>${v.models.map(m => `<tr><td><input class="pm" value="${esc(m.model)}" style="width:220px"></td><td class="n"><input class="pi" type="number" step="0.01" value="${m.input}" style="width:80px"></td><td class="n"><input class="po" type="number" step="0.01" value="${m.output}" style="width:80px"></td></tr>`).join("")}</table></div>
   <p><button class="act" id="priceSave">新しい版として保存</button> <span id="priceMsg" class="note"></span> <span class="note">（版の数：${D.prices.length}、最新の有効開始：${tm(v.from)}）</span></p>
   <h2>現在の設定（読み取り）</h2>
   <div class="note">モデル ${esc(D.config.model)} ／ 1日の費用上限 ${usd(D.config.dailyCap, 2)} ／ 同時に処理するAIの数 ${D.config.maxInflight}件 ／ 同時に使える人数 ${D.config.maxUsers}人 ／ 1日のセッション数 ${D.config.dailySessions}件 ／ 停止スイッチ：${D.config.disabled ? "停止中" : "稼働中"}（止めるには <code>data/DISABLED</code> というファイルを置く）</div>`;
@@ -364,13 +367,23 @@ document.addEventListener("mousedown", e => {
   document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
 }, true);
 document.addEventListener("click", e => { if (e.target.closest && e.target.closest("table.sess th .rz")) { e.preventDefault(); e.stopPropagation(); } }, true);
+// 表の箱の高さ：data-rows の行数ぶん（見出し＋N行）。行の高さはまちまちなので、描いたあとに測る
+function fitBoxes() {
+  document.querySelectorAll(".scroll[data-rows]").forEach(x => {
+    const n = +x.dataset.rows, rows = x.querySelectorAll("tr");
+    x.style.maxHeight = rows.length > n + 1 ? rows[n + 1].offsetTop + "px" : "";
+  });
+}
+new MutationObserver(() => fitBoxes()).observe(document.body, { childList:true, subtree:true });
 function liveLoad() {
   clearTimeout(liveTimer);
   liveTimer = setTimeout(async () => {
     const a = document.activeElement;
     if (tab === "settings" || RESIZING || document.getElementById("rconfirm") || (a && a.closest && a.closest("#main input, #main textarea"))) { stale = true; return; }
     const opened = new Set([...document.querySelectorAll("#main details[open] > summary")].map(x => x.textContent));
+    const keep = [...document.querySelectorAll("#main .scroll[data-rows]")].map(x => x.scrollTop); // 描き直しても箱のスクロール位置を保つ
     stale = false; await load();
+    document.querySelectorAll("#main .scroll[data-rows]").forEach((x, i) => { if (keep[i]) x.scrollTop = keep[i]; });
     document.querySelectorAll("#main details > summary").forEach(x => { if (opened.has(x.textContent)) x.parentElement.open = true; });
   }, 400);
 }
