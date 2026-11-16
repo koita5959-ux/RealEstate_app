@@ -505,6 +505,7 @@ function takeBranch(text) {
 // ---- ④から先の返事：サーバー（/api/chat）経由で Claude に作らせる。つながらなければ台本の返事に戻る ----
 const QS = new URLSearchParams(location.search);
 const AI_OFF = true; // タイプ1（選択式）はAIを呼ばない
+const NO_LOG = /[?&]ai=off/.test(location.search); // 記録を送らないのはテスト（?ai=off）のときだけ。タイプ1の体験は記録する（11-17）
 const newSid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2)).slice(0, 36);
 let SID = newSid(); // ブラウザを開いてから閉じるまで
 // ?by=名前 で誰の利用か分ける。一度付けて開けば、このブラウザで覚える（画面を行き来しても消えない）。?by=visitor で戻す
@@ -525,7 +526,7 @@ const pingDev = () => { try { if (devCh) devCh.postMessage({ type:"saved" }); } 
 let STAGE = "画面を開いた";
 const STAGE_LABEL = { open:"画面を開いた", map:"地図を開いた", pin:"ピンを置いた", evaluate:"評価した", inquiry_open:"問い合わせを開いた", inquiry_send:"問い合わせを押した" };
 function ev(type, data) {
-  if (AI_OFF || REPLAYING) return;
+  if (NO_LOG || REPLAYING) return;
   window.__restored = false; // 本物の操作が始まった＝ここから新しい体験として記録する
   if (type === "choice") STAGE = "①①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"[(+(data && data.q) || 1) - 1] + "に答えた";
   else if (STAGE_LABEL[type]) STAGE = STAGE_LABEL[type];
@@ -571,13 +572,13 @@ function postState(st, extra) {
   try { fetch(SESSION_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ sid:SID, by:BY, state:st, snapshot:snapshotNow(), ...(extra || {}) }), keepalive:true }).then(pingDev).catch(() => {}); } catch (e) { /* 送れなくても体験は止めない */ }
 }
 function syncSession(st) { // 連続した動きは1.5秒にまとめて1回だけ送る
-  if (AI_OFF || REPLAYING || window.__restored) return; // 元に戻した直後は、新しい操作が始まるまで送らない
+  if (NO_LOG || REPLAYING || window.__restored) return; // 元に戻した直後は、新しい操作が始まるまで送らない
   lastState = st;
   if (syncTimer) return;
   syncTimer = setTimeout(() => { syncTimer = null; postState(lastState); }, 1500);
 }
 window.addEventListener("pagehide", () => { // 閉じるときは、まだ送っていない最新の状態を送る
-  if (!lastState || AI_OFF) return;
+  if (!lastState || NO_LOG) return;
   try { navigator.sendBeacon(SESSION_URL, new Blob([JSON.stringify({ sid:SID, by:BY, state:lastState, snapshot:snapshotNow() })], { type:"application/json" })); } catch (e) { /* 何もしない */ }
 });
 function buildState() {
