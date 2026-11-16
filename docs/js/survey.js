@@ -197,3 +197,10 @@ document.getElementById("go").addEventListener("click", () => {
   if (REPLAYING || !S || !here || EVAL_AT !== goKey()) return;
   LandView.show(LandView.ready() ? "sv" : "photo");
 });
+// 締めの向き（11-16 総合チェック4-2）：言い切った見立てを一つ挙げ、合っているかを担当が確かめる。設問で「わからない」等があった土地だけ、その点を名指しして現地で確かめる
+function closeAim(who) {
+  const unsure = (S.signals || []).some(x => /現地確認|測量の確認/.test(x));
+  return unsure
+    ? `ここまでの話で分かったことを一言でまとめ、設問で利用者が分からなかった点を一つ名指しして、そこは${who}が現地で確かめる、と引き受けます。`
+    : `ここまでの話でAIが言い切った見立てを一つ挙げ（例：国の標準地の値で単純に計算すると約◯万円、角地なので数％高く見た）、それが実際に合っているかは${who}の担当が確かめる、と引き受けます。`;
+}
