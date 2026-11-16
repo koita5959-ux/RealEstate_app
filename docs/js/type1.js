@@ -12,7 +12,7 @@ function t1Classify(labels) {
   const re = s => new RegExp(s, "i"), drop = re(T1C.drop), out = re(T1C.outside), keys = Object.keys(T1C.cats);
   const by = new Map();
   for (const raw of labels) {
-    const label = String(raw).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim();
+    const label = String(raw).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1"); // 「売却査定 売却査定」は一つに
     if (!label || drop.test(label) || out.test(label)) continue;
     let cats = keys.filter(k => k !== "consult" && re(T1C.cats[k].words).test(label));
     const sp = cats.filter(k => !T1C.generic.includes(k));
