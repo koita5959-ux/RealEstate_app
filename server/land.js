@@ -70,6 +70,7 @@ export function landSetup({ keyFile, dataDir }) {
       const same = want && pts.find(o => o.d <= SAME_KIND_M && use(o) === want);
       const pick = same || pts[0], out = pointOut(pick.f.properties || {}, pick.d, year);
       if (want && use(pick) !== want) out.mismatch = { want, got: use(pick) };
+      if (same && same !== pts[0]) { const a = pointOut(pts[0].f.properties || {}, pts[0].d, year); out.alt = { use: a.use, price: a.price, d: a.d, location: a.location || a.address }; } // 選び方で値が動くので、最寄りの値も並べる（11-16 Claude.AI）
       return out;
     }
     return { none: true };

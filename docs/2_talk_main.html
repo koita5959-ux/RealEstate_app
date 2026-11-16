@@ -445,7 +445,8 @@ function fillLand(sh, r, area) {
   sh.標準地の区域と規制 = [e(p.division), e(p.zone), p.bcr && "建ぺい率 " + e(p.bcr), p.far && "容積率 " + e(p.far), e(p.fire), e(p.altitude)].filter(Boolean).join("・") + m || null;
   const unit = Number(String(p.price || "").replace(/[^\d]/g, ""));
   const mis = p.mismatch ? `近くに${e(p.mismatch.want)}の標準地がなく、${e(p.mismatch.got)}の値での計算なので、実際とは開きが出ます。` : ""; // land.js が種類違いの印を付けたとき
-  sh.単純計算の目安 = unit && area ? `${yen(unit * area)}（標準地の価格×面積。別の土地の値での単純計算で、この土地の値段ではありません）${mis}` + m : null;
+  const altU = p.alt ? Number(String(p.alt.price || "").replace(/[^\d]/g, "")) : 0; // 最寄りの種類違いの標準地（land.js の alt）
+  sh.単純計算の目安 = unit && area ? (altU ? `近くの${e(p.alt.use)}の値（約${p.alt.d >= 1000 ? (p.alt.d / 1000).toFixed(1) + "km" : p.alt.d + "m"}先）なら約${yen(altU * area)}、${e(p.use)}の値（約${dist}先）なら約${yen(unit * area)}` : yen(unit * area)) + `（標準地の価格×面積。別の土地の値での単純計算で、この土地の値段ではありません）${mis}` + m : null;
   for (const k of Object.keys(sh)) if (sh[k] === m) sh[k] = null;
 }
 
