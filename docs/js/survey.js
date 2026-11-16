@@ -158,10 +158,18 @@ const LandView = (() => {
   const photo = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
     { attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル（写真）</a>', maxZoom:18 });
   const sv = document.createElement("div"); sv.className = "svbox"; sv.hidden = true;
-  sv.innerHTML = '<iframe title="道から見た様子" loading="lazy" allow="accelerometer; gyroscope; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="svnote">ピンの近くの道から見た様子です。ドラッグで向きを変えられます。ピンの位置を直すときは「地図」へ。</div>';
+  sv.innerHTML = '<iframe title="道から見た様子" loading="lazy" allow="accelerometer; gyroscope; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="svnote">ピンの近くの道から見た様子です。ドラッグで向きを変えられます。ピンの位置を直すときは「地図」へ。</div><div class="svmini" title="ピンの場所"></div>';
   box.appendChild(sv); L.DomEvent.disableClickPropagation(sv); L.DomEvent.disableScrollPropagation(sv);
   const frame = sv.querySelector("iframe");
-  let key = "", mode = "map", svAt = "";
+  let key = "", mode = "map", svAt = "", mini = null, miniPin = null;
+  function miniShow(ll) { // 道から見る景色にはピンを描けないので、隅の小さな地図でピンの場所を示す
+    if (!mini) {
+      mini = L.map(sv.querySelector(".svmini"), { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false });
+      L.tileLayer(base ? base._url : "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(mini);
+      miniPin = L.marker(ll).addTo(mini);
+    }
+    mini.invalidateSize(); mini.setView(ll, 16); miniPin.setLatLng(ll);
+  }
   const bar = L.control({ position:"topright" });
   bar.onAdd = () => {
     const el = L.DomUtil.create("div", "viewbar");
@@ -179,6 +187,7 @@ const LandView = (() => {
     if (mode === "sv" && here) {
       const at = here.lat.toFixed(6) + "," + here.lng.toFixed(6);
       if (at !== svAt) { svAt = at; frame.src = `https://www.google.com/maps/embed/v1/streetview?key=${encodeURIComponent(key)}&location=${at}&fov=90&language=ja&region=JP`; }
+      miniShow(here);
     }
   }
   function show(v) {
