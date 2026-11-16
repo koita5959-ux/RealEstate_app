@@ -9,7 +9,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { adminHandler, publicStats, summarize } from "./admin.js";
 import { landSetup } from "./land.js";
 import { aroundSetup } from "./around.js";
-import { read as readSite, readMore } from "./shop/read.js";
+import { read as readSite, readMore, menu as readMenu } from "./shop/read.js";
 import { understand, understandMore, filled } from "./shop/understand.js";
 import { listings, areasText } from "./shop/listings.js";
 import { detectTriggers } from "./trigger.js";
@@ -403,6 +403,23 @@ async function handleChat(req, res) {
 
 // ---- 管理画面の「読み取る」：URLのHPを読み（プログラム）、店の姿を根拠つきで作る（API 1回）。押したときだけ走る ----
 const readCache = new Map(); // URL → その日の読み取り結果
+// タイプ1の③：HPのトップから業務内容の見出しを拾う（AIなし・費用0）
+async function handleShopMenu(req, res) {
+  const t0 = Date.now();
+  const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
+  const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
+  let b;
+  try { b = await readBody(req, 4096); } catch { return send(res, 400, { error: "bad_request" }); }
+  const target = clip(b && b.url, 500);
+  if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
+  if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
+  const r = await readMenu(target).catch((e) => ({ url: target, error: String(e.message || e), items: [] }));
+  const ts = new Date().toISOString();
+  writeLog({ ts, who, type: "shopmenu", url: target, by: clip(b.by, 32) || "visitor", sid: "menu-" + ts.replace(/\D/g, "").slice(0, 17),
+    status: r.error ? "unreadable" : "ok", items: r.items.length, costUsd: 0, ms: Date.now() - t0 });
+  return send(res, 200, { ...r, ms: Date.now() - t0 });
+}
+
 async function handleShopRead(req, res) {
   const t0 = Date.now();
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
@@ -598,6 +615,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
     if (req.method === "POST" && url.pathname === "/api/shopread") return await handleShopRead(req, res);
+    if (req.method === "POST" && url.pathname === "/api/shopmenu") return await handleShopMenu(req, res);
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);

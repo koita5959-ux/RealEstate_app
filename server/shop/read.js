@@ -155,7 +155,26 @@ async function read(url) {
   return out;
 }
 
-export { read, readMore, get, parse };
+// タイプ1の③：トップのリンクから「店が何をするか」の見出しを全部拾う（AIなし・ページは読まない）。
+// 見出しの言葉で、初期設定の4業態（b1仲介・b2開発・b3総合・b4相続税）のどれかに寄せる（④⑤の初期値を借りるため）
+const BIZ_OF = [[/相続|遺産|贈与|税|遺言|成年後見/, 'b4'], [/買取|買い取|開発|分譲|建築|新築|注文住宅|リフォーム|リノベ|造成/, 'b2'],
+  [/仲介|売却|売りたい|購入|買いたい|物件|賃貸|貸したい|借りたい/, 'b1']];
+const MENU_SKIP = /詳細|こちら|もっと見る|を見る|一覧|more|read/i; // 見出しでなく、飾りのリンク
+async function menu(url) {
+  const top = await get(url);
+  if (!top.ok) return { url, error: top.error || `HTTP ${top.status}`, items: [] };
+  const p = parse(top.html, top.url), host = new URL(top.url).host, seen = new Set(), items = [];
+  for (const l of p.links) {
+    const label = l.label.replace(/[>›»≫→▶▸►]+/g, ' ').replace(/^[A-Z][A-Z &]+\s+(?=[^\x00-\x7f])/, '').replace(/\s+/g, ' ').trim(); // 「SERVICE 事業内容」の英字の飾りは外す
+    if (!label || label.length > 24 || seen.has(label) || new URL(l.url).host !== host || MENU_SKIP.test(label)) continue;
+    if (!SERVICE_WORDS.test(label + ' ' + l.url) || SKIP_WORDS.test(label + ' ' + l.url) || PROFILE_WORDS.test(label)) continue;
+    seen.add(label);
+    items.push({ label, url: l.url, biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
+  }
+  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, items };
+}
+
+export { read, readMore, get, parse, menu };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [csv, dst] = process.argv.slice(2);

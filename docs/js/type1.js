@@ -7,10 +7,48 @@ async function t1Load() {
   if (!T1D) T1D = await (await fetch("data/type1_defaults.json", { cache:"no-cache" })).json();
   return T1D;
 }
-function t1Shop() { // 店の設定。読めなければ「総合」だけ（HPから何も読めない店と同じ）
-  try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && Array.isArray(s.biz) && s.biz.length) return { uke:{}, ...s }; } catch (e) { /* 初期値 */ }
-  return { v:1, biz:["b3"], uke:{} };
+// ---- 店が組む選択の木（③から先）。保存は localStorage「reType1」（v:2。v:1 の「重視する業務内容」は読まない） ----
+// 節：{ label, biz?（③：④⑤の初期値を借りる業態）, opt?（④：一式の options のキー）, nx?（⑤：options の next の一つ）,
+//       text?（選んだときの返事を店が書いた文）, ask?（次の問いを店が書いた文）, kids?（ない＝初期値のまま。[]＝子なし＝問い合わせだけ） }
+const T1_ASK3 = "この土地で考えられる道です。気になるものを選んでください。";
+const T1_INQ = "ここまでの情報で問い合わせを送る";
+function t1Default(items) { // HPから拾った見出し（なければ4業態）が③になる
+  const top = items && items.length ? items.map(i => ({ label:i.label, biz:i.biz }))
+    : ["b3", "b1", "b2", "b4"].map(b => ({ label:T1D.businesses[b].name, biz:b }));
+  return { v:2, url:"", top };
 }
+function t1Shop() {
+  try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 2 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
+  return t1Default();
+}
+// 子の一覧。初期値のままの節は、一式から作る（③の子は試しの土地で入れ替わる）
+function t1Kids(node, land) {
+  if (node.kids) return node.kids;
+  if (node.biz) {
+    const c = t1Compose(land, [node.biz]);
+    return c.main.concat(c.more).map(id => ({ label:T1D.options[id].label, opt:id,
+      first:c.first && c.first.id === id ? c.first.why : undefined, grey:c.grey[id] ? { reason:c.grey[id].reason, goto:c.grey[id].goto } : undefined }));
+  }
+  if (node.opt) return (T1D.options[node.opt].next || []).map(n => ({ label:n.label, nx:n, kids:[] }));
+  return [];
+}
+// 初期値のままの子を、今の一覧で固める（店が直すときだけ。土地しだいの印は外す）
+function t1Fix(node, land) {
+  if (!node.kids) node.kids = t1Kids(node, land).map(({ first, grey, ...n }) => n);
+  return node.kids;
+}
+// 選んだときの返事（書かれた文があればそれ。穴は土地の値で埋める）
+function t1Tpl(node, biz) {
+  if (node.text != null) return node.text;
+  if (node.opt) { const o = T1D.options[node.opt]; return [o.uke[biz] || o.uke._ || "", o.num || o.plain || ""].join(""); }
+  if (node.nx) return node.nx.reply || "";
+  return "";
+}
+function t1Text(node, land, biz) {
+  if (node.text == null && node.opt) { const r = t1Reply(land, [biz], node.opt, { [node.opt]:biz }, null); return [r.uke, r.facts, r.body].join(""); }
+  return t1Fill(t1Tpl(node, biz), land);
+}
+function t1AskOf(node) { return node.ask != null ? node.ask : node.opt ? T1D.options[node.opt].ask || "" : node.biz ? T1_ASK3 : ""; }
 const T1_HOLE = /\{([^}]+)\}/g;
 // 穴に値を入れる。値のない穴を含む文は、その一文ごと落とす（「現地で確認」には差し替えない）
 function t1Fill(text, land) {

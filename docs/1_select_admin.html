@@ -7,92 +7,169 @@
 <style>
   :root { --line:#d5dbe2; --sub:#5b6673; --red:#b3261e; --blue:#1f5fa8; }
   body { margin:0; font-family:"Noto Sans JP", system-ui, sans-serif; background:#f6f7f9; color:#1d2430; }
-  main { display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
-  @media (max-width:800px) { main { grid-template-columns:1fr; } }
-  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; }
-  h2 { font-size:16px; margin:0 0 8px; color:var(--red); }
+  main { padding:16px; max-width:1200px; margin:0 auto; }
+  .top { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .row input[type=url] { flex:1; min-width:240px; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:800px) { .cols { grid-template-columns:1fr; } }
+  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; min-height:200px; }
+  h2 { font-size:16px; margin:0 0 6px; color:var(--red); }
   .hint { color:var(--sub); font-size:13px; }
-  .biz { display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--line); border-radius:6px; margin:6px 0; background:#fff; }
-  .biz.on { border-color:var(--red); background:#fff6f5; }
-  .biz .no { width:1.6em; text-align:center; font-weight:bold; color:var(--red); }
-  .biz .mv { margin-left:auto; display:flex; gap:4px; }
-  .biz .mv button { padding:2px 8px; }
-  .lands { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
-  .lands button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
   button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
-  .opt { border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; }
-  .opt .l { font-weight:bold; }
-  .opt .s { display:block; color:var(--sub); font-size:13px; margin-top:2px; }
-  .opt.grey { opacity:.55; }
-  .opt .m { display:block; color:var(--red); font-size:12px; }
-  .opt .o { float:right; font-size:12px; color:#fff; background:#7b8794; border-radius:4px; padding:1px 6px; }
-  .opt .o.b1 { background:#1f5fa8; } .opt .o.b2 { background:#2e7d32; } .opt .o.b3 { background:#8e5a00; } .opt .o.b4 { background:#6a3d9a; } .opt .o.tag { background:#b3261e; }
-  .land { font-size:13px; color:var(--sub); margin-bottom:8px; }
+  button.main { background:var(--red); color:#fff; border-color:var(--red); }
+  .lands { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
+  .lands button { font-size:13px; padding:3px 8px; }
+  .lands button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .crumb { margin:0 0 10px; font-size:14px; }
+  .crumb a { color:var(--blue); cursor:pointer; text-decoration:underline; }
+  .item { display:flex; gap:8px; align-items:flex-start; border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; cursor:pointer; background:#fff; }
+  .item.sel { border-color:var(--red); background:#fff6f5; }
+  .item .no { color:var(--red); font-weight:bold; min-width:1.4em; }
+  .item .body { flex:1; }
+  .item .l { font-weight:bold; }
+  .item .s { display:block; color:var(--sub); font-size:12px; margin-top:2px; }
+  .item .m { display:block; color:var(--red); font-size:12px; }
+  .item .k { display:block; font-size:12px; color:#2e7d32; margin-top:2px; }
+  .item .k.leaf { color:var(--sub); }
+  .item.grey .l { opacity:.55; }
+  .item .ops { display:flex; gap:3px; }
+  .item .ops button { padding:1px 6px; font-size:13px; }
+  .item input { font:inherit; width:100%; padding:3px 6px; }
+  .fixed { border:1px dashed var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; color:var(--sub); font-size:14px; }
+  .add { margin-top:6px; }
+  .edit { border-top:1px solid var(--line); margin-top:10px; padding-top:10px; }
+  .edit label { display:block; font-size:13px; color:var(--sub); margin:6px 0 2px; }
+  .edit textarea, .edit input { width:100%; box-sizing:border-box; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  .edit .pv { background:#f4f8fd; border-radius:6px; padding:8px; font-size:14px; margin-top:6px; }
+  .q { color:var(--red); font-weight:bold; }
 </style>
 </head>
 <body>
 <header id="appbar" data-current="admin" data-title="1. 管理画面 ― 試作（コンテンツ：1 選択式）"></header>
 <script src="js/shell.js"></script>
 <main>
-  <section>
-    <h2>重視する業務内容</h2>
-    <div class="hint">チェックを入れると、その業務内容の選択肢が④に入ります。上にあるものほど先に並びます（④は5個まで）。文を書く必要はありません。</div>
-    <div id="bizList"></div>
-    <div class="hint" style="margin-top:10px">HPのURLからの読み取り（業務内容の判定）は、次の段で付けます。今は「総合」が初期値です。</div>
-  </section>
-  <section>
-    <h2>見本：客の画面の④</h2>
-    <div class="hint">試しの土地を変えずに、左のチェックだけ変えてみてください。選択肢の右の札は、どの業務内容から来たかです（この見本だけに出ます）。</div>
+  <div class="top">
+    <div class="row">
+      <b>あなたのHP</b>
+      <input type="url" id="url" placeholder="https://…（HPのトップのURL）">
+      <button class="main" id="read">読み込む（初期状態に戻す）</button>
+    </div>
+    <div class="hint" id="readMsg">HPのメニューから業務内容を全部拾い、<span class="q">③</span>の選択肢にします（AIは使いません）。読み込むたびに、それまでの組み立ては消えて初期状態に戻ります。URLが空なら、初期の4つの業務内容に戻ります。</div>
     <div class="lands" id="lands"></div>
-    <div class="land" id="landInfo"></div>
-    <div id="preview"></div>
-  </section>
+  </div>
+  <div class="crumb" id="crumb"></div>
+  <div class="cols">
+    <section id="left"></section>
+    <section id="right"></section>
+  </div>
 </main>
 <script src="js/type1.js"></script>
 <script>
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
-// 試しの土地（tryout.py の見本と同じ）
+const QN = "③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 深さ0＝③
+// 試しの土地（tryout.py の見本と同じ）。④の初期値と、ボタンの下の数字はこの土地で出る
 const LANDS = [
   { name:"通路の狭い空き家", cat:"K2", tags:["norebuild", "border"], data:{ 地域:"鷺山", 面積:"40坪（132㎡）", 単価:"6万2,000円", 変動:"−0.8％", 目安額:"約570万円", 足し引き:"通路2m未満 −30％", 用途地域:"第一種住居地域", 容積率:"200％", 延べ床上限:"264㎡", 駅:"岐阜駅", 駅距離:"約3.4km", 台数:5 } },
   { name:"角地の更地", cat:"K3", tags:["corner"], data:{ 地域:"長良", 面積:"60坪（198㎡）", 単価:"8万5,000円", 変動:"＋0.6％", 目安額:"約1,750万円", 足し引き:"角地 +4％", 用途地域:"第二種中高層住居専用地域", 容積率:"200％", 延べ床上限:"396㎡", 駅:"岐阜駅", 駅距離:"約4.1km", 台数:7 } },
   { name:"商業地域の家（目安が二つ）", cat:"K1", tags:[], two:true, data:{ 地域:"司町", 面積:"61坪（200㎡）", 単価:"12万7,000円", 変動:"＋1.6％", 目安額:"約2,540万〜3,120万円", 足し引き:"足し引きなし", 用途地域:"商業地域", 容積率:"400％", 延べ床上限:"800㎡", 駅:"岐阜駅", 駅距離:"約1.2km", 台数:8, 目安の但し書き:"低いほうは近くの住宅地、高いほうは商業地の標準地の値です。家がある土地は、住宅地の値に近く見られやすい土地です。" } },
   { name:"駐車場（公開データなし）", cat:"K4", tags:["unsure"], data:{ 地域:"山あいの町", 面積:"120坪（397㎡）" } },
 ];
-let SHOP = t1Shop(), LAND = 0;
-function save() { try { localStorage.setItem("reType1", JSON.stringify(SHOP)); } catch (e) { /* 保存できなくても見本は動く */ } }
-function renderBiz() {
-  const all = Object.keys(T1D.businesses), order = SHOP.biz.concat(all.filter(b => !SHOP.biz.includes(b)));
-  document.getElementById("bizList").innerHTML = order.map(b => {
-    const on = SHOP.biz.includes(b), n = SHOP.biz.indexOf(b) + 1;
-    return `<label class="biz${on ? " on" : ""}"><input type="checkbox" data-b="${b}"${on ? " checked" : ""}><span class="no">${on ? n : ""}</span>${esc(T1D.businesses[b].name)}（${esc(T1D.businesses[b].sub)}）`
-      + (on ? `<span class="mv"><button data-up="${b}" title="上へ">↑</button><button data-dn="${b}" title="下へ">↓</button></span>` : "") + `</label>`;
-  }).join("");
+let SHOP = null, LAND = 0, PATH = [], EDIT = null; // PATH＝選んでいる節の並び（深さごとの番号）。EDIT＝名前を直している「深さ:番号」
+const land = () => LANDS[LAND];
+function save() { try { localStorage.setItem("reType1", JSON.stringify(SHOP)); } catch (e) { /* 保存できなくても画面は動く */ } }
+// 深さ d の一覧（読むだけ。初期値のままなら、その場で作る）
+function listAt(d) { let l = SHOP.top; for (let k = 0; k < d; k++) l = t1Kids(l[PATH[k]], land()); return l; }
+const nodeAt = d => listAt(d)[PATH[d]];
+function bizAt(d) { let b = null; for (let k = 0; k <= d; k++) { const n = nodeAt(k); if (n && n.biz) b = n.biz; } return b; }
+// 深さ d の一覧を、直せる形で返す（上から順に、初期値のままの一覧を固める）
+function editable(d) { let l = SHOP.top; for (let k = 0; k < d; k++) l = t1Fix(l[PATH[k]], land()); return l; }
+const isAuto = d => d > 0 && !nodeAt(d - 1).kids;
+
+function itemHtml(n, d, i, sel) {
+  const kids = t1Kids(n, land());
+  const sub = n.grey ? `${n.grey.reason} →「${T1D.options[n.grey.goto].label}」` : n.opt ? t1Sub(land(), n.opt) : "";
+  const k = kids.length ? `<span class="k">→ ${QN[d + 1]} 選択肢 ${kids.length}つ</span>` : `<span class="k leaf">→ 子なし（問い合わせだけ出ます）</span>`;
+  const label = EDIT === `${d}:${i}` ? `<input data-in="${d}:${i}" value="${esc(n.label)}">` : `<span class="l">${esc(n.label)}</span>`;
+  return `<div class="item${sel ? " sel" : ""}${n.grey ? " grey" : ""}" data-go="${d}:${i}"><span class="no">${i + 1}</span><span class="body">`
+    + (n.first ? `<span class="m">${esc(T1D.rules.firstMarkLabel)}（${esc(n.first)}）</span>` : "") + label + (sub ? `<span class="s">${esc(sub)}</span>` : "") + k + `</span>`
+    + `<span class="ops"><button data-op="up" data-at="${d}:${i}" title="上へ">↑</button><button data-op="dn" data-at="${d}:${i}" title="下へ">↓</button>`
+    + `<button data-op="ed" data-at="${d}:${i}" title="直す">✎</button><button data-op="del" data-at="${d}:${i}" title="消す">✕</button></span></div>`;
 }
-function renderPreview() {
-  const L = LANDS[LAND], c = t1Compose(L, SHOP.biz), R = T1D.rules;
-  document.getElementById("lands").innerHTML = LANDS.map((x, i) => `<button data-l="${i}" class="${i === LAND ? "sel" : ""}">${esc(x.name)}</button>`).join("");
-  document.getElementById("landInfo").textContent = `${T1D.categories[L.cat]}／条件札：${L.tags.map(t => T1D.tags[t]).join("・") || "なし"}`;
-  const tagOf = i => c.origin[i] === "札" ? `<span class="o tag">条件札</span>` : `<span class="o ${c.origin[i]}">${esc(T1D.businesses[c.origin[i]].sub)}</span>`;
-  document.getElementById("preview").innerHTML = c.main.map(i => {
-    const o = T1D.options[i], g = c.grey[i];
-    return `<div class="opt${g ? " grey" : ""}">${tagOf(i)}${c.first && c.first.id === i ? `<span class="m">${esc(R.firstMarkLabel)}（${esc(c.first.why)}）</span>` : ""}<span class="l">${esc(o.label)}</span>`
-      + `<span class="s">${esc(g ? g.reason + " →「" + T1D.options[g.goto].label + "」を見る" : t1Sub(L, i))}</span></div>`;
-  }).join("") + (c.more.length ? `<div class="opt"><span class="l">${esc(R.moreLabel)}</span><span class="s">${c.more.map(i => esc(T1D.options[i].label)).join("・")}</span></div>` : "")
-    + `<div class="opt"><span class="l">${esc(R.always[0])}</span></div>`;
+function listHtml(d, selI) {
+  const l = listAt(d);
+  return l.map((n, i) => itemHtml(n, d, i, i === selI)).join("")
+    + `<button class="add" data-op="add" data-at="${d}:0">＋ 選択肢を足す</button>`
+    + (d > 0 ? `<div class="fixed">${esc(T1_INQ)}（④から先の段には必ず付きます）</div>` : "")
+    + (isAuto(d) ? `<div class="hint">※初期設定のままです。${d === 1 ? "④は試しの土地の種類で入れ替わります。" : ""}直すと、今の並びで固まります。</div>` : "");
 }
-document.addEventListener("change", e => {
-  const b = e.target.dataset.b; if (!b) return;
-  SHOP.biz = e.target.checked ? SHOP.biz.concat(b) : SHOP.biz.filter(x => x !== b);
-  if (!SHOP.biz.length) SHOP.biz = ["b3"]; // 一つも選ばないときは総合
-  save(); renderBiz(); renderPreview();
-});
+function editorHtml(d) {
+  const n = nodeAt(d), b = bizAt(d), kids = t1Kids(n, land());
+  return `<div class="edit"><label>「${esc(n.label)}」を選んだ客に返す文（{目安額} などの穴は、土地の値で埋まります）</label>`
+    + `<textarea rows="3" data-f="text">${esc(t1Tpl(n, b))}</textarea>`
+    + (kids.length ? `<label>次の問い（${QN[d + 1]}の選択肢の前に出ます）</label><input data-f="ask" value="${esc(t1AskOf(n))}">` : "")
+    + `<div class="pv"><b>この土地での見え方：</b><br>${esc(t1Text(n, land(), b))}<br>${esc(kids.length ? t1AskOf(n) : T1D.rules.close)}</div></div>`;
+}
+function render() {
+  document.getElementById("lands").innerHTML = `<span class="hint">試しの土地：</span>` + LANDS.map((x, i) => `<button data-l="${i}" class="${i === LAND ? "sel" : ""}">${esc(x.name)}</button>`).join("");
+  const crumbs = PATH.map((i, d) => `<a data-cr="${d}">${QN[d]} ${esc(listAt(d)[i].label)}</a>`);
+  document.getElementById("crumb").innerHTML = `<a data-cr="-1">最初から</a>` + (crumbs.length ? " › " + crumbs.join(" › ") : "");
+  const L = Math.max(PATH.length - 1, 0);
+  document.getElementById("left").innerHTML = `<h2>${QN[L]} の選択肢</h2><div class="hint">${L === 0 ? "HPから拾った業務内容です。上にあるものほど先に並びます。" : ""}押すと、右にその次が出ます。</div>` + listHtml(L, PATH.length ? PATH[L] : -1);
+  document.getElementById("right").innerHTML = PATH.length
+    ? `<h2>「${esc(nodeAt(L).label)}」を選んだら？ → ${QN[L + 1]}</h2><div class="hint">ここの選択肢を押すと、列が左へずれて、その先を組めます。</div>` + listHtml(L + 1, -1) + editorHtml(L)
+    : `<h2>それを選んだら？</h2><div class="hint">左の選択肢を押すと、それを選んだ客に次に出す選択肢がここに出ます。</div>`;
+  const inp = document.querySelector("[data-in]"); if (inp) { inp.focus(); inp.select(); }
+}
+function op(kind, d, i) {
+  const l = editable(d);
+  if (kind === "up" || kind === "dn") { const j = i + (kind === "up" ? -1 : 1); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; if (PATH[d] === i) PATH[d] = j; else if (PATH[d] === j) PATH[d] = i; }
+  else if (kind === "del") { if (!confirm(`「${l[i].label}」とその先を消しますか？`)) return; l.splice(i, 1); if (PATH.length > d) PATH = PATH[d] === i ? PATH.slice(0, d) : PATH[d] > i ? PATH.slice(0, d).concat(PATH[d] - 1, PATH.slice(d + 1)) : PATH; }
+  else if (kind === "add") { l.push({ label:"新しい選択肢", text:"", kids:[] }); EDIT = `${d}:${l.length - 1}`; }
+  else if (kind === "ed") { EDIT = `${d}:${i}`; }
+  save(); render();
+}
+function rename(d, i, v) { // 直したら、その先は空白に戻る
+  EDIT = null; v = v.trim();
+  const n = editable(d)[i];
+  if (v && v !== n.label) {
+    if (n.text == null) n.text = t1Tpl(n, bizAt(d)); // 元の文は残して、店が直せるように
+    delete n.opt; delete n.nx; n.label = v; n.kids = [];
+    if (PATH.length > d + 1 && PATH[d] === i) PATH = PATH.slice(0, d + 1);
+  }
+  save(); render();
+}
 document.addEventListener("click", e => {
-  const t = e.target, mv = (b, d) => { const a = SHOP.biz, i = a.indexOf(b), j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; save(); renderBiz(); renderPreview(); };
-  if (t.dataset.up) { e.preventDefault(); mv(t.dataset.up, -1); }
-  else if (t.dataset.dn) { e.preventDefault(); mv(t.dataset.dn, 1); }
-  else if (t.dataset.l != null) { LAND = +t.dataset.l; renderPreview(); }
+  const t = e.target.closest("button, a, .item"); if (!t) return;
+  if (t.dataset.op) { e.stopPropagation(); const [d, i] = t.dataset.at.split(":").map(Number); return op(t.dataset.op, d, i); }
+  if (t.dataset.l != null) { LAND = +t.dataset.l; PATH = []; return render(); } // 土地で④の初期値が変わるので、選びは戻す
+  if (t.dataset.cr != null) { PATH = PATH.slice(0, +t.dataset.cr + 1); return render(); }
+  if (t.dataset.go && !e.target.matches("input")) { const [d, i] = t.dataset.go.split(":").map(Number); PATH = PATH.slice(0, d).concat(i); render(); }
 });
-t1Load().then(() => { renderBiz(); renderPreview(); });
+document.addEventListener("keydown", e => { if (e.target.dataset.in && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); e.target.blur(); } });
+document.addEventListener("focusout", e => { if (e.target.dataset.in) { const [d, i] = e.target.dataset.in.split(":").map(Number); rename(d, i, e.target.value); } });
+document.addEventListener("change", e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const d = PATH.length - 1, n = editable(d)[PATH[d]];
+  n[f] = e.target.value; save(); render();
+});
+document.getElementById("read").onclick = async () => {
+  const url = document.getElementById("url").value.trim(), msg = document.getElementById("readMsg");
+  if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
+  let items = [], note = "";
+  if (url) {
+    msg.textContent = "HPを読んでいます…";
+    try {
+      const by = new URLSearchParams(location.search).get("by") || "visitor";
+      const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
+      items = r.items || [];
+      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPのメニューから ${items.length} 個の業務内容を拾いました。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
+    } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
+  }
+  SHOP = t1Default(items); SHOP.url = url; PATH = []; EDIT = null; save(); render();
+  msg.textContent = (note || "初期の4つの業務内容に戻しました。") + (url && !items.length ? "初期の4つの業務内容を出しています。" : "");
+};
+t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
 </script>
 </body>
 </html>
