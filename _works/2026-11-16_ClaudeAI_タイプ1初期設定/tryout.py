@@ -87,7 +87,9 @@ def show(land, biz):
             continue
         sub = next((v for t, v in o.get("subWhen", {}).items() if t in land["tags"]), o["sub"])
         mark = f"【{R['firstMarkLabel']}（{first[1]}）】" if first and i == first[0] else ""
-        print(f"   {mark}{o['label']} ― {fill(sub, land) or o['subPlain']}  {tag}")
+        line = fill(sub, land) or o["subPlain"]
+        if "{目安額}" in sub and land["data"].get("目安の但し書き") and land["data"].get("目安額"): line += fill(R["mismatch"]["subSuffix"], land)   # 種類の違う標準地での計算は、ボタンの下でも断る
+        print(f"   {mark}{o['label']} ― {line}  {tag}")
     if more: print(f"   {R['moreLabel']} → " + "、".join(O[i]["label"] for i in more))
     print(f"   {R['always'][0]}")
     return main, (first[0] if first else main[0]), origin
@@ -114,6 +116,10 @@ LANDS = [
     {"name": "見本B 角地の更地", "cat": "K3", "tags": ["corner", "shoparea"],
      "data": {"地域": "長良", "面積": "60坪（198㎡）", "単価": "8万5,000円", "変動": "＋0.6％", "目安額": "1,750万円", "足し引き": "角地 +4％",
               "用途地域": "第二種中高層住居専用地域", "容積率": "200％", "延べ床上限": "396㎡", "駅": "岐阜駅", "駅距離": "約4.1km", "台数": 7, "店の地区": "長良学区"}},
+    {"name": "見本D 商業地域の家（最寄りの標準地が住宅地）", "cat": "K1", "tags": [],
+     "data": {"地域": "司町", "面積": "61坪（200㎡）", "単価": "12万7,000円", "変動": "＋1.6％", "目安額": "2,540万円", "足し引き": "足し引きなし",
+              "用途地域": "商業地域", "容積率": "400％", "延べ床上限": "800㎡", "駅": "岐阜駅", "駅距離": "約1.2km", "台数": 8,
+              "標準地の種類": "住宅地", "目安の但し書き": "近くに商業地の標準地がなく、住宅地の値での計算なので、実際とは開きが出ます。"}},
     {"name": "見本C 住んでいる家（公開データなし）", "cat": "K1", "tags": ["unsure"],
      "data": {"地域": "山あいの町", "面積": "120坪（397㎡）"}},
 ]
@@ -123,6 +129,6 @@ if __name__ == "__main__":
     print("点検：" + ("問題なし" if not errs else f"{len(errs)}件"))
     for e in errs: print("  -", e)
     if "--check" in sys.argv or errs: sys.exit(1 if errs else 0)
-    for land, biz in [(LANDS[0], ["b3"]), (LANDS[0], ["b1", "b4"]), (LANDS[1], ["b3"]), (LANDS[1], ["b2", "b3"]), (LANDS[2], ["b3"]), (LANDS[2], ["b1"])]:
+    for land, biz in [(LANDS[0], ["b3"]), (LANDS[0], ["b1", "b4"]), (LANDS[1], ["b3"]), (LANDS[1], ["b2", "b3"]), (LANDS[3], ["b3"]), (LANDS[3], ["b1"]), (LANDS[2], ["b1"])]:
         main, first, origin = show(land, biz)
         if first: reply(land, biz, first, origin)
