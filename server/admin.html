@@ -49,6 +49,7 @@
   table.sess th .rz { position:absolute; right:0; top:0; bottom:0; width:7px; cursor:col-resize; user-select:none; }
   table.sess th .rz:hover, table.sess th .rz.on { background:#9db7d6; }
   table.sess a.btn-user-link, table.sess a.btn-user-link.replay { font-size:10px; padding:0 2px; line-height:1.35; border-radius:2px; white-space:nowrap; } /* 再表示・渡す：文字ぎりぎりの反転の箱 */
+  table.sess td.btnc, table.sess th:nth-last-child(-n+2) { text-align:right; padding:4px 2px; } table.sess td.btnc:last-child, table.sess th:last-child { padding-right:6px; }
 </style>
 </head>
 <body>
@@ -199,8 +200,8 @@ function viewCost() {
   </div>
   <h2>セッションと費用（${top.length}件・開いた時点から）</h2>
   <div class="note">画面を開いた時点から行が入り、動きのたびに「進んだ所」が変わります。費用は②で AI が返事をしてから付きます。「時刻」は開始〜最後の動き。行を押すと、このセッションを元に戻します（開いているメイン画面・管理画面・利用状況の画面。確認なし）。列の幅は見出しの右端をドラッグで変えられます。　<label style="white-space:nowrap"><input type="checkbox" id="paid"${window.paidOnly ? " checked" : ""}> 費用が発生したものだけ</label>　${actorSelect()}　並び順：<select id="csort"><option value="new" ${costSort === "new" ? "selected" : ""}>新しい順（始めた時刻）</option><option value="last" ${costSort === "last" ? "selected" : ""}>最後に動いた順</option><option value="cost" ${costSort === "cost" ? "selected" : ""}>費用の大きい順</option></select></div>
-  <div class="scroll"><table class="sess" style="width:${SESS_W.reduce((x, y) => x + y, 0)}px">${sessCols()}<tr>${["時刻", "誰", "進んだ所", "往復", "入力", "出力", "推定", "実績", "最初の言葉", "再表示", "GitHub"].map((h, i) => `<th${i >= 3 && i <= 7 ? ' class="n"' : ""}>${h}<span class="rz" data-i="${i}"></span></th>`).join("")}</tr>
-  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? " <span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td title="${esc(s.by)}">${esc(s.by)}</td><td title="${esc(stageOf(s))}">${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td title="${esc((s.first || "").replace(/\n/g, " "))}">${esc((s.first || "").replace(/\n/g, " "))}</td><td>${replayCell(s)}</td><td>${shareCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
+  <div class="scroll"><table class="sess" style="width:100%">${sessCols()}<tr>${["時刻", "誰", "進んだ所", "往復", "入力", "出力", "推定", "実績", "最初の言葉", "再表示", "GitHub"].map((h, i) => `<th${i >= 3 && i <= 7 || i >= 9 ? ' class="n"' : ""}>${h}${i === 8 || i === 10 ? "" : `<span class="rz" data-i="${i}"></span>`}</th>`).join("")}</tr>
+  ${top.map(s => `<tr${rowAttr(s)}><td>${tm(s.started)}${s.last && s.last !== s.started ? " <span class=\"note\">〜" + tm(s.last).split(" ").pop() + "</span>" : ""}</td><td title="${esc(s.by)}">${esc(s.by)}</td><td title="${esc(stageOf(s))}">${esc(stageOf(s))}</td><td class="n">${s.rounds || "—"}</td><td class="n">${s.rounds ? num(s.inTok) : "—"}</td><td class="n">${s.rounds ? num(s.outTok) : "—"}</td><td class="n">${s.rounds ? money(s.est) : "—"}</td><td class="n">${actual(s)}</td><td title="${esc((s.first || "").replace(/\n/g, " "))}">${esc((s.first || "").replace(/\n/g, " "))}</td><td class="btnc">${replayCell(s)}</td><td class="btnc">${shareCell(s)}</td></tr>`).join("") || `<tr><td colspan="11" class="note">まだありません</td></tr>`}</table></div>
   <h2>Console との突き合わせ（日ごと・Console の日の区切り：${D.lots.tz === "UTC" ? "UTC＝日本時間9時切り替え" : "日本時間"}）</h2>
   <div class="note">トークン数は、こちらの記録と Console が同じものを数えているので、ぴったり合うはずです（合わなければ記録の漏れ）。金額は推定なので、ずれは単価の見直し材料です。Console の数字は「設定」で入れます。</div>
   <div class="scroll"><table><tr><th>日</th><th class="n">往復</th><th class="n">入力（こちら）</th><th class="n">入力（Console）</th><th class="n">出力（こちら）</th><th class="n">出力（Console）</th><th class="n">推定</th><th class="n">実績（Console）</th><th class="n">比（実績÷推定）</th></tr>
@@ -349,17 +350,17 @@ document.getElementById("reload").onclick = load;
 // 設定タブで書いている途中・元に戻す確認の途中は、書き換えない（次にタブを移ったときに読み直す）。開いていた「詳しく」は開いたままにする。
 let stale = false, liveTimer = null;
 // セッション表の列幅（このブラウザに保存。表は動きのたびに描き直すので、幅は colgroup で毎回当てる）
-const SESS_W0 = [150, 90, 80, 46, 60, 56, 110, 70, 380, 56, 46];
-let SESS_W = (() => { try { const w = JSON.parse(localStorage.getItem("reDevSessW")); return Array.isArray(w) && w.length === SESS_W0.length ? w : SESS_W0.slice(); } catch (e) { return SESS_W0.slice(); } })();
+const SESS_W0 = [150, 90, 80, 46, 60, 56, 110, 70, 0, 50, 34]; // 最初の言葉（8）は幅を決めず、残りを全部使う
+let SESS_W = (() => { try { const w = JSON.parse(localStorage.getItem("reDevSessW2")); return Array.isArray(w) && w.length === SESS_W0.length ? w : SESS_W0.slice(); } catch (e) { return SESS_W0.slice(); } })();
 let RESIZING = false;
-const sessCols = () => `<colgroup>${SESS_W.map(w => `<col style="width:${w}px">`).join("")}</colgroup>`;
+const sessCols = () => `<colgroup>${SESS_W.map((w, i) => i === 8 ? "<col>" : `<col style="width:${w}px">`).join("")}</colgroup>`;
 document.addEventListener("mousedown", e => {
   const h = e.target.closest && e.target.closest("table.sess th .rz"); if (!h) return;
   e.preventDefault(); e.stopPropagation();
   const i = +h.dataset.i, col = h.closest("table").querySelectorAll("col")[i], x0 = e.clientX, w0 = SESS_W[i];
   RESIZING = true; h.classList.add("on");
-  const mv = ev2 => { SESS_W[i] = Math.max(30, Math.round(w0 + ev2.clientX - x0)); col.style.width = SESS_W[i] + "px"; h.closest("table").style.width = SESS_W.reduce((x, y) => x + y, 0) + "px"; };
-  const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); h.classList.remove("on"); RESIZING = false; try { localStorage.setItem("reDevSessW", JSON.stringify(SESS_W)); } catch (e3) {} if (stale) liveLoad(); };
+  const mv = ev2 => { SESS_W[i] = Math.max(30, Math.round(w0 + ev2.clientX - x0)); col.style.width = SESS_W[i] + "px"; };
+  const up = () => { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); h.classList.remove("on"); RESIZING = false; try { localStorage.setItem("reDevSessW2", JSON.stringify(SESS_W)); } catch (e3) {} if (stale) liveLoad(); };
   document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
 }, true);
 document.addEventListener("click", e => { if (e.target.closest && e.target.closest("table.sess th .rz")) { e.preventDefault(); e.stopPropagation(); } }, true);
