@@ -629,6 +629,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/land") return await handleLand(req, res, url);
     if (req.method === "GET" && url.pathname === "/api/around") return await handleAround(req, res, url);
+    if (req.method === "GET" && url.pathname === "/api/svmeta") { // 道から見る：ピンに一番近い撮影地点（Street View のメタデータ。無料・回数の制限なし）。景色をピンへ向けるのに使う
+      const lat = +url.searchParams.get("lat"), lng = +url.searchParams.get("lng");
+      if (!isFinite(lat) || !isFinite(lng)) return send(res, 400, { error: "bad_location" });
+      try {
+        const key = fs.readFileSync(MAP_KEY_FILE, "utf8").trim();
+        const r = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat.toFixed(6)},${lng.toFixed(6)}&radius=80&source=outdoor&key=${encodeURIComponent(key)}`, { headers: { Referer: "https://taskboard.asuscomm.com/RealEstate_app/docs/" }, signal: AbortSignal.timeout(5000) });
+        const j = await r.json();
+        return send(res, 200, j.status === "OK" ? { pano: j.pano_id, lat: j.location.lat, lng: j.location.lng } : { none: j.status || "?" });
+      } catch (e) { return send(res, 200, { none: "error" }); }
+    }
     if (req.method === "GET" && url.pathname === "/api/mapkey") { let key = ""; try { key = fs.readFileSync(MAP_KEY_FILE, "utf8").trim(); } catch { /* なければ「道から見る」を出さない */ } return send(res, 200, { key }); }
     if (req.method === "GET" && url.pathname === "/api/public-stats") return send(res, 200, publicStats(adminCtx));
     if (await adminHandler(req, res, url, adminCtx)) return;

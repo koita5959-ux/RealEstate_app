@@ -158,10 +158,26 @@ const LandView = (() => {
   const photo = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
     { attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル（写真）</a>', maxZoom:18 });
   const sv = document.createElement("div"); sv.className = "svbox"; sv.hidden = true;
-  sv.innerHTML = '<iframe title="道から見た様子" loading="lazy" allow="accelerometer; gyroscope; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="svnote">ピンの近くの道から見た様子です。ドラッグで向きを変えられます。ピンの位置を直すときは「地図」へ。</div><div class="svmini" title="ピンの場所"></div>';
+  sv.innerHTML = '<iframe title="道から見た様子" loading="lazy" allow="accelerometer; gyroscope; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="svnote">ピンの近くの道から見た様子です。ピンの方向を向いて開きます（左下の地図：青＝ピン、オレンジ＝見ている場所）。ドラッグで向きを変えられます。ピンの位置を直すときは「地図」へ。</div><div class="svmini" title="ピンの場所"></div>';
   box.appendChild(sv); L.DomEvent.disableClickPropagation(sv); L.DomEvent.disableScrollPropagation(sv);
   const frame = sv.querySelector("iframe");
   let key = "", mode = "map", svAt = "", mini = null, miniPin = null;
+  async function svOpen(ll, at) { // 撮影地点が分かれば、そこからピンの方向へ向けて開く（分からなければ今まで通りピンの近くを向きなしで）
+    const base = `https://www.google.com/maps/embed/v1/streetview?key=${encodeURIComponent(key)}&fov=90&language=ja&region=JP`;
+    let src = base + `&location=${at}`;
+    try {
+      const m = await fetch(`../api/svmeta?lat=${ll.lat}&lng=${ll.lng}`).then(r => r.json());
+      if (m && m.pano) {
+        const r = Math.PI / 180, y = Math.sin((ll.lng - m.lng) * r) * Math.cos(ll.lat * r), x = Math.cos(m.lat * r) * Math.sin(ll.lat * r) - Math.sin(m.lat * r) * Math.cos(ll.lat * r) * Math.cos((ll.lng - m.lng) * r);
+        const hd = ((Math.atan2(y, x) / r) + 360) % 360;
+        src = base + `&pano=${encodeURIComponent(m.pano)}&heading=${hd.toFixed(0)}&pitch=0`;
+        if (miniCam) miniCam.setLatLng([m.lat, m.lng]); else if (mini) miniCam = L.circleMarker([m.lat, m.lng], { radius:5, color:"#fff", weight:2, fillColor:"#e8710a", fillOpacity:1 }).addTo(mini);
+        camAt = [m.lat, m.lng];
+      }
+    } catch (e) { /* 向きなしで開く */ }
+    if (svAt === at) frame.src = src;
+  }
+  let miniCam = null, camAt = null;
   function miniShow(ll) { // 道から見る景色にはピンを描けないので、隅の小さな地図でピンの場所を示す
     if (!mini) {
       mini = L.map(sv.querySelector(".svmini"), { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false });
@@ -169,6 +185,7 @@ const LandView = (() => {
       miniPin = L.marker(ll).addTo(mini);
     }
     mini.invalidateSize(); mini.setView(ll, 16); miniPin.setLatLng(ll);
+    if (camAt && !miniCam) miniCam = L.circleMarker(camAt, { radius:5, color:"#fff", weight:2, fillColor:"#e8710a", fillOpacity:1 }).addTo(mini); // オレンジの点＝見ている場所
   }
   const bar = L.control({ position:"topright" });
   bar.onAdd = () => {
@@ -186,7 +203,7 @@ const LandView = (() => {
     bar.getContainer().querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === mode));
     if (mode === "sv" && here) {
       const at = here.lat.toFixed(6) + "," + here.lng.toFixed(6);
-      if (at !== svAt) { svAt = at; frame.src = `https://www.google.com/maps/embed/v1/streetview?key=${encodeURIComponent(key)}&location=${at}&fov=90&language=ja&region=JP`; }
+      if (at !== svAt) { svAt = at; svOpen(here, at); }
       miniShow(here);
     }
   }
