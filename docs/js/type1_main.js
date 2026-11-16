@@ -33,7 +33,7 @@ async function goStep(i, lead) {
   function step(list, q, trail) { // q は記録の番号（表示は q−1：4＝③）。trail＝③からここまでに選んだ節
     const row = newRow(q); row.classList.add("t1row");
     list.forEach((n, k) => { const b = t1Btn(n.label, ""); b.onclick = () => pick(n, k, b); row.appendChild(b); });
-    if (q > 4 || !list.length) inq(row, q, list.length ? "mail" : "final");
+    inq(row, q, list.length ? "mail" : "final"); // ③から先のどの段にも、問い合わせの出口を必ず付ける（③が0のサイトでも行き止まりにしない）
     document.getElementById("talk").appendChild(row);
     function pick(n, k, b) {
       t1Done(row, b);

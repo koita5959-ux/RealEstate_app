@@ -100,7 +100,7 @@ function colHtml(d) {
   return `<div class="col">${head}<div class="ctx">${esc(ctx)}</div>`
     + list.map((n, i) => itemHtml(n, d, i, PATH[d] === i)).join("")
     + `<button class="add" data-op="add" data-at="${d}:0">＋ 選択肢を足す</button>`
-    + (d > 0 ? `<div class="fixed">${esc(T1_INQ)}（必ず付きます）</div>` : "")
+    + `<div class="fixed">${esc(T1_INQ)}（必ず付きます）</div>`
     + (isAuto(d) ? `<div class="note">※初期設定のまま（候補の表から文脈で出しています）。直すと、今の並びで固まります。</div>` : "") + `</div>`;
 }
 function editHtml() {
