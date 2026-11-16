@@ -7,20 +7,25 @@
 <style>
   :root { --line:#d5dbe2; --sub:#5b6673; --red:#b3261e; --blue:#1f5fa8; }
   body { margin:0; font-family:"Noto Sans JP", system-ui, sans-serif; background:#f6f7f9; color:#1d2430; }
-  main { padding:16px; max-width:1200px; margin:0 auto; }
+  main { padding:16px; max-width:1400px; margin:0 auto; }
   section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:12px; overflow-x:auto; }
   h2 { font-size:16px; margin:0 0 6px; color:var(--red); }
   .hint { color:var(--sub); font-size:13px; }
-  table { border-collapse:collapse; width:100%; font-size:14px; margin-top:8px; }
-  th, td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
-  th { background:#f4f6f9; white-space:nowrap; }
-  td.w { font-size:13px; color:#3a4452; }
-  .gen { font-size:11px; background:#7b8794; color:#fff; border-radius:4px; padding:1px 5px; margin-left:4px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; margin-top:8px; }
+  th, td { border:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; }
+  th { background:#f4f6f9; white-space:nowrap; cursor:pointer; user-select:none; }
+  th .ar { color:var(--red); }
+  tr.f th { background:#fff; cursor:default; padding:2px; }
+  tr.f input { width:100%; box-sizing:border-box; font:inherit; font-size:12px; padding:3px 4px; border:1px solid var(--line); border-radius:4px; }
+  td.w { color:#3a4452; }
+  td.same { color:#b8c0ca; }
   .none { color:var(--sub); }
   .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
   .row input { flex:1; min-width:240px; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
   button { font:inherit; border:1px solid var(--red); background:var(--red); color:#fff; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button.lite { background:#fff; color:var(--red); }
   .x { color:var(--sub); text-decoration:line-through; }
+  .count { margin-left:8px; font-size:13px; color:var(--sub); }
 </style>
 </head>
 <body>
@@ -29,39 +34,58 @@
 <main>
   <section>
     <h2>この表について</h2>
-    <div class="hint" id="note"></div>
+    <div class="hint">1行＝1つの道（大分類・小分類・④・⑤）。③のボタン（HPの見出し）は「手がかりの言葉」で小分類に当て、その小分類の行から④⑤を組みます。木は持たず、行の絞り込みで組むので、⑤から逆に③④を引くこともできます。<br>
+      ④は「土地の種類」に入っている土地でだけ出ます（K1 家がある／K2 空き家・古い家／K3 更地／K4 駐車場・畑など）。一般語の小分類（売却など）は、具体的な小分類と同じ見出しに当たれば外します。<br>
+      表の直しは Claude Code が行います（docs/data/type1_paths.csv。表計算ソフトでもそのまま開けます）。</div>
   </section>
   <section>
     <h2>URLで試す</h2>
-    <div class="hint">HPのURLを入れると、メニューから拾った見出しと、この表での分類を並べます（AIなし。管理画面の組み立てには触りません）。</div>
+    <div class="hint">HPのURLを入れると、メニューから拾った見出しと、この表での当て方を並べます（AIなし。管理画面の組み立てには触りません）。</div>
     <div class="row"><input type="url" id="url" placeholder="https://…（HPのトップのURL）"><button id="go">分類する</button></div>
     <div id="try"></div>
   </section>
   <section>
-    <h2>カテゴリー</h2>
-    <div class="hint">手がかりの言葉は上から順に当てます（上ほど細かい）。④の初期値は、試しの土地の種類に合うものだけが出ます。</div>
-    <div id="cats"></div>
+    <h2>道の表<span class="count" id="count"></span></h2>
+    <div class="hint">見出しを押すと並べ替え（もう一度で逆順）。下の欄に文字を入れると、その列で絞り込みます（複数の列を組み合わせられます）。上の行と同じ値は薄く出します。</div>
+    <div class="row"><button class="lite" id="clear">絞り込みを消す</button></div>
+    <div id="paths"></div>
   </section>
   <section>
-    <h2>外す見出し</h2>
-    <div id="drops"></div>
+    <h2>③の当て方の規則</h2>
+    <div id="rules"></div>
   </section>
 </main>
 <script src="js/type1.js"></script>
 <script>
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
 const words = s => String(s || "").split("|").map(esc).join("・");
-const optName = id => T1D.options[id] ? T1D.options[id].label : id;
-function render() {
-  document.getElementById("note").innerHTML = `版 ${esc(T1C.version)}。${esc(T1C.note)}<br>${esc(T1C.genericNote || "")}<br>表の直しは Claude Code が行います（docs/data/type1_categories.json）。`;
-  document.getElementById("cats").innerHTML = `<table><tr><th>#</th><th>カテゴリー</th><th>手がかりの言葉</th><th>④の初期値</th><th>返事の受け（業態）</th></tr>`
-    + Object.entries(T1C.cats).map(([k, c], i) => `<tr><td>${i + 1}</td><td><b>${esc(c.name)}</b>${T1C.generic.includes(k) ? `<span class="gen">一般語</span>` : ""}<br><span class="hint">${esc(k)}</span></td>`
-      + `<td class="w">${words(c.words)}</td>`
-      + `<td>${c.multi ? "合わせる：" + c.multi.map(m => esc(T1C.cats[m].name)).join("＋") : (c.opts || []).length ? c.opts.map(o => esc(optName(o))).join("<br>") : `<span class="none">なし（店が足す）</span>`}</td>`
-      + `<td>${esc(T1D.businesses[c.biz].sub)}</td></tr>`).join("") + `</table>`;
-  document.getElementById("drops").innerHTML = `<table><tr><th>種類</th><th>言葉（見出しに含まれれば外す）</th></tr>`
-    + `<tr><td>業務でない見出し</td><td class="w">${words(T1C.drop)}</td></tr><tr><td>不動産以外の事業</td><td class="w">${words(T1C.outside)}</td></tr></table>`;
+let SORT = null, DESC = false; const FIL = {};
+function renderPaths() {
+  const H = T1P.head;
+  let rows = T1P.rows.map((r, i) => ({ ...r, "#":i + 1 }));
+  for (const [k, v] of Object.entries(FIL)) if (v) rows = rows.filter(r => String(r[k]).includes(v));
+  if (SORT) rows.sort((a, b) => { const x = a[SORT], y = b[SORT]; const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "ja"); return DESC ? -c : c; });
+  const cols = ["#", ...H];
+  const fl = document.activeElement && document.activeElement.dataset.fk; // 打っている欄を描き直し後も保つ
+  document.getElementById("paths").innerHTML = `<table><tr>${cols.map(k => `<th data-s="${esc(k)}">${esc(k)}${SORT === k ? `<span class="ar">${DESC ? "▼" : "▲"}</span>` : ""}</th>`).join("")}</tr>`
+    + `<tr class="f">${cols.map(k => k === "#" ? "<th></th>" : `<th><input data-fk="${esc(k)}" value="${esc(FIL[k] || "")}"></th>`).join("")}</tr>`
+    + rows.map((r, i) => `<tr>${cols.map(k => { const same = k !== "#" && i > 0 && rows[i - 1][k] === r[k] && cols.indexOf(k) <= 3;
+      return `<td class="${k === "手がかりの言葉" ? "w" : ""}${same ? " same" : ""}">${r[k] ? (k === "手がかりの言葉" ? words(r[k]) : esc(r[k])) : `<span class="none">—</span>`}</td>`; }).join("")}</tr>`).join("") + `</table>`;
+  document.getElementById("count").textContent = `${rows.length} / ${T1P.rows.length} 行`;
+  if (fl) { const e = document.querySelector(`[data-fk="${fl}"]`); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }
 }
+function renderRules() {
+  document.getElementById("rules").innerHTML = `<table><tr><th>規則</th><th>中身</th></tr>`
+    + `<tr><td>大枠の見出し</td><td>${words(T1C.broad.words)}<br>→ 小分類「${T1C.broad.into.map(esc).join("」「")}」を合わせる</td></tr>`
+    + `<tr><td>業務でない見出し（外す）</td><td class="w">${words(T1C.drop)}</td></tr>`
+    + `<tr><td>不動産以外の事業（外す）</td><td class="w">${words(T1C.outside)}</td></tr>`
+    + `<tr><td>同じ小分類が重なる</td><td>短い見出しを一つだけ残す。合わせ物は、中身が全部単独で出ていれば外す</td></tr></table>`;
+}
+document.addEventListener("click", e => {
+  const s = e.target.closest("th[data-s]"); if (s) { const k = s.dataset.s; DESC = SORT === k ? !DESC : false; SORT = k; renderPaths(); }
+});
+document.addEventListener("input", e => { const k = e.target.dataset.fk; if (k) { FIL[k] = e.target.value.trim(); renderPaths(); } });
+document.getElementById("clear").onclick = () => { for (const k in FIL) delete FIL[k]; SORT = null; renderPaths(); };
 document.getElementById("go").onclick = async () => {
   const url = document.getElementById("url").value.trim(), box = document.getElementById("try");
   if (!url) return;
@@ -71,12 +95,13 @@ document.getElementById("go").onclick = async () => {
     const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
     if (r.error) { box.innerHTML = `<p class="hint">HPを開けませんでした（${esc(r.error)}）。</p>`; return; }
     const labels = (r.items || []).map(i => i.label), got = t1Classify(labels), kept = new Set(got.map(n => n.label));
-    box.innerHTML = `<table><tr><th>③のボタン（HPの言葉）</th><th>内部の分類</th></tr>`
-      + (got.length ? got.map(n => `<tr><td><b>${esc(n.label)}</b></td><td>${n.cats.map(c => esc(T1C.cats[c].name)).join("＋")}</td></tr>`).join("") : `<tr><td colspan="2" class="none">拾えた見出しがありません（初期の4業態が出ます）</td></tr>`)
-      + `</table><p class="hint">拾った見出し ${labels.length} 個：${labels.map(l => kept.has(l) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ分類にまとめたもの）</p>`;
+    const norm = l => String(l).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1");
+    box.innerHTML = `<table><tr><th>③のボタン（HPの言葉）</th><th>大分類／小分類</th></tr>`
+      + (got.length ? got.map(n => `<tr><td><b>${esc(n.label)}</b></td><td>${n.cats.map(c => esc((T1P.small[c] ? T1P.small[c].big + "／" : "") + c)).join("＋")}</td></tr>`).join("") : `<tr><td colspan="2" class="none">拾えた見出しがありません（初期の4業態が出ます）</td></tr>`)
+      + `</table><p class="hint">拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）</p>`;
   } catch (e) { box.innerHTML = `<p class="hint">HPを読めませんでした（時間切れか通信の失敗）。</p>`; }
 };
-t1Load().then(render);
+t1Load().then(() => { renderPaths(); renderRules(); });
 </script>
 </body>
 </html>

@@ -2,35 +2,56 @@
 // 決まりは _works/2026-11-16_ClaudeAI_タイプ1初期設定/tryout.py の compose・fill・reply をそのまま移したもの。
 // アプリの一式は data/type1_defaults.json（読むだけ）。店の設定（重視する業務内容・受けの差分）は localStorage「reType1」。
 // 当てはめ案：_works/2026-11-16_ClaudeCode_タイプ1の当てはめ案.md
-let T1D = null, T1C = null; // アプリの一式／③のカテゴリーの表
+let T1D = null, T1C = null, T1P = null; // アプリの一式／③の当て方の規則／道の表（type1_paths.csv）
+// 道の表：1行＝1つの道（大分類・小分類・手がかりの言葉・一般語・④・⑤・土地の種類・業態）。木は持たず、行の絞り込みで③④⑤を組む
+function t1Csv(text) {
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"') q = true; else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n") { row.push(cell.replace(/\r$/, "")); rows.push(row); row = []; cell = ""; } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  const [head, ...body] = rows.filter(r => r.some(Boolean));
+  const h = head.map(x => x.replace(/^\ufeff/, "").trim());
+  return { head:h, rows:body.map(r => Object.fromEntries(h.map((k, i) => [k, (r[i] || "").trim()]))) };
+}
 async function t1Load() {
-  if (!T1D) [T1D, T1C] = await Promise.all(["data/type1_defaults.json", "data/type1_categories.json"].map(async u => (await fetch(u, { cache:"no-cache" })).json()));
+  if (!T1D) {
+    const [d, c, p] = await Promise.all(["data/type1_defaults.json", "data/type1_categories.json", "data/type1_paths.csv"].map(u => fetch(u, { cache:"no-cache" }).then(r => u.endsWith(".csv") ? r.text() : r.json())));
+    T1D = d; T1C = c; T1P = t1Csv(p);
+    const bizOf = Object.fromEntries(Object.entries(T1D.businesses).map(([b, x]) => [x.sub, b]));
+    const optOf = Object.fromEntries(Object.entries(T1D.options).map(([id, o]) => [o.label, id]));
+    T1P.small = {}; // 小分類ごと：手がかりの言葉・一般語・業態（表の上にあるものほど先に当てる）
+    for (const r of T1P.rows) { r.opt = optOf[r["④"]] || null; if (!T1P.small[r.小分類]) T1P.small[r.小分類] = { big:r.大分類, words:r.手がかりの言葉, generic:!!r.一般語, biz:bizOf[r.業態] || "b3" }; }
+  }
   return T1D;
 }
-// HPの見出しをカテゴリーに当てる。ボタン名は見出しのまま、内部は cats。同じカテゴリーは短い見出し一つに、大枠は2〜3カテゴリーを合わせる
+// HPの見出しを小分類に当てる。ボタン名は見出しのまま、内部は cats（小分類の名前）。同じ小分類は短い見出し一つに、大枠は規則の小分類を合わせる
 function t1Classify(labels) {
-  const re = s => new RegExp(s, "i"), drop = re(T1C.drop), out = re(T1C.outside), keys = Object.keys(T1C.cats);
+  const re = s => new RegExp(s, "i"), drop = re(T1C.drop), out = re(T1C.outside), keys = Object.keys(T1P.small);
   const by = new Map();
   for (const raw of labels) {
     const label = String(raw).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1"); // 「売却査定 売却査定」は一つに
     if (!label || drop.test(label) || out.test(label)) continue;
-    let cats = keys.filter(k => k !== "consult" && re(T1C.cats[k].words).test(label));
-    const sp = cats.filter(k => !T1C.generic.includes(k));
-    cats = (sp.length ? sp : cats.slice(0, 1)).slice(0, 3); // 一般的な言葉（売却など）は、具体的なカテゴリーがあれば外す
-    if (!cats.length) { if (!re(T1C.cats.consult.words).test(label)) continue; cats = T1C.cats.consult.multi.slice(); }
+    let cats = keys.filter(k => T1P.small[k].words && re(T1P.small[k].words).test(label));
+    const sp = cats.filter(k => !T1P.small[k].generic);
+    cats = (sp.length ? sp : cats.slice(-1)).slice(0, 3); // 一般語（売却など）は、具体的な小分類があれば外す。一般語だけなら表の下のもの（売却査定＝査定・相場）
+    if (!cats.length) { if (!re(T1C.broad.words).test(label)) continue; cats = T1C.broad.into.slice(); }
     const key = cats.join("+"), had = by.get(key);
-    if (!had || label.length < had.label.length) by.set(key, { label, cats, biz:T1C.cats[cats[0]].biz, at:had ? had.at : by.size });
+    if (!had || label.length < had.label.length) by.set(key, { label, cats, biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
   }
   const one = new Set([...by.values()].filter(n => n.cats.length === 1).map(n => n.cats[0]));
   return [...by.values()].filter(n => n.cats.length === 1 || !n.cats.every(c => one.has(c))) // 合わせ物は、中身が全部単独で出ていれば外す
     .sort((a, b) => a.at - b.at).map(({ at, ...n }) => n);
 }
 // ---- 店が組む選択の木（③から先）。保存は localStorage「reType1」（v:2。v:1 の「重視する業務内容」は読まない） ----
-// 節：{ label, biz?（③：④⑤の初期値を借りる業態）, opt?（④：一式の options のキー）, nx?（⑤：options の next の一つ）,
+// 節：{ label, cats?（③：小分類。④⑤は道の表から）, biz?（返事の受けの業態）, opt?（④：一式の options のキー）, nx?（⑤：options の next の一つ）,
 //       text?（選んだときの返事を店が書いた文）, ask?（次の問いを店が書いた文）, kids?（ない＝初期値のまま。[]＝子なし＝問い合わせだけ） }
 const T1_ASK3 = "この土地で考えられる道です。気になるものを選んでください。";
 const T1_INQ = "ここまでの情報で問い合わせを送る";
-function t1Default(items) { // HPから拾った見出し（カテゴリーに当てたもの。なければ4業態）が③になる
+function t1Default(items) { // HPから拾った見出し（小分類に当てたもの。なければ4業態）が③になる
   const cl = items && items.length ? t1Classify(items.map(i => i.label)) : [];
   const top = cl.length ? cl
     : ["b3", "b1", "b2", "b4"].map(b => ({ label:T1D.businesses[b].name, biz:b }));
@@ -40,15 +61,19 @@ function t1Shop() {
   try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 2 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
   return t1Default();
 }
-// 子の一覧。初期値のままの節は、一式から作る（③の子は試しの土地で入れ替わる）
+// 子の一覧。初期値のままの節は、道の表（なければ一式）から作る（③の子は試しの土地で入れ替わる）
 function t1Kids(node, land) {
   if (node.kids) return node.kids;
+  if (node.opt) {
+    const o = T1D.options[node.opt], next = o.next || [];
+    const want = node.cats ? [...new Set(T1P.rows.filter(r => node.cats.includes(r.小分類) && r.opt === node.opt && r["⑤"]).map(r => r["⑤"]))] : null; // 表に行がない④（条件札が連れてきたもの）は、一式の⑤をそのまま
+    return (want && want.length ? want.map(l => next.find(n => n.label === l)).filter(Boolean) : next).map(n => ({ label:n.label, nx:n, kids:[] }));
+  }
   if (node.cats || node.biz) {
     const c = node.cats ? t1Compose(land, null, node.cats) : t1Compose(land, [node.biz]);
-    return c.main.concat(c.more).map(id => ({ label:T1D.options[id].label, opt:id,
+    return c.main.concat(c.more).map(id => ({ label:T1D.options[id].label, opt:id, cats:node.cats,
       first:c.first && c.first.id === id ? c.first.why : undefined, grey:c.grey[id] ? { reason:c.grey[id].reason, goto:c.grey[id].goto } : undefined }));
   }
-  if (node.opt) return (T1D.options[node.opt].next || []).map(n => ({ label:n.label, nx:n, kids:[] }));
   return [];
 }
 // 初期値のままの子を、今の一覧で固める（店が直すときだけ。土地しだいの印は外す）
@@ -75,11 +100,10 @@ function t1Fill(text, land) {
     .map(s => s.replace(T1_HOLE, (_, h) => String(land.data[h]))).join("");
 }
 // ④の顔ぶれ。biz は重視する業務内容（順番つき）
-function t1Compose(land, biz, cats) { // cats を渡すと、業態の代わりにカテゴリーの表（type1_categories.json）の opts から作る
+function t1Compose(land, biz, cats) { // cats（小分類）を渡すと、業態の代わりに道の表（type1_paths.csv）から作る
   const D = T1D, O = D.options, R = D.rules, ids = [], origin = {};
   if (cats) {
-    const fit = new Set(Object.values(D.sets).flatMap(s => s[land.cat] || [])); // この土地の種類に合う選択肢
-    for (const c of cats) for (const i of T1C.cats[c].opts || []) if (fit.has(i) && !(i in origin)) { ids.push(i); origin[i] = T1C.cats[c].biz; }
+    for (const c of cats) for (const r of T1P.rows) if (r.小分類 === c && r.opt && r.土地の種類.split(/s+/).includes(land.cat) && !(r.opt in origin)) { ids.push(r.opt); origin[r.opt] = T1P.small[c].biz; } // 道の表の上から、この土地の種類に合う④
   } else for (const b of biz) for (const i of (D.sets[b] || {})[land.cat] || []) if (!(i in origin)) { ids.push(i); origin[i] = b; } // 1番から埋め、重なりは一つに
   for (const r of R.tagBrings) if (land.tags.includes(r.tag) && !(r.option in origin)) { ids.push(r.option); origin[r.option] = "札"; } // 条件札が連れてくる
   const ok = ids.filter(i => (O[i].needs || []).every(h => land.data[h])); // 材料のない選択肢は出さない
