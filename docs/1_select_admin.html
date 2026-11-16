@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理画面 ― 選択式</title>
+<style>
+  :root { --line:#d5dbe2; --sub:#5b6673; --red:#b3261e; --blue:#1f5fa8; }
+  body { margin:0; font-family:"Noto Sans JP", system-ui, sans-serif; background:#f6f7f9; color:#1d2430; }
+  main { display:grid; grid-template-columns:minmax(280px, 380px) 1fr; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
+  @media (max-width:800px) { main { grid-template-columns:1fr; } }
+  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; }
+  h2 { font-size:16px; margin:0 0 8px; color:var(--red); }
+  .hint { color:var(--sub); font-size:13px; }
+  .biz { display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--line); border-radius:6px; margin:6px 0; background:#fff; }
+  .biz.on { border-color:var(--red); background:#fff6f5; }
+  .biz .no { width:1.6em; text-align:center; font-weight:bold; color:var(--red); }
+  .biz .mv { margin-left:auto; display:flex; gap:4px; }
+  .biz .mv button { padding:2px 8px; }
+  .lands { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .lands button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
+  button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
+  .opt { border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; }
+  .opt .l { font-weight:bold; }
+  .opt .s { display:block; color:var(--sub); font-size:13px; margin-top:2px; }
+  .opt.grey { opacity:.55; }
+  .opt .m { display:block; color:var(--red); font-size:12px; }
+  .opt .o { float:right; font-size:12px; color:#fff; background:#7b8794; border-radius:4px; padding:1px 6px; }
+  .opt .o.b1 { background:#1f5fa8; } .opt .o.b2 { background:#2e7d32; } .opt .o.b3 { background:#8e5a00; } .opt .o.b4 { background:#6a3d9a; } .opt .o.tag { background:#b3261e; }
+  .land { font-size:13px; color:var(--sub); margin-bottom:8px; }
+</style>
+</head>
+<body>
+<header id="appbar" data-current="admin" data-title="1. 管理画面 ― 試作（コンテンツ：1 選択式）"></header>
+<script src="js/shell.js"></script>
+<main>
+  <section>
+    <h2>重視する業務内容</h2>
+    <div class="hint">チェックを入れると、その業務内容の選択肢が④に入ります。上にあるものほど先に並びます（④は5個まで）。文を書く必要はありません。</div>
+    <div id="bizList"></div>
+    <div class="hint" style="margin-top:10px">HPのURLからの読み取り（業務内容の判定）は、次の段で付けます。今は「総合」が初期値です。</div>
+  </section>
+  <section>
+    <h2>見本：客の画面の④</h2>
+    <div class="hint">試しの土地を変えずに、左のチェックだけ変えてみてください。選択肢の右の札は、どの業務内容から来たかです（この見本だけに出ます）。</div>
+    <div class="lands" id="lands"></div>
+    <div class="land" id="landInfo"></div>
+    <div id="preview"></div>
+  </section>
+</main>
+<script src="js/type1.js"></script>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+// 試しの土地（tryout.py の見本と同じ）
+const LANDS = [
+  { name:"通路の狭い空き家", cat:"K2", tags:["norebuild", "border"], data:{ 地域:"鷺山", 面積:"40坪（132㎡）", 単価:"6万2,000円", 変動:"−0.8％", 目安額:"約570万円", 足し引き:"通路2m未満 −30％", 用途地域:"第一種住居地域", 容積率:"200％", 延べ床上限:"264㎡", 駅:"岐阜駅", 駅距離:"約3.4km", 台数:5 } },
+  { name:"角地の更地", cat:"K3", tags:["corner"], data:{ 地域:"長良", 面積:"60坪（198㎡）", 単価:"8万5,000円", 変動:"＋0.6％", 目安額:"約1,750万円", 足し引き:"角地 +4％", 用途地域:"第二種中高層住居専用地域", 容積率:"200％", 延べ床上限:"396㎡", 駅:"岐阜駅", 駅距離:"約4.1km", 台数:7 } },
+  { name:"商業地域の家（目安が二つ）", cat:"K1", tags:[], two:true, data:{ 地域:"司町", 面積:"61坪（200㎡）", 単価:"12万7,000円", 変動:"＋1.6％", 目安額:"約2,540万〜3,120万円", 足し引き:"足し引きなし", 用途地域:"商業地域", 容積率:"400％", 延べ床上限:"800㎡", 駅:"岐阜駅", 駅距離:"約1.2km", 台数:8, 目安の但し書き:"低いほうは近くの住宅地、高いほうは商業地の標準地の値です。家がある土地は、住宅地の値に近く見られやすい土地です。" } },
+  { name:"駐車場（公開データなし）", cat:"K4", tags:["unsure"], data:{ 地域:"山あいの町", 面積:"120坪（397㎡）" } },
+];
+let SHOP = t1Shop(), LAND = 0;
+function save() { try { localStorage.setItem("reType1", JSON.stringify(SHOP)); } catch (e) { /* 保存できなくても見本は動く */ } }
+function renderBiz() {
+  const all = Object.keys(T1D.businesses), order = SHOP.biz.concat(all.filter(b => !SHOP.biz.includes(b)));
+  document.getElementById("bizList").innerHTML = order.map(b => {
+    const on = SHOP.biz.includes(b), n = SHOP.biz.indexOf(b) + 1;
+    return `<label class="biz${on ? " on" : ""}"><input type="checkbox" data-b="${b}"${on ? " checked" : ""}><span class="no">${on ? n : ""}</span>${esc(T1D.businesses[b].name)}（${esc(T1D.businesses[b].sub)}）`
+      + (on ? `<span class="mv"><button data-up="${b}" title="上へ">↑</button><button data-dn="${b}" title="下へ">↓</button></span>` : "") + `</label>`;
+  }).join("");
+}
+function renderPreview() {
+  const L = LANDS[LAND], c = t1Compose(L, SHOP.biz), R = T1D.rules;
+  document.getElementById("lands").innerHTML = LANDS.map((x, i) => `<button data-l="${i}" class="${i === LAND ? "sel" : ""}">${esc(x.name)}</button>`).join("");
+  document.getElementById("landInfo").textContent = `${T1D.categories[L.cat]}／条件札：${L.tags.map(t => T1D.tags[t]).join("・") || "なし"}`;
+  const tagOf = i => c.origin[i] === "札" ? `<span class="o tag">条件札</span>` : `<span class="o ${c.origin[i]}">${esc(T1D.businesses[c.origin[i]].sub)}</span>`;
+  document.getElementById("preview").innerHTML = c.main.map(i => {
+    const o = T1D.options[i], g = c.grey[i];
+    return `<div class="opt${g ? " grey" : ""}">${tagOf(i)}${c.first && c.first.id === i ? `<span class="m">${esc(R.firstMarkLabel)}（${esc(c.first.why)}）</span>` : ""}<span class="l">${esc(o.label)}</span>`
+      + `<span class="s">${esc(g ? g.reason + " →「" + T1D.options[g.goto].label + "」を見る" : t1Sub(L, i))}</span></div>`;
+  }).join("") + (c.more.length ? `<div class="opt"><span class="l">${esc(R.moreLabel)}</span><span class="s">${c.more.map(i => esc(T1D.options[i].label)).join("・")}</span></div>` : "")
+    + `<div class="opt"><span class="l">${esc(R.always[0])}</span></div>`;
+}
+document.addEventListener("change", e => {
+  const b = e.target.dataset.b; if (!b) return;
+  SHOP.biz = e.target.checked ? SHOP.biz.concat(b) : SHOP.biz.filter(x => x !== b);
+  if (!SHOP.biz.length) SHOP.biz = ["b3"]; // 一つも選ばないときは総合
+  save(); renderBiz(); renderPreview();
+});
+document.addEventListener("click", e => {
+  const t = e.target, mv = (b, d) => { const a = SHOP.biz, i = a.indexOf(b), j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; save(); renderBiz(); renderPreview(); };
+  if (t.dataset.up) { e.preventDefault(); mv(t.dataset.up, -1); }
+  else if (t.dataset.dn) { e.preventDefault(); mv(t.dataset.dn, 1); }
+  else if (t.dataset.l != null) { LAND = +t.dataset.l; renderPreview(); }
+});
+t1Load().then(() => { renderBiz(); renderPreview(); });
+</script>
+</body>
+</html>
