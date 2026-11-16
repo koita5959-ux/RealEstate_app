@@ -444,7 +444,7 @@ function commit() {
 // 保存済みの設定を読む（なければ総合系の初期値）
 function loadSaved() {
   loadMode("m3");
-  try { const sv = JSON.parse(localStorage.getItem("reAdmin")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
+  try { const sv = JSON.parse((localStorage.getItem("reAdmin") || "null").replaceAll("\"接道の条件で、選べる活かし方を現地で一緒に絞ります。\"", "\"この土地の見立てを、担当が現地で確かめます。\"")); if (sv && MODES[sv.mode] && sv.steps[1] && sv.steps[1].branches) { // 分岐のない古い保存は読まない
     modeKey = sv.mode; steps = sv.steps; closeText = sv.close; limit = Math.max(1, sv.free ?? 2 + (sv.extra ?? (sv.limit != null ? Math.max(0, sv.limit - (sv.steps.filter(hasBtns).length + 2)) : 0))); // 前の保存（追加・合計）はフリートークの回数に読み替える
     stance = sv.stance ?? MODES[sv.mode].stance; hint = sv.hint ?? MODES[sv.mode].hint;
     if (sv.stance === undefined) localStorage.setItem("reAdmin", JSON.stringify({ ...sv, name:MODES[sv.mode].name, stance, hint })); // 受け方を持たない古い保存は、初期値を足して保存し直す
