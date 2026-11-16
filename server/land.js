@@ -39,8 +39,8 @@ export function landSetup({ keyFile, dataDir }) {
 
   async function lookup(lat, lng) {
     if (!key) return sample(lat, lng);
-    const zone = await zoneAt(lat, lng).catch(e => ({ error: e.message }));
-    const point = await nearestPoint(lat, lng, zone.name).catch(e => ({ error: e.message }));
+    const zoneP = zoneAt(lat, lng).catch(e => ({ error: e.message })); // 取得は並行、選ぶ所だけ用途地域を待つ
+    const [zone, point] = await Promise.all([zoneP, nearestPoint(lat, lng, zoneP).catch(e => ({ error: e.message }))]);
     return { source: "api", zone, point, note: SOURCE_NOTE };
   }
 
@@ -56,7 +56,7 @@ export function landSetup({ keyFile, dataDir }) {
 
   // 地価公示・地価調査：ピンを含む z13 タイルと、ピンに近い側の隣 3 枚（計 2×2）。今年の分がなければ前年
   // 用途地域の系統と標準地の種類が合うものを、SAME_KIND_M の中で先に選ぶ。なければ最寄りに戻し、mismatch の印（11-16 Claude.AI：商業地域を住宅地の値で言わない）
-  async function nearestPoint(lat, lng, zoneName) {
+  async function nearestPoint(lat, lng, zoneP) {
     const t = tileOf(lat, lng, 13);
     const xs = [t.x, t.x + (t.fx < 0.5 ? -1 : 1)], ys = [t.y, t.y + (t.fy < 0.5 ? -1 : 1)];
     const y0 = new Date().getFullYear();
@@ -66,7 +66,7 @@ export function landSetup({ keyFile, dataDir }) {
       const pts = all.filter(f => f.geometry && f.geometry.type === "Point" && !(f.properties || {}).pause_flag)
         .map(f => ({ f, d: distM(lat, lng, f.geometry.coordinates[1], f.geometry.coordinates[0]) })).sort((a, b) => a.d - b.d);
       if (!pts.length) continue;
-      const want = kindOf(zoneName), use = o => (o.f.properties || {}).use_category_name_ja || "";
+      const want = kindOf(((await zoneP) || {}).name), use = o => (o.f.properties || {}).use_category_name_ja || "";
       const same = want && pts.find(o => o.d <= SAME_KIND_M && use(o) === want);
       const pick = same || pts[0], out = pointOut(pick.f.properties || {}, pick.d, year);
       if (want && use(pick) !== want) out.mismatch = { want, got: use(pick) };
@@ -80,7 +80,7 @@ export function landSetup({ keyFile, dataDir }) {
 
 const SAME_KIND_M = 3000;
 // 用途地域の名前 → 合う標準地の種類（地価公示の用途区分）
-function kindOf(zone) { return !zone ? "" : /商業/.test(zone) ? "商業地" : /工業|工専/.test(zone) ? "工業地" : /住居|住宅|田園/.test(zone) ? "住宅地" : ""; }
+function kindOf(zone) { return !zone ? "" : /商業/.test(zone) ? "商業地" : /準工業/.test(zone) ? "" /* 住宅・店が多く、工業地の値を先に選ぶとかえって開く（11-16） */ : /工業|工専/.test(zone) ? "工業地" : /住居|住宅|田園/.test(zone) ? "住宅地" : ""; }
 function pointOut(p, d, year) {
   return {
     d: Math.round(d), year, yearName: p.target_year_name_ja || String(year),
