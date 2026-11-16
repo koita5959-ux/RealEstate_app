@@ -413,7 +413,7 @@ async function handleShopMenu(req, res) {
   const target = clip(b && b.url, 500);
   if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
-  const r = await readMenu(target).catch((e) => ({ url: target, error: String(e.message || e), items: [] }));
+  const r = await readMenu(target, { deep: !!b.deep }).catch((e) => ({ url: target, error: String(e.message || e), items: [] }));
   const ts = new Date().toISOString();
   writeLog({ ts, who, type: "shopmenu", url: target, by: clip(b.by, 32) || "visitor", sid: "menu-" + ts.replace(/\D/g, "").slice(0, 17),
     status: r.error ? "unreadable" : "ok", items: r.items.length, costUsd: 0, ms: Date.now() - t0 });

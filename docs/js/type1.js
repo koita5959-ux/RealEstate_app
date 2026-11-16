@@ -73,9 +73,18 @@ const T1_BASE = [ // HPから何も拾えないときの③
   { label:"売りたい", cats:["売却（仲介）"] }, { label:"早く手放したい", cats:["早く売る・買取"] },
   { label:"土地を活かしたい", cats:["土地活用", "空き家・空き地"] }, { label:"相続した・相続する", cats:["相続"] },
 ];
-function t1Default(items) { // HPから拾った見出し（小分類に当てたもの。なければ T1_BASE）が③になる
+function t1Default(items) { // HPから拾った見出し（小分類に当てたもの）が③になる。3つ未満なら、よく出る小分類から補う（fill:true）
   const cl = items && items.length ? t1Classify(items.map(i => i.label)) : [];
-  return { v:3, url:"", top:(cl.length ? cl : T1_BASE).map(n => ({ label:n.label, cats:n.cats })) };
+  const top = cl.map(n => ({ label:n.label, cats:n.cats })), have = new Set(top.flatMap(n => n.cats));
+  for (const f of T1C.fill || []) { if (top.length >= (T1C.min3 || 3)) break; if (f.cats.some(c => have.has(c))) continue; top.push({ label:f.label, cats:f.cats, fill:true }); f.cats.forEach(c => have.add(c)); }
+  return { v:3, url:"", top:top.length ? top : T1_BASE.map(n => ({ ...n })) };
+}
+// HPを読む：トップで③が3つ未満なら、会社概要・サイトマップまで読み足す（deep）
+async function t1ReadMenu(url, by) {
+  const ask = async deep => (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, deep }), signal:AbortSignal.timeout(45000) })).json();
+  let r = await ask(false);
+  if (!r.error && t1Classify((r.items || []).map(i => i.label)).length < (T1C.min3 || 3)) { const d = await ask(true); if (!d.error) r = { ...d, deepTried:true }; }
+  return r;
 }
 function t1Shop() {
   try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 3 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }

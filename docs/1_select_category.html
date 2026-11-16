@@ -106,7 +106,7 @@ let SIM = { b3:null, b4:null }, LIST3 = [];
 const smallName = c => (T1P.small[c] ? T1P.small[c].big + "／" : "") + c;
 function chHtml(x, sel, key, i) { return `<button class="ch${sel ? " sel" : ""}" data-${key}="${i}">${x.score != null ? `<span class="sc">${x.score}</span>` : ""}${esc(x.label)}<span class="why">${esc(x.why || "")}</span></button>`; }
 function drawSim() {
-  document.getElementById("s3").innerHTML = LIST3.map((n, i) => chHtml({ label:n.label, why:n.cats.map(smallName).join("＋") }, SIM.b3 === i, "b3", i)).join("") || `<span class="none">なし</span>`;
+  document.getElementById("s3").innerHTML = LIST3.map((n, i) => chHtml({ label:n.label, why:(n.fill ? "補い／" : "") + n.cats.map(smallName).join("＋") }, SIM.b3 === i, "b3", i)).join("") || `<span class="none">なし</span>`;
   const n3 = LIST3[SIM.b3];
   if (!n3) { document.getElementById("s4").innerHTML = `<span class="none">③を押すと出ます</span>`; document.getElementById("s5").innerHTML = `<span class="none">④を押すと出ます</span>`; document.getElementById("ctx").textContent = ""; return; }
   const c4 = t1Next(n3.cats, [n3.label], [], 6);
@@ -129,11 +129,11 @@ document.getElementById("go").onclick = async () => {
   box.textContent = "HPを読んでいます…";
   try {
     const by = new URLSearchParams(location.search).get("by") || "visitor";
-    const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
+    const r = await t1ReadMenu(url, by);
     if (r.error) { box.textContent = `HPを開けませんでした（${r.error}）。`; LIST3 = []; return drawSim(); }
-    const labels = (r.items || []).map(i => i.label); LIST3 = t1Classify(labels);
+    const labels = (r.items || []).map(i => i.label); LIST3 = t1Default(r.items || []).top;
     const kept = new Set(LIST3.map(n => n.label)), norm = l => String(l).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1");
-    box.innerHTML = `拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）`;
+    box.innerHTML = `${r.deepTried ? "トップで足りず、会社概要・サイトマップまで読みました。" : ""}${LIST3.some(n => n.fill) ? "3つに届かない分を補いました（補い）。" : ""}拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）`;
   } catch (e) { box.textContent = "HPを読めませんでした（時間切れか通信の失敗）。"; LIST3 = []; }
   drawSim();
 };

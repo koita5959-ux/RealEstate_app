@@ -84,7 +84,7 @@ const isAuto = d => d > 0 && !trailTo(d).trail[d - 1].kids;
 
 function itemHtml(n, d, i, sel) {
   const t = trailTo(d).trail.concat(n), kids = t1Kids(n, land(), t);
-  const sub = n.cats ? "小分類：" + n.cats.join("＋") : n.why ? "候補の表から（" + n.why + "）" : n.gen ? "" : "店が書いた選択肢";
+  const sub = n.fill ? "補い（HPから取れなかった分）／小分類：" + n.cats.join("＋") : n.cats ? "小分類：" + n.cats.join("＋") : n.why ? "候補の表から（" + n.why + "）" : n.gen ? "" : "店が書いた選択肢";
   const k = kids.length ? `<span class="k">→ ${QN[d + 1]} ${kids.length}つ</span>` : `<span class="k leaf">→ 子なし（問い合わせだけ）</span>`;
   const label = EDIT === `${d}:${i}` ? `<input data-in="${d}:${i}" value="${esc(n.label)}">` : `<span class="l">${esc(n.label)}</span>`;
   return `<div class="item${sel ? " sel" : ""}" data-go="${d}:${i}"><span class="no">${i + 1}</span><span class="body">${label}${sub ? `<span class="s">${esc(sub)}</span>` : ""}${k}</span>`
@@ -161,14 +161,14 @@ document.getElementById("read").onclick = async () => {
     msg.textContent = "HPを読んでいます…";
     try {
       const by = new URLSearchParams(location.search).get("by") || "visitor";
-      const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
+      const r = await t1ReadMenu(url, by);
       items = r.items || [];
-      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPのメニューから ${items.length} 個の見出しを拾いました。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
+      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました${r.deepTried ? "（トップで足りず、会社概要・サイトマップまで読みました）" : ""}。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
     } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
   }
   SHOP = t1Default(items); SHOP.url = url; PATH = []; EDIT = null; save(); render();
-  const used = items.length ? t1Classify(items.map(i => i.label)).length : 0;
-  msg.textContent = (note || "初期の4つに戻しました。") + (url && !used ? "業務内容に当たる見出しがないので、初期の4つを出しています。" : "");
+  const fills = SHOP.top.filter(n => n.fill).length;
+  msg.textContent = (note || "") + (fills ? `③が3つに届かないので、よく出る業務内容を ${fills} つ補いました（「補い」の印）。` : "");
 };
 t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
 </script>
