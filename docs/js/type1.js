@@ -37,7 +37,7 @@ function t1Sub(land, i) {
   const o = T1D.options[i], R = T1D.rules;
   const sub = Object.entries(o.subWhen || {}).find(([t]) => land.tags.includes(t))?.[1] || o.sub;
   let line = t1Fill(sub, land) || o.subPlain;
-  if (/\{目安額\}/.test(sub) && land.data.目安の但し書き && land.data.目安額 && land.data.標準地の種類 && !land.two) line += t1Fill(R.mismatch.subSuffix, land); // 種類の違う標準地での計算は、ボタンの下でも断る
+  if (/\{目安額\}/.test(sub) && land.mismatch && land.data.目安額 && land.data.標準地の種類) line += t1Fill(R.mismatch.subSuffix, land); // 種類の違う標準地での計算は、ボタンの下でも断る
   return line;
 }
 // 選んだ後の返事：受け＋土地の一文＋中身＋問い
@@ -105,7 +105,7 @@ function landOf(s, sheet, raw, around, area, place) {
     if (two) {
       const lowIsAlt = u2Low(p, unit);
       note.push(`低いほうは近くの${lowIsAlt ? p.alt.use : p.use}、高いほうは${lowIsAlt ? p.use : p.alt.use}の標準地の値です。`);
-      if (cat === "K1" || cat === "K2") note.push("家がある土地は、住宅地の値に近く見られやすい土地です。");
+      if ((cat === "K1" || cat === "K2") && [p.use, p.alt.use].includes("住宅地")) note.push("家がある土地は、住宅地の値に近く見られやすい土地です。");
     } else if (p.mismatch) note.push(`近くに${p.mismatch.want}の標準地がなく、${p.mismatch.got}の値での計算なので、実際とは開きが出ます。`);
     const pfar = t1Num(p.far);
     if (!two && pfar && far && pfar !== far) note.push(`比べた標準地は容積率${pfar}％で、この土地の${far}％より${pfar > far ? "大きいので、実際はこれより低く出やすい" : "小さいので、実際はこれより高く出やすい"}です。`);
@@ -115,6 +115,7 @@ function landOf(s, sheet, raw, around, area, place) {
   const st = around && Array.isArray(around.stations) && around.stations[0];
   if (st) { d.駅 = st.name + "駅"; d.駅距離 = t1Km(st.d); }
   if (area > 0) d.台数 = Math.floor(area / 25);
-  return { cat, tags, data:d, two };
+  const mismatch = !two && !!(raw && raw.point && raw.point.mismatch);
+  return { cat, tags, data:d, two, mismatch };
 }
 function u2Low(p, unit) { return t1Num(p.alt.price) < unit; }
