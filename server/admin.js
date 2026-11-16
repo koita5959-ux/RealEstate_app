@@ -6,6 +6,13 @@ import crypto from "node:crypto";
 
 const JST = (ts) => new Date(new Date(ts).getTime() + 9 * 3600_000).toISOString();
 const dayOf = (ts) => JST(ts).slice(0, 10);
+const typeCache = new Map(); // sid → 保存された状態の種類（select＝タイプ1）。一度タイプ1と分かれば変わらない
+function savedType(dir, sid) {
+  if (typeCache.get(sid) === "select") return "select";
+  let t = "";
+  try { t = (JSON.parse(fs.readFileSync(path.join(dir, "sessions", sid + ".json"), "utf8")).state || {}).type || ""; } catch { /* 読めなければ種類なし */ }
+  typeCache.set(sid, t); return t;
+}
 const IDLE_MS = 30 * 60_000; // 最後の動きから30分で「終了」とみなす
 
 // ---- 記録の読み込み ----
@@ -172,6 +179,7 @@ export function summarize(ctx) {
   }
   let saved = new Set();
   try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
+  for (const s of sess.values()) if (s.screen !== "read" && s.screen !== "select" && saved.has(s.sid) && savedType(dir, s.sid) === "select") s.screen = "select"; // 11-17 より前のタイプ1は "talk" で記録されていた。保存された状態の種類で見分ける
   const now = Date.now();
   const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: s.screen !== "read" && (s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3)), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
