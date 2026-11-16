@@ -216,3 +216,18 @@ function closeAim(who) {
 }
 // AIへ渡す公開データの扱い（両タイプ共通。11-16 総合チェック4-1）
 const AI_LAND = { pub:"\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値（価格・前の道など）は近くの別の土地のもので、この土地の値段ではありません。値段を聞かれたら、「単純計算の目安」を「国の標準地の値で単純に計算すると約◯万円」の形で、出どころを付けて言います。その値で売れるとは約束せず、値が動く点を一つ挙げて、そこは担当が確かめる、とつなげます。「単純計算の目安」に、標準地の種類がこの土地と違うと書かれていれば、数字と一緒にそのことを一度言います。目安が二つ書かれていれば、二つとも出どころを付けて言い、この土地がどちらに近そうかを、設問の答え（今の使われ方・道）から一言添えます（例：住んでいる家がある土地なら「住宅地の値に近く見られやすい」）。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。", none:"\n【公開データなし】この場所の標準地価格・用途地域のデータは用意していません。数字は作りません。聞かれたら「国のデータがこの場所にはありません」と一度だけ言い、利用者の答えと周りの様子から言える見立てを一つ返します。" };
+
+// 管理画面の設定（店の設定・HPの読み取り）も記録に入れ、再表示で戻す（11-17 ユーザー：再表示はメイン画面・管理画面・利用状況の全部）
+const SET_KEYS = ["reAdmin", "reTalk", "reType1", "reShopKnow", "reShopHP"];
+buildState = (f => () => { const o = {}; SET_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) o[k] = v; }); return { ...f(), settings:o }; })(buildState);
+restoreSession = (f => d => {
+  const set = d && d.state && d.state.settings;
+  if (set && !d.applied) { // 設定が今と違えば書き戻して読み直す（開いている管理画面は reRestoreStamp で読み直す）
+    let changed = false;
+    SET_KEYS.forEach(k => { const cur = localStorage.getItem(k), v = set[k] ?? null; if (v !== cur) { changed = true; if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } });
+    localStorage.setItem("reRestoreStamp", String(Date.now()));
+    if (changed) { sessionStorage.setItem("rePendingRestore", JSON.stringify(d)); setTimeout(() => location.reload(), 50); return; }
+  }
+  return f(d);
+})(restoreSession);
+try { const p = sessionStorage.getItem("rePendingRestore"); if (p) { sessionStorage.removeItem("rePendingRestore"); setTimeout(() => { try { restoreSession({ ...JSON.parse(p), applied:true }); } catch (e) { REPLAYING = false; } }, 800); } } catch (e) { /* 戻せなくても画面は使える */ }

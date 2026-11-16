@@ -531,7 +531,7 @@ function ev(type, data) {
   else if (STAGE_LABEL[type]) STAGE = STAGE_LABEL[type];
   if (type !== "end") setTimeout(saveSession, 0); // 動きのたびに、利用状況と開発利用状況へ（評価する前の段階も）
   try {
-    const b = JSON.stringify({ sid:SID, by:BY, type, screen:"talk", data:data || {} }); // screen＝画面のタイプ（開発利用状況の「再表示２」）
+    const b = JSON.stringify({ sid:SID, by:BY, type, screen:"select", data:data || {} }); // screen＝画面のタイプ（開発利用状況の「再表示１」）
     if (navigator.sendBeacon) navigator.sendBeacon(EV_URL, new Blob([b], { type:"application/json" }));
     else fetch(EV_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body:b, keepalive:true });
     setTimeout(pingDev, 500); // sendBeacon は届いた時が分からないので、少し待ってから知らせる

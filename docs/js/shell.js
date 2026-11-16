@@ -102,3 +102,6 @@
   Shell.refresh();
   window.addEventListener("storage", e => { if (e.key === SKEY || e.key === null) Shell.refresh(); });
 })();
+
+// 管理画面：開発利用状況の再表示で設定が戻ったら読み直す（メイン画面が reRestoreStamp を書く）
+if (/_admin\.html$/.test(location.pathname)) window.addEventListener("storage", e => { if (e.key === "reRestoreStamp") location.reload(); });

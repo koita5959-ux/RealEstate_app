@@ -507,7 +507,7 @@ async function handleEvent(req, res) {
   const data = {};
   if (b.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data).slice(0, 8)) data[clip(k, 20)] = typeof v === "number" || typeof v === "boolean" ? v : clip(v, 80);
   try {
-    fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, ...(b.screen === "talk" ? { screen: "talk" } : {}), data }) + "\n", { mode: 0o600 });
+    fs.appendFileSync(path.join(DATA_DIR, `events-${today()}.jsonl`), JSON.stringify({ ts: new Date().toISOString(), who, sid: clip(b.sid, 64) || "no-sid", by: clip(b.by, 32) || "visitor", type: b.type, ...(b.screen === "talk" || b.screen === "select" ? { screen: b.screen } : {}), data }) + "\n", { mode: 0o600 });
   } catch (e) { console.error("event write failed:", e.message); }
   touchSnap();
   return send(res, 204, {});

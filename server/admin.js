@@ -144,6 +144,11 @@ export function summarize(ctx) {
   };
   const touch = (s, ts) => { if (!s.started || ts < s.started) s.started = ts; if (!s.last || ts > s.last) s.last = ts; };
   for (const t of turns) {
+    if (t.type === "shopmenu") { // タイプ1の管理画面のメニュー読み取り（AIなし）。体験ではないので再表示しない
+      const s = S(t.sid || "menu-" + t.ts); touch(s, t.ts); s.by = t.by || "（記録なし）"; s.screen = "read";
+      s.first = "メニュー読み取り：" + (t.url || "") + "（" + (t.items ?? 0) + "件・費用0）";
+      continue;
+    }
     if (t.type === "shopread") { // 管理画面の「読み取る」：1回ずつ別の行。URLを「最初の言葉」の欄に出す（前は sid なしで「?」の1行にまとまっていた）
       const s = S(t.sid || "read-" + t.ts); touch(s, t.ts); s.by = t.by || "（記録なし）"; s.screen = "read";
       s.first = "読み取り：" + (t.url || "") + (t.status === "cached" ? "（同じ日の結果を使用・費用0）" : t.status === "unreadable" ? "（読めないHP・費用0）" : "");
@@ -156,7 +161,7 @@ export function summarize(ctx) {
     if (t.meta) { s.maxQ = Math.max(s.maxQ, +t.meta.q || 0); if (t.meta.place) s.place = t.meta.place; if (t.meta.branch) s.branch = t.meta.branch; }
   }
   for (const e of events) {
-    const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?"; if (e.screen === "talk") s.screen = "talk";
+    const s = S(e.sid || "no-sid"); touch(s, e.ts); s.events++; if (s.by === "?") s.by = e.by || "?"; if (e.screen === "talk" || e.screen === "select") s.screen = e.screen;
     if (e.type === "end") s.ended = true;
     const R = { open: 0, map: 1, pin: 2, evaluate: 3, choice: 3 }; // どこまで進んだか（①以降は maxQ で見る）
     if (e.type in R) s.reach = Math.max(s.reach, R[e.type]);
