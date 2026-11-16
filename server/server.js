@@ -330,7 +330,8 @@ async function handleChat(req, res) {
   if (input.contextFixed) system.push({ type: "text", text: `【店のこと】\n${input.contextFixed}`, cache_control: { type: "ephemeral" } });
   if (input.context) system.push({ type: "text", text: `【画面から渡された状況】\n${input.context}` });
   const rec = { ...base, type: input.type, mode: input.type === "talk" ? input.mode : undefined, sid: input.sid, by: input.by, turn, context: input.context, contextFixed: input.contextFixed || undefined, userText, meta: input.meta };
-  rec.triggers = detectTriggers(input.said ? input.said.map((content) => ({ role: "user", content })) : input.messages); // 会話の途中が省かれていても、最初からの発言で判定する // AIには渡さない。発動したかを見るだけ
+  const unwrap = (t) => typeof t === "string" ? t.replace(/【利用者の言葉】\n?/g, "") : t; // タイプ2の囲いを判定に混ぜない
+  rec.triggers = detectTriggers(input.said ? input.said.map((content) => ({ role: "user", content: unwrap(content) })) : input.messages.map((m) => ({ ...m, content: unwrap(m.content) }))); // 会話の途中が省かれていても、最初からの発言で判定する // AIには渡さない。発動したかを見るだけ
   // 発動したら、AIへの説明に一行足す（試験用・2026-11-14）。こちらから言い出さないため、保留・不発では何も足さない
   const fired = rec.triggers.find((g) => g.name === "代替え地" && g.decision === "発動");
   if (fired) {

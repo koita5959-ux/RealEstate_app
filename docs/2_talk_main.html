@@ -444,7 +444,8 @@ function fillLand(sh, r, area) {
   sh.標準地の供給処理 = p.water || p.gas || p.sewer ? `水道 ${yn(p.water)}・ガス ${yn(p.gas)}・下水 ${yn(p.sewer)}` + m : null;
   sh.標準地の区域と規制 = [e(p.division), e(p.zone), p.bcr && "建ぺい率 " + e(p.bcr), p.far && "容積率 " + e(p.far), e(p.fire), e(p.altitude)].filter(Boolean).join("・") + m || null;
   const unit = Number(String(p.price || "").replace(/[^\d]/g, ""));
-  sh.単純計算の目安 = unit && area ? `${yen(unit * area)}（標準地の価格×面積。別の土地の値での単純計算で、この土地の値段ではありません）` + m : null;
+  const mis = p.mismatch ? `近くに${e(p.mismatch.want)}の標準地がなく、${e(p.mismatch.got)}の値での計算なので、実際とは開きが出ます。` : ""; // land.js が種類違いの印を付けたとき
+  sh.単純計算の目安 = unit && area ? `${yen(unit * area)}（標準地の価格×面積。別の土地の値での単純計算で、この土地の値段ではありません）${mis}` + m : null;
   for (const k of Object.keys(sh)) if (sh[k] === m) sh[k] = null;
 }
 
@@ -1140,8 +1141,8 @@ function aiContext(n) {
   let c = "ここまでの土地の条件（利用者の申告と公開データ）\n" + lines.join("\n");
   const src = S.sheet.公開データ || "";
   if (/見本/.test(src)) c += "\n【注意】（見本）と付いた値は、画面の見え方を確かめるための実在しない値です。価格・相場・用途地域などとして利用者に伝えないでください。";
-  else if (/国の公開データ/.test(src)) c += "\n【公開データ】用途地域・建ぺい率・容積率は、この土地（ピンの場所）の国の公開データです。標準地の値は近くの別の土地のもので、この土地の値段ではありません。値段を聞かれたら、「単純計算の目安」を「国の標準地の値で単純に計算すると約◯万円」の形で、出どころを付けて言います。その値で売れるとは約束せず、値が動く点を一つ挙げて、そこは担当が確かめる、とつなげます。広さの話は「この土地の面積」の値だけを使い、標準地の広さをこの土地の広さとして話さないでください。";
-  if (!src || /取得できません/.test(src)) c += "\n【公開データなし】価格や用途地域の数字を挙げたり推測したりしません。不安材料として説明・指摘しません。";
+  else if (/国の公開データ/.test(src)) c += AI_LAND.pub;
+  if (!src || /取得できません/.test(src)) c += AI_LAND.none;
   c += aroundText(S.around, S.sheet.用途地域, (S.sheet.相談目的 || "") + " " + (S.sheet.事情 || ""), n); // 周り（作業用データ）
   const nm = TALK.name, staff = TALK.mode === "staff", me = staff ? "弊社" : nm;
   const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
