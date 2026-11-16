@@ -9,8 +9,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { adminHandler, publicStats, summarize } from "./admin.js";
 import { landSetup } from "./land.js";
 import { aroundSetup } from "./around.js";
-import { read as readSite } from "./shop/read.js";
-import { understand } from "./shop/understand.js";
+import { read as readSite, readMore } from "./shop/read.js";
+import { understand, understandMore, filled } from "./shop/understand.js";
 import { listings, areasText } from "./shop/listings.js";
 import { detectTriggers } from "./trigger.js";
 import { altlandSetup, altlandText } from "./altland.js"; // 代替え地の「例えば」（試験用） // きっかけの察知（試験用・リリースでは外す）
@@ -434,11 +434,25 @@ async function handleShopRead(req, res) {
   if (!(await acquire())) return send(res, 429, { error: "busy" });
   try {
     const u = await understand((p) => createWithRetry(p, base, goodJson), { model: MODEL, maxTokens: 4000, effort: EFFORT }, r);
-    const costUsd = estimateUsd(u.usage); spentUsd += costUsd;
+    let costUsd = estimateUsd(u.usage); spentUsd += costUsd;
+    // 読み直し：中身の欄が4つ以下で、まだ読んでいない「店が何をするか」のページが残っていれば、空欄だけ埋める（1回目は確保）
+    let reread;
+    if (u.shop && filled(u.shop) <= 4 && (r.rest || []).length) {
+      const more = await readMore(r, 3);
+      if (more.length) {
+        const before = filled(u.shop);
+        const m = await understandMore((p) => createWithRetry(p, base, goodJson), { model: MODEL, maxTokens: 4000, effort: EFFORT }, u.shop, more);
+        const c2 = estimateUsd(m.usage); spentUsd += c2; costUsd += c2;
+        u.usage = { input_tokens: (u.usage.input_tokens || 0) + (m.usage.input_tokens || 0), output_tokens: (u.usage.output_tokens || 0) + (m.usage.output_tokens || 0) };
+        u.shop = m.shop;
+        reread = { before, after: filled(u.shop), added: m.added, pages: more.map((p) => p.label || p.url), costUsd: c2 };
+        site.pages.push(...more.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, imgs: p.imgs, imgHeavy: p.imgHeavy, reread: true })));
+      }
+    }
     if (u.shop && heavy.length) u.shop.unread = [...(Array.isArray(u.shop.unread) ? u.shop.unread : []),
       `画像の中の文字（${heavy.join("・")}のページ。本文より画像が多く、売り文句が画像の中にあると、AIにも検索にも読まれていない可能性があります）`];
-    writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd: costUsd + (base.retryLostUsd || 0), ms: Date.now() - t0, reply: clip(u.text, 4000) });
-    const body = { site, shop: u.shop, raw: u.shop ? undefined : clip(u.text, 2000) };
+    writeLog({ ...base, status: u.shop ? "ok" : "bad_json", inputTokens: u.usage.input_tokens || 0, outputTokens: u.usage.output_tokens || 0, costUsd: costUsd + (base.retryLostUsd || 0), ms: Date.now() - t0, reply: clip(u.text, 4000), ...(reread ? { reread } : {}) });
+    const body = { site, shop: u.shop, reread, raw: u.shop ? undefined : clip(u.text, 2000) };
     if (u.shop) readCache.set(target, { day: today(), ts, body });
     return send(res, 200, { ...body, costUsdEstimate: costUsd, ms: Date.now() - t0 });
   } catch (e) {

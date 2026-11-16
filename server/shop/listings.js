@@ -107,7 +107,7 @@ export async function listings(top, { lookup, dataDir, limitMs = 45000 } = {}) {
   r.towns = byTown.size;
   const zone = new Map();
   for (const x of byTown.values()) { x.z5 = zoneOf(dataDir, x.city, x.town); const zk = x.z5 ? x.city + "#" + x.z5 : "?" + x.city + x.town; if (!zone.has(zk)) zone.set(zk, []); zone.get(zk).push(x); }
-  for (const list of zone.values()) { list.sort((a, b) => b.n - a.n); const lab = list[0].city + list[0].town + (list.length > 1 ? "周辺" : ""); for (const x of list) x.zoneLabel = x.z5 ? lab : list[0].city; }
+  for (const list of zone.values()) { list.sort((a, b) => b.n - a.n); const lab = list.length > 1 ? list[0].city + list[0].town + "周辺" : list[0].city; /* 町が1つだけなら町名を出さず市区町村まで */ for (const x of list) x.zoneLabel = x.z5 ? lab : list[0].city; }
   // 多い町から8つ、座標 → 学区・駅（国土地理院の住所検索）
   const groups = new Map();
   for (const x of [...byTown.values()].sort((a, b) => b.n - a.n).slice(0, 8)) {

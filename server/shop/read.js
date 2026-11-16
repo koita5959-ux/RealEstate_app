@@ -9,6 +9,8 @@ import { pathToFileURL } from 'url';
 const UA = 'Mozilla/5.0 (RealEstate_app siteread; +https://taskboard.asuscomm.com/RealEstate_app/)';
 const PROFILE_WORDS = /会社概要|会社案内|会社情報|企業情報|事務所概要|事務所案内|店舗情報|店舗案内|アクセス|プロフィール|運営会社|運営者|私たちについて|当社について|company|profile|about|access|outline|gaiyou|gaiyo/i;
 const CASE_WORDS = /事例|実績|お客様の声|お客さまの声|売却事例|解決事例|取扱物件|取引事例|case|works|voice/i; // 合う相談・合いにくい相談は事例の偏りから読む
+const SERVICE_WORDS = /サポート|サービス|業務内容|事業内容|売却|売りたい|購入|買取|相続|空き家|管理|コンサル|ご相談|support|service|business/i; // 店が何をするかを書いたページ
+const SKIP_WORDS = /一覧|検索|問い合わせ|査定依頼|依頼フォーム|form|メールマガジン|contact|プライバシー|privacy|個人情報|サイトマップ|sitemap|採用|recruit|ブログ|blog|お知らせ|news|\.(jpe?g|png|gif|pdf)$/i;
 const TEXT_MAX = 8000;
 
 // 管理画面から誰でもURLを渡せるので、サーバーの内側（LAN・自分自身）へは取りに行かない
@@ -92,6 +94,27 @@ function pick(text) {
   return { lic, reg, tel, addr, copy };
 }
 
+async function readPage(l) {
+  const g = await get(l.url);
+  if (!g.ok) return { url: l.url, kind: l.kind, error: g.error || `HTTP ${g.status}` };
+  const q = parse(g.html, g.url);
+  return { url: g.url, kind: l.kind, label: l.label, text: q.text.slice(0, TEXT_MAX), imgs: q.imgs, imgHeavy: q.imgHeavy };
+}
+
+// 読み直し用：1回目で読まなかった「店が何をするか」のページを、最大 n つ読む
+async function readMore(r, n = 3) {
+  const add = [];
+  const texts = r.texts || new Set();
+  for (const l of r.rest || []) {
+    if (add.length >= n) break;
+    await new Promise(res => setTimeout(res, 400));
+    const pg = await readPage(l);
+    if (!pg.text || texts.has(pg.text)) continue;
+    texts.add(pg.text); add.push(pg);
+  }
+  return add;
+}
+
 async function read(url) {
   const out = { url, pages: [], picked: { lic: [], tel: [], addr: [], copy: '' } };
   const top = await get(url);
@@ -103,24 +126,36 @@ async function read(url) {
   const seen = new Set([top.url]);
   const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
     && (new URL(l.url).host === host || /about|company|profile/i.test(l.url)));
-  const uniq = [...new Map(cands.map(l => [l.url, { ...l, kind: 'profile' }])).values()].slice(0, 2);
+  let prof = [...new Map(cands.map(l => [l.url, { ...l, kind: 'profile' }])).values()];
+  const notAccess = prof.filter(l => !/アクセス|access/i.test(l.label + ' ' + l.url));
+  if (notAccess.length) prof = notAccess; // 会社概要があれば、アクセス（地図と住所だけ）は読まない
+  const uniq = prof.slice(0, 2);
   const cases = p.links.filter(l => CASE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url) && !uniq.some(u => u.url === l.url)
     && new URL(l.url).host === host);
   if (cases.length) uniq.push({ ...cases[0], kind: 'case' });
+  // 店が何をするかのページ（売却サポート・業務内容など）。1回目は1つ、残りは読み直しの候補に取っておく
+  const services = [...new Map(p.links.filter(l => SERVICE_WORDS.test(l.label + ' ' + l.url) && !SKIP_WORDS.test(l.label + ' ' + l.url)
+    && !seen.has(l.url) && !uniq.some(u => u.url === l.url) && new URL(l.url).host === host).map(l => [l.url, { ...l, kind: 'service' }])).values()];
+  const rank = l => { const s = l.label + ' ' + l.url; return /売却|売りたい/.test(s) ? 0 : /相続|空き家/.test(s) ? 1 : /業務|事業|サービス|service|business/i.test(s) ? 2 : 3; };
+  services.sort((a, b) => rank(a) - rank(b)); // 売却 → 相続・空き家 → 業務内容 → そのほか
+  if (services.length) uniq.push(services.shift());
+  out.rest = services;
+  const texts = new Set();
   for (const l of uniq) {
     await new Promise(r => setTimeout(r, 400));
-    const g = await get(l.url);
-    if (!g.ok) { out.pages.push({ url: l.url, kind: l.kind, error: g.error || `HTTP ${g.status}` }); continue; }
-    const q = parse(g.html, g.url);
-    out.pages.push({ url: g.url, kind: l.kind, label: l.label, text: q.text.slice(0, TEXT_MAX), imgs: q.imgs, imgHeavy: q.imgHeavy });
+    const pg = await readPage(l);
+    if (pg.text && texts.has(pg.text)) continue; // 別のリンクから同じページ
+    if (pg.text) texts.add(pg.text);
+    out.pages.push(pg);
   }
+  out.texts = texts;
   const all = out.pages.map(x => x.text || '').join(' ');
   out.picked = pick(all);
   out.js_only = p.text.length < 200;   // 本文がほぼない＝画面をJSで作るサイト
   return out;
 }
 
-export { read, get, parse };
+export { read, readMore, get, parse };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [csv, dst] = process.argv.slice(2);
