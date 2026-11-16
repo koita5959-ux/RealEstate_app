@@ -48,7 +48,7 @@
   table.sess th, table.sess td { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; padding:4px 7px; position:relative; }
   table.sess th .rz { position:absolute; right:0; top:0; bottom:0; width:7px; cursor:col-resize; user-select:none; }
   table.sess th .rz:hover, table.sess th .rz.on { background:#9db7d6; }
-  table.sess a.btn-user-link.replay, table.sess .act { white-space:nowrap; }
+  table.sess a.btn-user-link, table.sess a.btn-user-link.replay { font-size:10px; padding:0 2px; line-height:1.35; border-radius:2px; white-space:nowrap; } /* 再表示・渡す：文字ぎりぎりの反転の箱 */
 </style>
 </head>
 <body>
@@ -349,7 +349,7 @@ document.getElementById("reload").onclick = load;
 // 設定タブで書いている途中・元に戻す確認の途中は、書き換えない（次にタブを移ったときに読み直す）。開いていた「詳しく」は開いたままにする。
 let stale = false, liveTimer = null;
 // セッション表の列幅（このブラウザに保存。表は動きのたびに描き直すので、幅は colgroup で毎回当てる）
-const SESS_W0 = [150, 90, 80, 46, 60, 56, 110, 70, 380, 72, 66];
+const SESS_W0 = [150, 90, 80, 46, 60, 56, 110, 70, 380, 56, 46];
 let SESS_W = (() => { try { const w = JSON.parse(localStorage.getItem("reDevSessW")); return Array.isArray(w) && w.length === SESS_W0.length ? w : SESS_W0.slice(); } catch (e) { return SESS_W0.slice(); } })();
 let RESIZING = false;
 const sessCols = () => `<colgroup>${SESS_W.map(w => `<col style="width:${w}px">`).join("")}</colgroup>`;
