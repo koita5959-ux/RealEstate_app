@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分類の表 ― 選択式</title>
+<style>
+  :root { --line:#d5dbe2; --sub:#5b6673; --red:#b3261e; --blue:#1f5fa8; }
+  body { margin:0; font-family:"Noto Sans JP", system-ui, sans-serif; background:#f6f7f9; color:#1d2430; }
+  main { padding:16px; max-width:1200px; margin:0 auto; }
+  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:12px; overflow-x:auto; }
+  h2 { font-size:16px; margin:0 0 6px; color:var(--red); }
+  .hint { color:var(--sub); font-size:13px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; margin-top:8px; }
+  th, td { border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  th { background:#f4f6f9; white-space:nowrap; }
+  td.w { font-size:13px; color:#3a4452; }
+  .gen { font-size:11px; background:#7b8794; color:#fff; border-radius:4px; padding:1px 5px; margin-left:4px; }
+  .none { color:var(--sub); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
+  .row input { flex:1; min-width:240px; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  button { font:inherit; border:1px solid var(--red); background:var(--red); color:#fff; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  .x { color:var(--sub); text-decoration:line-through; }
+</style>
+</head>
+<body>
+<header id="appbar" data-current="admin" data-title="1. 分類の表 ― 開発用（コンテンツ：1 選択式・閲覧のみ）"></header>
+<script src="js/shell.js"></script>
+<main>
+  <section>
+    <h2>この表について</h2>
+    <div class="hint" id="note"></div>
+  </section>
+  <section>
+    <h2>URLで試す</h2>
+    <div class="hint">HPのURLを入れると、メニューから拾った見出しと、この表での分類を並べます（AIなし。管理画面の組み立てには触りません）。</div>
+    <div class="row"><input type="url" id="url" placeholder="https://…（HPのトップのURL）"><button id="go">分類する</button></div>
+    <div id="try"></div>
+  </section>
+  <section>
+    <h2>カテゴリー</h2>
+    <div class="hint">手がかりの言葉は上から順に当てます（上ほど細かい）。④の初期値は、試しの土地の種類に合うものだけが出ます。</div>
+    <div id="cats"></div>
+  </section>
+  <section>
+    <h2>外す見出し</h2>
+    <div id="drops"></div>
+  </section>
+</main>
+<script src="js/type1.js"></script>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+const words = s => String(s || "").split("|").map(esc).join("・");
+const optName = id => T1D.options[id] ? T1D.options[id].label : id;
+function render() {
+  document.getElementById("note").innerHTML = `版 ${esc(T1C.version)}。${esc(T1C.note)}<br>${esc(T1C.genericNote || "")}<br>表の直しは Claude Code が行います（docs/data/type1_categories.json）。`;
+  document.getElementById("cats").innerHTML = `<table><tr><th>#</th><th>カテゴリー</th><th>手がかりの言葉</th><th>④の初期値</th><th>返事の受け（業態）</th></tr>`
+    + Object.entries(T1C.cats).map(([k, c], i) => `<tr><td>${i + 1}</td><td><b>${esc(c.name)}</b>${T1C.generic.includes(k) ? `<span class="gen">一般語</span>` : ""}<br><span class="hint">${esc(k)}</span></td>`
+      + `<td class="w">${words(c.words)}</td>`
+      + `<td>${c.multi ? "合わせる：" + c.multi.map(m => esc(T1C.cats[m].name)).join("＋") : (c.opts || []).length ? c.opts.map(o => esc(optName(o))).join("<br>") : `<span class="none">なし（店が足す）</span>`}</td>`
+      + `<td>${esc(T1D.businesses[c.biz].sub)}</td></tr>`).join("") + `</table>`;
+  document.getElementById("drops").innerHTML = `<table><tr><th>種類</th><th>言葉（見出しに含まれれば外す）</th></tr>`
+    + `<tr><td>業務でない見出し</td><td class="w">${words(T1C.drop)}</td></tr><tr><td>不動産以外の事業</td><td class="w">${words(T1C.outside)}</td></tr></table>`;
+}
+document.getElementById("go").onclick = async () => {
+  const url = document.getElementById("url").value.trim(), box = document.getElementById("try");
+  if (!url) return;
+  box.innerHTML = `<p class="hint">HPを読んでいます…</p>`;
+  try {
+    const by = new URLSearchParams(location.search).get("by") || "visitor";
+    const r = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(30000) })).json();
+    if (r.error) { box.innerHTML = `<p class="hint">HPを開けませんでした（${esc(r.error)}）。</p>`; return; }
+    const labels = (r.items || []).map(i => i.label), got = t1Classify(labels), kept = new Set(got.map(n => n.label));
+    box.innerHTML = `<table><tr><th>③のボタン（HPの言葉）</th><th>内部の分類</th></tr>`
+      + (got.length ? got.map(n => `<tr><td><b>${esc(n.label)}</b></td><td>${n.cats.map(c => esc(T1C.cats[c].name)).join("＋")}</td></tr>`).join("") : `<tr><td colspan="2" class="none">拾えた見出しがありません（初期の4業態が出ます）</td></tr>`)
+      + `</table><p class="hint">拾った見出し ${labels.length} 個：${labels.map(l => kept.has(l) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ分類にまとめたもの）</p>`;
+  } catch (e) { box.innerHTML = `<p class="hint">HPを読めませんでした（時間切れか通信の失敗）。</p>`; }
+};
+t1Load().then(render);
+</script>
+</body>
+</html>
