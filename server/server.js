@@ -621,9 +621,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);
     if (req.method === "GET" && url.pathname === "/api/sample") {
       const clip2 = (v) => String(v ?? "").slice(0, 32).replace(/[^\w.-]/g, "");
-      const r = clip2(url.searchParams.get("r")), k = clip2(url.searchParams.get("k")), by = clip2(url.searchParams.get("by"));
-      let html; try { html = renderSample(r); } catch { return send(res, 500, { error: "sample_missing" }); }
-      logSample(DATA_DIR, req, r, k, by, regionKnown(r));
+      const r = clip2(url.searchParams.get("r")), k = clip2(url.searchParams.get("k")), by = clip2(url.searchParams.get("by")), page = url.searchParams.get("page") === "pr" ? "pr" : "";
+      let html; try { html = renderSample(r, page); } catch { return send(res, 500, { error: "sample_missing" }); }
+      logSample(DATA_DIR, req, r, k, by, regionKnown(r), page);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
       return res.end(html);
     }

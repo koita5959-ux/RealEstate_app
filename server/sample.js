@@ -4,6 +4,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 const SITE = "/site/index.html";
+const PR = "/site/pr/index.html"; // 広告ページ（不動産向けチャットボットのセールス概要）
+const CONF = "/site/site.json";   // 開発元の表記など（一か所で直す）
 const REGIONS = "/regions/地区一覧.csv";
 let regions = null;
 
@@ -19,8 +21,17 @@ function loadRegions() {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
 
-export function renderSample(r) {
-  let html = fs.readFileSync(SITE, "utf8");
+function conf() { try { return JSON.parse(fs.readFileSync(CONF, "utf8")); } catch { return {}; } }
+
+// page：空＝サンプルHP、"pr"＝広告ページ。どちらも ?r= を引き継いで行き来する
+export function renderSample(r, page) {
+  const c = conf(), dev = esc(c.developer || "開発元（準備中）");
+  const rq = loadRegions().has(r) ? `?r=${encodeURIComponent(r)}` : "";
+  if (page === "pr") {
+    const top = "../" + rq;
+    return fs.readFileSync(PR, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{SAMPLE_URL}}", top + "#bot").replaceAll("{{CONTACT_URL}}", top + "#contact");
+  }
+  let html = fs.readFileSync(SITE, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{PR_URL}}", "pr/" + rq);
   const name = loadRegions().get(r);
   if (name) return html.replaceAll("{{REGION}}", esc(name));
   // 地区の指定がない・一覧にないとき（監修書 2-1）
@@ -29,11 +40,11 @@ export function renderSample(r) {
   return html.replaceAll("{{REGION}}", "地域");
 }
 
-export function logSample(dataDir, req, r, k, by, known) {
+export function logSample(dataDir, req, r, k, by, known, page) {
   const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
   const who = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 12);
   const day = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
-  const row = { ts: new Date().toISOString(), who, by: by || "visitor", r: r || null, known, k: k || null };
+  const row = { ts: new Date().toISOString(), who, by: by || "visitor", r: r || null, known, k: k || null, ...(page ? { page } : {}) };
   try { fs.appendFileSync(path.join(dataDir, `sample-${day}.jsonl`), JSON.stringify(row) + "\n", { mode: 0o600 }); }
   catch (e) { console.error("sample log failed:", e.message); }
 }
