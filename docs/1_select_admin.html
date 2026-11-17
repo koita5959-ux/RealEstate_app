@@ -14,6 +14,10 @@
   .hint { color:var(--sub); font-size:13px; }
   button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
   button.main { background:var(--red); color:#fff; border-color:var(--red); }
+  button.main:disabled { opacity:.55; cursor:wait; }
+  .loading { color:var(--red); font-weight:600; }
+  .loading::before { content:""; display:inline-block; width:.9em; height:.9em; margin-right:.4em; vertical-align:-.1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   .lands { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
   .lands button { font-size:13px; padding:3px 8px; }
   .lands button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
@@ -51,7 +55,7 @@
     <div class="row">
       <b>あなたのHP</b>
       <input type="url" id="url" placeholder="https://…（HPのトップのURL）">
-      <button class="main" id="read">読み込む（初期状態に戻す）</button>
+      <button class="main" id="read">読み込み（初期設定）</button>
     </div>
     <div class="hint" id="readMsg">HPのメニューから業務内容を全部拾い、<span class="q">③</span>の選択肢にします（AIは使いません）。読み込むたびに、それまでの組み立ては消えて初期状態に戻ります。URLが空なら、初期の4つに戻ります。</div>
     <div class="hint">④⑤の初期値は、<a href="1_select_category.html" target="_blank">分類の表</a>の候補から、③の小分類と押した言葉で選んでいます。</div>
@@ -158,17 +162,22 @@ document.getElementById("read").onclick = async () => {
   if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
   let items = [], areas = [], note = "";
   if (url) {
-    msg.textContent = "HPを読んでいます…";
+    const btn = document.getElementById("read"), t0 = Date.now();
+    btn.disabled = true; msg.className = "hint loading";
+    const tick = () => { msg.textContent = `HPを読んでいます…（${Math.round((Date.now() - t0) / 1000)}秒。トップ・物件情報・会社概要と物件の地区を読むので、30秒ほどかかることがあります）`; };
+    tick(); const timer = setInterval(tick, 1000);
     try {
       const by = new URLSearchParams(location.search).get("by") || "visitor";
       const r = await t1ReadMenu(url, by);
       items = r.items || []; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
       note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました（トップ・物件情報・会社概要を読みました）。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
     } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
+    clearInterval(timer); btn.disabled = false; msg.className = "hint";
   }
   SHOP = t1Default(url ? items : undefined); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
   msg.textContent = note || "";
 };
+document.getElementById("url").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && !document.getElementById("read").disabled) { e.preventDefault(); document.getElementById("read").click(); } }); // URLの欄でエンター＝読み込み
 t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
 </script>
 </body>
