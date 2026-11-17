@@ -133,7 +133,7 @@ document.getElementById("go").onclick = async () => {
     if (r.error) { box.textContent = `HPを開けませんでした（${r.error}）。`; LIST3 = []; return drawSim(); }
     const labels = (r.items || []).map(i => i.label); LIST3 = t1Default(r.items || []).top;
     const kept = new Set(LIST3.map(n => n.label)), norm = l => String(l).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1");
-    box.innerHTML = `${r.deepTried ? "トップで足りず、会社概要・サイトマップまで読みました。" : ""}${LIST3.some(n => n.fill) ? "3つに届かない分を補いました（補い）。" : ""}拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）`;
+    box.innerHTML = `拾った見出し ${labels.length} 個：${labels.map(l => kept.has(norm(l)) ? esc(l) : `<span class="x">${esc(l)}</span>`).join("／") || "なし"}（線は、外したか同じ小分類にまとめたもの）`;
   } catch (e) { box.textContent = "HPを読めませんでした（時間切れか通信の失敗）。"; LIST3 = []; }
   drawSim();
 };

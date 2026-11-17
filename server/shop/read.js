@@ -64,9 +64,10 @@ function parse(html, base) {
   const desc = decode((html.match(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)/i)
     || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']description/i) || [])[1] || '');
   const links = [];
-  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     try {
-      const u = new URL(decode(m[1]), base);
+      if (m[1].startsWith('#')) continue; // 同じページの中への飛び先は数えない（property.php#… はページへのリンクとして数える）
+      const u = new URL(decode(m[1]), base); u.hash = '';
       if (!/^https?:$/.test(u.protocol)) continue;
       const label = decode(m[2].replace(/<img[^>]*alt=["']([^"']*)["'][^>]*>/gi, ' $1 ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
       links.push({ url: u.href, label });
@@ -161,44 +162,54 @@ const BIZ_OF = [[/相続|遺産|贈与|税|遺言|成年後見/, 'b4'], [/買取
   [/仲介|売却|売りたい|購入|買いたい|物件|賃貸|貸したい|借りたい/, 'b1']];
 const MENU_SKIP = /詳細|こちら|もっと見る|を見る|一覧|more|read|万円|㎡|坪|号室|\d{3,}|[０-９]{3,}|最近|お気に入り|おすすめ|オススメ|[！!☆★♪]|募集|値下げ|でました|まだまだ|限定/i; // 見出しでなく、飾りのリンク・個々の物件や宣伝（値段・面積・番号・！つき）
 const MENU_WORDS = /物件|賃貸|売買|土地|マンション|戸建|住まい|管理|仲介/; // メニューでは、物件の種類・賃貸も業務の印として拾う
-const BODY_HEAD = /(?:主な)?(?:業務内容|事業内容|営業品目|業務案内|取扱業務|営業内容)/; // 本文の業務一覧の見出し
-// deep：③が足りないとき（画面が判断して頼む）、会社概要とサイトマップのページも読み、同じ拾い方を足す（from:'deep'）
+// 本文の業務一覧：見出し → 一覧 → 次の項目（所属団体・免許・資格…）で止める。見出しは何度も出る（ナビにも）ので、業務の言葉がいちばん多く取れた所を使う
+const BODY_HEAD = /(?:主な)?(?:業務内容|事業内容|事業の内容|営業品目|業務案内|取扱業務|取扱い業務|営業内容|事業概要|事業紹介|サービス内容|資産活用)/g;
+const BODY_STOP = /所属団体|加盟団体|免許|許可|登録番号|資格|代表者?|設立|創業|資本金|従業員|社員数|取引銀行|保証協会|アクセス|所在地|住所|営業時間|定休日|お問い?合わせ|このページの先頭|ページトップ|Copyright|©|個人情報/;
+const BIZ_WORDS = /不動産|売買|仲介|代理|賃貸|貸|管理|売却|購入|買取|相続|土地|建物|住宅|戸建|一戸建|マンション|アパート|新築|中古|分譲|建築|注文|請負|リフォーム|リノベ|改装|改築|増築|外構|エクステリア|設計|施工|駐車場|事務所|店舗|倉庫|工場|活用|経営|運用|コンサル|鑑定|査定|保険|競売|開発|造成|空き家|空家|リゾート|物件|介護|医療|福祉/;
+const PROP_WORDS = /物件情報|物件一覧|物件検索|売買物件|賃貸物件|売物件|物件|property|bukken/i;
+// 読むページ：トップ（＝渡されたURL）＞物件情報（同じサイト内の1ページ）＞会社概要・事業内容（最大3ページ）。③の数で打ち切らない
 async function menu(url, opt = {}) {
   const top = await get(url);
   if (!top.ok) return { url, error: top.error || `HTTP ${top.status}`, items: [] };
   const p = parse(top.html, top.url), host = new URL(top.url).host, seen = new Set(), items = [];
   collect(p, top.url, host, seen, items, null);
-  let deep = [];
-  if (opt.deep) {
-    const pick = re => p.links.find(l => re.test(l.label + ' ' + l.url) && new URL(l.url).host === host && l.url !== top.url && !/アクセス|access/i.test(l.label + ' ' + l.url));
-    deep = [...new Set([pick(PROFILE_WORDS), pick(/サイトマップ|sitemap/i)].filter(Boolean).map(l => l.url))];
-    for (const u of deep) {
-      await new Promise(r => setTimeout(r, 400));
-      const g = await get(u);
-      if (g.ok) collect(parse(g.html, g.url), g.url, host, seen, items, 'deep');
-    }
+  const same = l => { try { return new URL(l.url).host === host && l.url.replace(/\/$/, '') !== top.url.replace(/\/$/, ''); } catch { return false; } };
+  const prop = p.links.find(l => same(l) && PROP_WORDS.test(l.label + ' ' + l.url) && !/お問い?合わせ|リクエスト|contact|form/i.test(l.label + ' ' + l.url));
+  const prof = [...new Map(p.links.filter(l => same(l) && (PROFILE_WORDS.test(l.label + ' ' + l.url) || /事業内容|業務内容|業務案内|事業紹介|サービス/.test(l.label))
+    && !/アクセス|access|地図|map/i.test(l.label + ' ' + l.url) && !/挨拶|理念|スタッフ|message|philosophy|staff/i.test(l.label + ' ' + l.url)).map(l => [decodeURI(l.url).toLowerCase().replace(/\/+$/, ''), l])).values()].slice(0, 3);
+  const pages = [];
+  for (const [l, from] of [...(prop ? [[prop, 'prop']] : []), ...prof.map(l => [l, 'profile'])]) {
+    await new Promise(r => setTimeout(r, 400));
+    const g = await get(l.url);
+    if (g.ok) { collect(parse(g.html, g.url), g.url, host, seen, items, from); pages.push({ url: g.url, from }); }
   }
-  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, items, deep };
+  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, items, pages };
+}
+function bodyList(text) {
+  let best = [];
+  for (const m of text.matchAll(BODY_HEAD)) {
+    let tail = text.slice(m.index + m[0].length, m.index + m[0].length + 500);
+    const s = tail.search(BODY_STOP); if (s >= 0) tail = tail.slice(0, s);
+    const got = tail.split(/\s+|[\/／|｜◎●○■□◆◇※★☆]|(?:^|\s)・|[①-⑳]|(?:[0-9０-９]{1,2}[．.、)）])/)
+      .map(x => (x || '').replace(/^[\s:：・、]+|[\s。、・]+$/g, '').replace(/^について$/, '').trim())
+      .filter(x => x.length >= 2 && x.length <= 30 && BIZ_WORDS.test(x) && !MENU_SKIP.test(x));
+    if (got.length > best.length) best = got;
+  }
+  return best;
 }
 function collect(p, pageUrl, host, seen, items, from) {
   for (const l of p.links) {
-    const label = l.label.replace(/[>›»≫→▶▸►]+/g, ' ').replace(/^[A-Z][A-Z &]+\s+(?=[^\x00-\x7f])/, '').replace(/\s+/g, ' ').trim(); // 「SERVICE 事業内容」の英字の飾りは外す
+    const label = l.label.replace(/[>›»≫→▶▸►➤]+/g, ' ').replace(/^[A-Za-z][A-Za-z &]+\s+(?=[^\x00-\x7f])/, '').replace(/\s+[A-Za-z][A-Za-z &]+$/, '').replace(/\s+/g, ' ').trim(); // 「SERVICE 事業内容」「物件情報 Property」の英字の飾りは外す
     const outside = new URL(l.url).host !== host; // 物件検索は外のサービスに飛ぶ店が多い。外へのリンクは、短い物件の見出し（売買物件・賃貸物件）だけ拾う
     if (!label || label.length > 24 || seen.has(label) || MENU_SKIP.test(label) || (outside && !(label.length <= 8 && MENU_WORDS.test(label)))) continue;
     if (!(SERVICE_WORDS.test(label + ' ' + l.url) || MENU_WORDS.test(label)) || SKIP_WORDS.test(label + ' ' + l.url) || PROFILE_WORDS.test(label)) continue;
     seen.add(label);
     items.push({ label, url: l.url, ...(from ? { from } : {}), biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
   }
-  // 本文の「主な業務内容」などの箇条（リンクでない業務の一覧）も拾う
-  const m = p.text.match(BODY_HEAD);
-  if (m) {
-    const tail = p.text.slice(m.index + m[0].length, m.index + m[0].length + 300);
-    for (const raw of tail.split(/[◎●○■□◆◇・※★☆]|[-－]{2,}|\s{2,}|】|【/)) {
-      const label = raw.replace(/^[\s:：]+|[\s。、]+$/g, '').trim();
-      if (label.length < 4 || label.length > 24 || seen.has(label) || MENU_SKIP.test(label)) continue;
-      if (!(SERVICE_WORDS.test(label) || MENU_WORDS.test(label))) continue;
-      seen.add(label); items.push({ label, url: pageUrl, from: from || 'text', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
-    }
+  // 本文の「事業内容」などの一覧（リンクでない業務の一覧）も拾う
+  for (const label of bodyList(p.text)) {
+    if (seen.has(label)) continue;
+    seen.add(label); items.push({ label, url: pageUrl, from: (from || 'top') + ':text', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
   }
 }
 

@@ -32,16 +32,20 @@ async function t1Load() {
 // 同じ小分類の行は重みの順。「前の言葉」のある行は、文脈に当たったときだけ出して一つ上げる。別の小分類の行も、前の言葉が当たれば一つ下げて混ぜる。選んだものは出さない
 function t1Next(cats, ctx, chosen, n, shown) { // shown：前の段で見せて選ばれなかったもの（一つ下げる。次の段に新しいものが上がるように）
   const text = [].concat(ctx).join(" "), out = [];
+  const closed = cats.length && cats.every(c => (T1C.closed || []).includes(c)); // 土地の話に混ぜない小分類（借りる・リフォーム）は、ほかの小分類の行を混ぜない
   for (const r of T1Q.rows) {
     if (!r.選択肢 || (chosen || []).includes(r.選択肢)) continue;
     const mine = r.小分類.split("|").some(c => cats.includes(c)), cond = r.前の言葉, hit = cond && new RegExp(cond).test(text);
     if (cond && !hit) continue;
-    if (!mine && !hit) continue;
-    const score = (+r.重み || 1) + (mine ? (hit ? 1 : 0) : -1) - ((shown || []).includes(r.選択肢) ? 2 : 0);
-    out.push({ label:r.選択肢, score, why:mine ? (hit ? "小分類＋前の言葉「" + text.match(new RegExp(cond))[0] + "」" : "小分類") : "前の言葉「" + text.match(new RegExp(cond))[0] + "」（ほかの小分類から）", row:r });
+    if (!mine && (!hit || closed)) continue;
+    const score = (+r.重み || 1) + (mine ? (hit ? 1 : 0) : -1) - (!hit && (shown || []).includes(r.選択肢) ? 2 : 0);
+    out.push({ label:r.選択肢, score, why:mine ? (hit ? "小分類＋前の言葉「" + text.match(new RegExp(cond))[0] + "」" : "小分類") : "前の言葉「" + text.match(new RegExp(cond))[0] + "」（ほかの小分類から）", row:r, hit:!!hit });
   }
   const seen = new Set();
-  return out.sort((a, b) => b.score - a.score).filter(x => !seen.has(x.label) && seen.add(x.label)).slice(0, n || 5);
+  let list = out.sort((a, b) => b.score - a.score).filter(x => !seen.has(x.label) && seen.add(x.label));
+  const fresh = list.filter(x => x.hit || !(shown || []).includes(x.label)); // 前の言葉に当たった行は、同じ名前でも新しい候補
+  if (fresh.length >= 4) list = fresh; // 新しい候補が4つあれば、前の段で見せたものは繰り返さない（リフォームの⑤＝視点の4つ）
+  return list.slice(0, n || 5);
 }
 // HPの見出しを小分類に当てる。ボタン名は見出しのまま、内部は cats（小分類の名前）。同じ小分類は短い見出し一つに、大枠は規則の小分類を合わせる
 function t1Classify(labels) {
@@ -53,7 +57,7 @@ function t1Classify(labels) {
     let cats = keys.filter(k => T1P.small[k].words && re(T1P.small[k].words).test(label));
     const sp = cats.filter(k => !T1P.small[k].generic);
     cats = (sp.length ? sp : cats.slice(-1)).slice(0, 3); // 一般語（売却など）は、具体的な小分類があれば外す。一般語だけなら表の下のもの（売却査定＝査定・相場）
-    if (!cats.length) { if (!re(T1C.broad.words).test(label)) continue; cats = T1C.broad.into.slice(); }
+    if (!cats.length) continue; // 大枠の見出し（事業内容など）からは足さない。中身はそのページの一覧から拾う
     const key = cats.join("+"), had = by.get(key);
     if (!had || label.length < had.label.length) by.set(key, { label, cats, biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
   }
@@ -66,26 +70,24 @@ function t1Classify(labels) {
 //       kids?（ない＝初期値のまま＝候補の表から文脈で出す。[]＝子なし＝問い合わせだけ） }
 // trail＝③からその節までの並び（文脈）。④⑤は小分類と trail の言葉で決まる（言語エンジンのように）。土地では変わらない
 const T1_ASK3 = "この中で、先に知りたいのはどれですか。";
-const T1_ASK0 = "この土地のことで、いちばん近いご相談を選んでください。"; // ③の前の橋の一言
+const T1_ASK0 = "道の関係で、評価には現地の確認が大切です。いちばん近いご相談を選んでください。"; // ③の前の一言（ユーザー 11-17）
+const T1_ASK0_RENT = "賃貸に関するお問い合わせでしょうか？いちばん近いご相談を選んでください。"; // ③に賃貸（貸す・借りる）があるとき
+const T1_ASK0_NONE = "この先のご相談は、担当が直接うかがいます。下のボタンから、ここまでの内容を添えてお問い合わせください。"; // ③が0件のとき（問い合わせだけ）
 const T1_ASK4 = "もう少し詳しく、どれが気になりますか。";
 const T1_INQ = "ここまでの内容を添えて、メールで問い合わせる";
 const T1_N = 5; // 一つの段に出す候補の数
-const T1_BASE = [ // HPから何も拾えないときの③
+const T1_BASE = [ // URLを入れる前の見本の③（HPを読んで0件の店には出さない＝問い合わせだけ。ユーザー 11-17：無理やりの相続・お金の話は一般の不動産屋には厄介）
   { label:"売りたい", cats:["売却（仲介）"] }, { label:"早く手放したい", cats:["早く売る・買取"] },
   { label:"土地を活かしたい", cats:["土地活用", "空き家・空き地"] }, { label:"相続した・相続する", cats:["相続"] },
 ];
-function t1Default(items) { // HPから拾った見出し（小分類に当てたもの）が③になる。3つ未満なら、よく出る小分類から補う（fill:true）
+function t1Default(items) { // HPから拾った見出し（小分類に当てたもの）だけが③になる。足りなくても補わない（出口の問い合わせで受ける）
   const cl = items && items.length ? t1Classify(items.map(i => i.label)) : [];
-  const top = cl.map(n => ({ label:n.label, cats:n.cats })), have = new Set(top.flatMap(n => n.cats));
-  for (const f of T1C.fill || []) { if (top.length >= (T1C.min3 || 3)) break; if (f.cats.some(c => have.has(c))) continue; top.push({ label:f.label, cats:f.cats, fill:true }); f.cats.forEach(c => have.add(c)); }
-  return { v:3, url:"", top:top.length ? top : T1_BASE.map(n => ({ ...n })) };
+  const top = cl.map(n => ({ label:n.label, cats:n.cats }));
+  return { v:3, url:"", top:items === undefined ? T1_BASE.map(n => ({ ...n })) : top };
 }
-// HPを読む：トップで③が3つ未満なら、会社概要・サイトマップまで読み足す（deep）
+// HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
 async function t1ReadMenu(url, by) {
-  const ask = async deep => (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, deep }), signal:AbortSignal.timeout(45000) })).json();
-  let r = await ask(false);
-  if (!r.error && t1Classify((r.items || []).map(i => i.label)).length < (T1C.min3 || 3)) { const d = await ask(true); if (!d.error) r = { ...d, deepTried:true }; }
-  return r;
+  return (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json();
 }
 function t1Shop() {
   try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 3 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
@@ -97,6 +99,9 @@ function t1Kids(node, land, trail) {
   const t = trail || [node], cats = t[0].cats || [], words = t.map(n => n.label);
   if (t.length === 1) return t1Next(cats, words, [], T1_N).map(x => ({ label:x.label, gen:4, why:x.why }));
   if (t.length === 2 && node.gen === 4) {
+    if (node.label === "地域重視" && cats.includes("借りたい・部屋探し")) { // HPの物件の地区（学区・駅・郵便番号の町を混ぜて、物件の多い順）から3つ
+      return (t1Shop().areas || []).slice(0, 3).map(a => ({ label:a, gen:5, area:true, kids:[] })); // 取れない店は⑤なし（問い合わせだけ）。表の「HP判定利用」は見本の1行
+    }
     const shown = t1Next(cats, [t[0].label], [], T1_N).map(x => x.label);
     return t1Next(cats, words, words.slice(1), T1_N, shown).map(x => ({ label:x.label, gen:5, why:x.why, kids:[] }));
   }
@@ -110,10 +115,14 @@ function t1Fix(node, land, trail) {
 function t1Tpl(node) { // 店が書いた文があればそれ。なければ初期の文（③は小分類ごと、④⑤は候補の表の「返す文」）
   if (node.text != null) return node.text;
   if (node.cats) return (T1C.reply3 || {})[node.cats[0]] || "";
+  if (node.area) return node.label + "ですね、詳しいご要望はありますか？";
   const r = T1Q.rows.find(x => x.選択肢 === node.label); return r ? r.返す文 || "" : "";
 }
 function t1Text(node, land) { return t1Fill(t1Tpl(node), land); }
-function t1AskOf(node, depth) { return node.ask != null ? node.ask : depth === 0 ? T1_ASK3 : T1_ASK4; }
+// 問いと締めは、③の小分類に専用の文があればそれ（借りる・リフォームは土地の見立てでないので。type1_categories.json の ask）
+const t1AskSet = cats => (cats || []).map(c => (T1C.ask || {})[c]).find(Boolean) || {};
+function t1AskOf(node, depth, cats) { const a = t1AskSet(cats || node.cats); return node.ask != null ? node.ask : depth === 0 ? a.ask3 || T1_ASK3 : a.ask4 || T1_ASK4; }
+function t1Close(cats) { return t1AskSet(cats).close || T1D.rules.close; }
 const T1_HOLE = /\{([^}]+)\}/g;
 // 穴に値を入れる。値のない穴を含む文は、その一文ごと落とす（「現地で確認」には差し替えない）
 function t1Fill(text, land) {

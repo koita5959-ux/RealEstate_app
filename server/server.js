@@ -413,7 +413,9 @@ async function handleShopMenu(req, res) {
   const target = clip(b && b.url, 500);
   if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
-  const r = await readMenu(target, { deep: !!b.deep }).catch((e) => ({ url: target, error: String(e.message || e), items: [] }));
+  const [r, li] = await Promise.all([readMenu(target).catch((e) => ({ url: target, error: String(e.message || e), items: [] })),
+    listings(target, { lookup: (la, ln) => around.lookup(la, ln), dataDir: DATA_DIR, limitMs: 35000 }).catch(() => ({ areas: [] }))]); // HPの物件の地区＝借りる側の「地域重視」の⑤
+  r.areas = li.areas || [];
   const ts = new Date().toISOString();
   writeLog({ ts, who, type: "shopmenu", url: target, by: clip(b.by, 32) || "visitor", sid: "menu-" + ts.replace(/\D/g, "").slice(0, 17),
     status: r.error ? "unreadable" : "ok", items: r.items.length, costUsd: 0, ms: Date.now() - t0 });

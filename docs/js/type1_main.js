@@ -17,11 +17,13 @@ function t1Mail(where, kind) { // kind：mail＝途中で問い合わせ／final
   T1_OPENED = true; inquiryBar(); const b = document.getElementById("inqOpen"); if (b) b.click();
 }
 function t1Done(row, b) { row.classList.add("done"); row.querySelectorAll("button").forEach(x => { x.disabled = true; if (x !== b) x.classList.add("t1off"); }); b.classList.add("chosen"); }
-async function goStep(i, lead) {
+SURVEY.lead = "この土地をもう少し詳しく確認したいので、この土地の様子を教えてください。"; // ②の前（タイプ1だけ。売り目的に寄った「値段より先に」を外す。ユーザー 11-17）
+async function goStep(i, lead) { // ③の前：設問の事実の文はつなげず、③の顔ぶれで一文を選ぶ（ユーザー 11-17）。lead は使わない
   if (i !== 0) return;
-  say(lead + "<br>" + esc(T1_ASK0));
   await t1Load();
   T1O = t1Shop();
+  const rent = T1O.top.some(n => (n.cats || []).some(c => c === "借りたい・部屋探し" || c === "賃貸・管理"));
+  say(esc(!T1O.top.length ? T1_ASK0_NONE : rent ? T1_ASK0_RENT : T1_ASK0));
   T1L = landOf(T1S, S.sheet, S.landRaw, S.around, S.area, t1Place());
   S.sheet.タイプ1の分け = `${T1D.categories[T1L.cat]}／条件札：${T1L.tags.map(t => T1D.tags[t]).join("・") || "なし"}`;
   step(T1O.top, 4, []);
@@ -43,8 +45,8 @@ async function goStep(i, lead) {
       if (q === 4) S.sheet.相談目的 = esc(n.label);
       me(n.label);
       const t = trail.concat(n), kids = t1Kids(n, T1L, t), text = t1Text(n, T1L);
-      if (kids.length) { say([text, t1AskOf(n, t.length - 1)].filter(Boolean).map(esc).join("<br>")); step(kids, q + 1, t); }
-      else { say([text, T1D.rules.close].filter(Boolean).map(esc).join("<br>")); const fin = newRow(q + 1); fin.classList.add("t1row"); inq(fin, q + 1, "final"); document.getElementById("talk").appendChild(fin); }
+      if (kids.length) { say([text, t1AskOf(n, t.length - 1, t[0].cats)].filter(Boolean).map(esc).join("<br>")); step(kids, q + 1, t); }
+      else { say([text, t1Close(t[0].cats)].filter(Boolean).map(esc).join("<br>")); const fin = newRow(q + 1); fin.classList.add("t1row"); inq(fin, q + 1, "final"); document.getElementById("talk").appendChild(fin); }
       saveSession();
     }
   }

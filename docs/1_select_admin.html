@@ -108,8 +108,8 @@ function editHtml() {
   const d = PATH.length - 1, t = trailTo(d).trail, n = nodeAt(d), kids = t1Kids(n, land(), t.concat(n));
   return `<h2>${QN[d]}「${esc(n.label)}」を選んだ客に</h2>`
     + `<label>返す文（初期の文が入っています。直せば店の文になります。{目安額} {駅距離} などの穴は土地の値で埋まり、値のない穴を含む一文は出ません）</label><textarea rows="3" data-f="text">${esc(t1Tpl(n))}</textarea>`
-    + (kids.length ? `<label>次の問い（${QN[d + 1]}の選択肢の前に出ます）</label><input data-f="ask" value="${esc(t1AskOf(n, d))}">` : "")
-    + `<div class="pv"><b>試しの土地での見え方：</b><br>${esc(t1Text(n, land())) || `<span class="hint">（返す文なし）</span>`}<br>${esc(kids.length ? t1AskOf(n, d) : T1D.rules.close)}</div>`;
+    + (kids.length ? `<label>次の問い（${QN[d + 1]}の選択肢の前に出ます）</label><input data-f="ask" value="${esc(t1AskOf(n, d, (t[0] || n).cats))}">` : "")
+    + `<div class="pv"><b>試しの土地での見え方：</b><br>${esc(t1Text(n, land())) || `<span class="hint">（返す文なし）</span>`}<br>${esc(kids.length ? t1AskOf(n, d, (t[0] || n).cats) : t1Close((t[0] || n).cats))}</div>`;
 }
 function render() {
   document.getElementById("lands").innerHTML = `<span class="hint">試しの土地（返す文の穴の見え方）：</span>` + LANDS.map((x, i) => `<button data-l="${i}" class="${i === LAND ? "sel" : ""}">${esc(x.name)}</button>`).join("");
@@ -156,19 +156,18 @@ document.addEventListener("change", e => {
 document.getElementById("read").onclick = async () => {
   const url = document.getElementById("url").value.trim(), msg = document.getElementById("readMsg");
   if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
-  let items = [], note = "";
+  let items = [], areas = [], note = "";
   if (url) {
     msg.textContent = "HPを読んでいます…";
     try {
       const by = new URLSearchParams(location.search).get("by") || "visitor";
       const r = await t1ReadMenu(url, by);
-      items = r.items || [];
-      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました${r.deepTried ? "（トップで足りず、会社概要・サイトマップまで読みました）" : ""}。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
+      items = r.items || []; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
+      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました（トップ・物件情報・会社概要を読みました）。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
     } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
   }
-  SHOP = t1Default(items); SHOP.url = url; PATH = []; EDIT = null; save(); render();
-  const fills = SHOP.top.filter(n => n.fill).length;
-  msg.textContent = (note || "") + (fills ? `③が3つに届かないので、よく出る業務内容を ${fills} つ補いました（「補い」の印）。` : "");
+  SHOP = t1Default(url ? items : undefined); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
+  msg.textContent = note || "";
 };
 t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
 </script>
