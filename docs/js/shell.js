@@ -39,7 +39,7 @@
   const SCREENS = {
     user:   { label: "メイン画面へ", url: TYPE + "main.html",   name: "reUser",     cls: "btn-user" },
     admin:  { label: "管理画面へ",   url: TYPE + "admin.html",  name: "reAdminWin", cls: "btn-dev" },
-    report: { label: "利用状況",     url: TYPE + "report.html", name: "reReport",   cls: "btn-user", needsSession: true },
+    report: { label: "利用状況",     url: TYPE + "report.html", name: "reReport",   cls: "btn-user", needsSession: true, not: "1_select_" }, // タイプ1の利用状況はまだない
     dev:    { label: "開発利用状況", url: "../api/admin/",     name: "reDevWin",   cls: "btn-dev" },
     cat:    { label: "分類の表",     url: "1_select_category.html", name: "reCatWin", cls: "btn-dev", only: "1_select_" }, // タイプ1だけ（③の見出しの当て方、閲覧のみ）
   };
@@ -88,7 +88,7 @@
     refresh() { // セッションの有無で、「利用状況」のグレー表示を切り替える
       nav.innerHTML = "";
       for (const key of ORDER) {
-        if (key === current || (SCREENS[key].only && SCREENS[key].only !== TYPE)) continue;
+        if (key === current || (SCREENS[key].only && SCREENS[key].only !== TYPE) || SCREENS[key].not === TYPE) continue;
         const s = SCREENS[key], off = s.needsSession && !hasSession();
         const a = document.createElement("a");
         a.className = s.cls + (off ? " off" : "");

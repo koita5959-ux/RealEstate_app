@@ -712,7 +712,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","
 
 // ---- 問い合わせ（いつでも出せる。記録は画面に出さず、送るときに店へ添える） ----
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
-const INQ_FORM = `<b>以下記入の上送信ください</b>
+const INQ_FORM = `<b>${TALK.mode === "staff" ? "弊社" : esc(TALK.name)}へのお問い合わせ</b>
       <label>お名前</label><input id="fName" type="text">
       <label>メール</label><input id="fMail" type="email">
       <label>電話</label><input id="fTel" type="tel">
@@ -733,7 +733,7 @@ function inqSentMark(box) {
 }
 function inquiryBar() {
   const bar = document.getElementById("inq");
-  bar.innerHTML = `<button id="inqOpen" class="inq">メールで問い合わせる</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
+  bar.innerHTML = `<button id="inqOpen" class="inq">ここまでの内容を添えて、メールで問い合わせる</button>${closeNow() && closeNow().trim() ? `<div class="hint">${esc(closeNow())}</div>` : ""}`;
   bar.querySelector("button").onclick = () => {
     ev("inquiry_open");
     bar.innerHTML = "";
@@ -951,7 +951,7 @@ const DEMOS = {
       { press:"送信", note:"「送信」で③の答えを送る。" },
       { press:"費用の目安", note:"④。この先にボタンが書かれていなければ、AIは打ち切りの文で終わる。" },
       { press:"送信", note:"「送信」で④の答えを送る。" },
-      { press:"これらの情報をもとにお問い合わせ", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
+      { press:"ここまでの内容を添えて、メールで問い合わせる", note:"問い合わせは最初からずっと下にある。人と話したくなった時が問い合わせの時。" },
       { fill:{ fName:"岐阜 太郎", fTel:"058-000-0000", fWhen:"平日の夕方" }, press:"この内容で送る", note:"相談の記録は画面に出さず、送るときに店へ添える。" },
     ]
   }

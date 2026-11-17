@@ -1,7 +1,8 @@
 // ---- タイプ1：設問のあとを、AIではなく選択肢で進める（js/type1.js の組み立てを使う） ----
 // ③＝店の業務内容（管理画面で並べた順）→ 返事＋問い → ④ → ⑤ → 店が足した枠の分だけ先へ。子のない選択肢の先は問い合わせだけ。
-// ④から先の段には、いつでも「ここまでの情報で問い合わせを送る」を付ける。書き欄は置かない（企画書8章）
-let T1S = null, T1L = null, T1O = null;
+// ③から先の段には、いつでも問い合わせの出口（T1_INQ）を付ける。下の欄の同じボタンは、フォームから戻ったときだけ出す。書き欄は置かない（企画書8章）
+let T1S = null, T1L = null, T1O = null, T1_OPENED = false;
+inquiryBar = (f => () => { f(); const b = document.getElementById("inq"); if (b) b.style.display = T1_OPENED ? "" : "none"; })(inquiryBar);
 onSurvey = (f => (s, t) => { T1S = s; return f(s, t); })(onSurvey);
 fillLand = (f => (sh, r, area) => { S.landRaw = r; return f(sh, r, area); })(fillLand);
 const t1Place = () => { const a = String(ADDR || ""), c = String(PLACE || ""); const town = a.replace(/^.*?[都道府県]/, "").replace(/^.*?[市区町村]/, "").replace(/[0-9０-９丁目番地\-−ー].*$/, ""); return town || c.replace(/^.*?[都道府県]/, ""); };
@@ -13,12 +14,12 @@ function t1Btn(label, sub, cls) {
 function t1Mail(where, kind) { // kind：mail＝途中で問い合わせ／final＝選択肢の尽きた先
   ev("t1_exit", { kind, at:where });
   S.sheet.選んだ出口 = kind === "mail" ? "ここまでの情報で問い合わせ（" + where + "）" : "最後から問い合わせ（" + where + "）";
-  inquiryBar(); const b = document.getElementById("inqOpen"); if (b) b.click();
+  T1_OPENED = true; inquiryBar(); const b = document.getElementById("inqOpen"); if (b) b.click();
 }
 function t1Done(row, b) { row.classList.add("done"); row.querySelectorAll("button").forEach(x => { x.disabled = true; if (x !== b) x.classList.add("t1off"); }); b.classList.add("chosen"); }
 async function goStep(i, lead) {
   if (i !== 0) return;
-  say(lead);
+  say(lead + "<br>" + esc(T1_ASK0));
   await t1Load();
   T1O = t1Shop();
   T1L = landOf(T1S, S.sheet, S.landRaw, S.around, S.area, t1Place());
