@@ -414,7 +414,7 @@ async function handleShopMenu(req, res) {
   if (!/^https?:\/\//i.test(target)) return send(res, 400, { error: "bad_url" });
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
   const [r, li] = await Promise.all([readMenu(target).catch((e) => ({ url: target, error: String(e.message || e), items: [] })),
-    listings(target, { lookup: (la, ln) => around.lookup(la, ln), dataDir: DATA_DIR, limitMs: 35000 }).catch(() => ({ areas: [] }))]); // HPの物件の地区＝借りる側の「地域重視」の⑤
+    listings(target, { lookup: (la, ln) => around.lookupArea(la, ln), dataDir: DATA_DIR, limitMs: 35000 }).catch(() => ({ areas: [] }))]); // HPの物件の地区＝借りる側の「地域重視」の⑤
   r.areas = li.areas || [];
   const ts = new Date().toISOString();
   writeLog({ ts, who, type: "shopmenu", url: target, by: clip(b.by, 32) || "visitor", sid: "menu-" + ts.replace(/\D/g, "").slice(0, 17),
@@ -442,7 +442,7 @@ async function handleShopRead(req, res) {
   if (today() !== spentDate) loadSpent();
   if (spentUsd >= limits().dailyCap) return send(res, 429, { error: "daily_cap" });
   if (rateLimited(who)) return send(res, 429, { error: "rate_limited" });
-  const [r, li] = await Promise.all([readSite(target), listings(target, { lookup: (la, ln) => around.lookup(la, ln), dataDir: DATA_DIR }).catch((e) => ({ error: e.message, areas: [] }))]);
+  const [r, li] = await Promise.all([readSite(target), listings(target, { lookup: (la, ln) => around.lookupArea(la, ln), dataDir: DATA_DIR }).catch((e) => ({ error: e.message, areas: [] }))]);
   const site = { final: r.final, title: r.title, js_only: !!r.js_only, picked: r.picked, error: r.error,
     listings: { text: areasText(li), areas: li.areas, pages: (li.found || []).length, external: li.external, error: li.error },
     pages: r.pages.map(p => ({ url: p.url, kind: p.kind, label: p.label, chars: (p.text || "").length, imgs: p.imgs, imgHeavy: p.imgHeavy, error: p.error })) };

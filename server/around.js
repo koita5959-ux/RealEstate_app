@@ -85,7 +85,12 @@ export function aroundSetup({ tile, dataDir }) {
     const [st, sc, hz, po, pl] = [await safe(stations(lat, lng)), await safe(schools(lat, lng)), await safe(hazards(lat, lng)), await safe(population(lat, lng)), await safe(plan(lat, lng))];
     return { stations: st, schools: sc, hazards: hz, population: po, plan: pl, shops: shops(lat, lng), shopSource: poiSource };
   }
-  return { lookup };
+  // 地区の呼び名だけ（HPの物件の地区。学区・駅だけ読む。災害のタイルは大きく、町8つ分でメモリを使い切った：倉敷 11-18）
+  async function lookupArea(lat, lng) {
+    const [sc, st] = [await safe(schools(lat, lng)), await safe(stations(lat, lng))];
+    return { schools: sc, stations: st };
+  }
+  return { lookup, lookupArea };
 }
 
 function tileOf(lat, lng, z) {

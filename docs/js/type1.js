@@ -44,7 +44,7 @@ function t1Next(cats, ctx, chosen, n, shown) { // shown：前の段で見せて�
   const seen = new Set();
   let list = out.sort((a, b) => b.score - a.score).filter(x => !seen.has(x.label) && seen.add(x.label));
   const fresh = list.filter(x => x.hit || !(shown || []).includes(x.label)); // 前の言葉に当たった行は、同じ名前でも新しい候補
-  if (fresh.length >= 4) list = fresh; // 新しい候補が4つあれば、前の段で見せたものは繰り返さない（リフォームの⑤＝視点の4つ）
+  if (shown) list = fresh; // ⑤では④で見せたものを繰り返さない（前の言葉に当たったものは別。リフォームの④⑤が同じ並びになった：ユーザー 11-18）。残りが少なければ少ないまま
   return list.slice(0, n || 5);
 }
 // HPの見出しを小分類に当てる。ボタン名は見出しのまま、内部は cats（小分類の名前）。同じ小分類は短い見出し一つに、大枠は規則の小分類を合わせる
@@ -55,7 +55,7 @@ function t1Classify(labels) {
     const label = String(raw && raw.label != null ? raw.label : raw).replace(/^[・\s]+/, "").replace(/\s*\(\d+\)$/, "").trim().replace(/^(.+?)\s+\1$/, "$1"); // 「売却査定 売却査定」は一つに
     if (!label || drop.test(label) || (out.test(label) && !/不動産|建築|住宅|土地|建物|物件/.test(label))) continue; // 「建築工事及び土木工事の…施工」は外さない
     const hit = s => keys.filter(k => T1P.small[k].words && re(T1P.small[k].words).test(s));
-    const head = (label.match(/^(.{2,8}?)の/) || [])[1]; // 「賃貸物件の仲介・管理・リフォーム」は頭の「賃貸物件」で決める（売買物件の…と④を分けるため）
+    const head = !/売却|査定|買取/.test(label) && (label.match(/^(.{2,8}?)の/) || [])[1]; // 「マンションの売却」は売る側（11-18） // 「賃貸物件の仲介・管理・リフォーム」は頭の「賃貸物件」で決める（売買物件の…と④を分けるため）
     let cats = head && hit(head).length ? hit(head) : hit(label);
     if (/物件$|物件特集$/.test(label) && !/^(売買|賃貸|自社|売主)/.test(label)) cats = cats.filter(k => T1C.rentSide.includes(k)).length ? cats.filter(k => T1C.rentSide.includes(k)) : ["購入・物件探し"]; // 「駐車場有り物件」「新築・築浅物件」は物件の絞り込み（買う・借りる側）
     const rentMark = /貸|賃貸|借|テナント|月極|駐車場|部屋|入居|単身|ファミリー/.test(label);
@@ -66,8 +66,9 @@ function t1Classify(labels) {
     const sp = cats.filter(k => !T1P.small[k].generic);
     cats = (sp.length ? sp : cats.slice(-1)).slice(0, 3); // 一般語（売却など）は、具体的な小分類があれば外す。一般語だけなら表の下のもの（売却査定＝査定・相場）
     if (!cats.length) continue; // 大枠の見出し（事業内容など）からは足さない。中身はそのページの一覧から拾う
-    let sideAsk = null; // 借りる側と貸す側（管理）の両方に当たる見出しは、借りる側に寄せて店に向きを確かめてもらう（④を混ぜない）
-    if (cats.some(k => T1C.rentSide.includes(k)) && cats.includes("賃貸・管理")) { sideAsk = cats.filter(k => !T1C.rentSide.includes(k)); cats = cats.filter(k => T1C.rentSide.includes(k)); }
+    let sideAsk = null; // 借りる側と貸す側（管理）の両方に当たる見出しは、片方に寄せて店に向きを確かめてもらう（④を混ぜない。管理のあるものは貸す側、ほかは借りる側）
+    if (cats.some(k => T1C.rentSide.includes(k)) && cats.includes("賃貸・管理")) { const lend = /管理/.test(label), b = cats.filter(k => T1C.rentSide.includes(k)), l = cats.filter(k => !T1C.rentSide.includes(k)); sideAsk = lend ? b : l; cats = lend ? l : b; } // 「管理」のある見出しは貸す側（オーナー向け）に寄せる（入居者募集の視点。ユーザー 11-18）
+    if (!sideAsk && cats.some(k => T1C.rentSide.includes(k)) && /賃貸(仲介|事業|業)|売買・賃貸|賃貸・売買/.test(label) && !/部屋|借|住まい探し/.test(label)) sideAsk = ["賃貸・管理"]; // 「不動産売買・賃貸仲介」「不動産賃貸事業」は貸す側にも読める。借りる側に寄せて店に確かめてもらう（11-18）
     const broad = !(head && hit(head).length) && hit(label).length >= 3; // 「不動産の賃貸・売買・仲介・管理」のような何でもの見出しは、はっきりしたリンクに譲る
     const key = cats.join("+"), had = by.get(key), weak = broad ? 1.5 : raw && raw.weak != null && raw.weak !== false ? +raw.weak : (/物件$|物件特集$/.test(label) && !/^(売買|賃貸|自社|売主)/.test(label)) ? 2 : 1;
     if (!had || weak < had.weak || weak === had.weak && label.length < had.label.length) by.set(key, { label, cats, weak, sideAsk, prose:!!(raw && raw.prose), biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
@@ -94,6 +95,8 @@ const T1_BASE = [ // URLを入れる前の見本の③（HPを読んで0件の�
 const T1_OMAKASE = [{ label:"売りたい方", cats:["売却（仲介）"] }, { label:"買いたい方", cats:["購入・物件探し"] }, { label:"貸したい方", cats:["賃貸・管理"] }, { label:"借りたい方", cats:["借りたい・部屋探し"] }];
 function t1Default(items, omakase) { // omakase＝「不動産のことなら何でも」型の店。③が3つに届かなければ、基本の取引から足す（相続・お金の話は足さない。ユーザー 11-18） // HPから拾った見出し（小分類に当てたもの）だけが③になる。足りなくても補わない（出口の問い合わせで受ける）
   const cl = items && items.length ? t1Classify(items.map(i => ({ label:i.label, prose:/:prose$/.test(i.from || ""), weak:/:prose$/.test(i.from || "") ? 3 : /^(title|desc)$/.test(i.from || "") ? 2 : /:text$/.test(i.from || "") ? 0 : null }))) : []; // 同じ分類なら、事業内容の一覧（本文）＞メニューのリンク＞物件の絞り込み・タイトル・説明文の言葉
+  const rentOnly = (items || []).some(i => /賃貸|貸|借り|部屋/.test(i.label)) && !(items || []).some(i => /売|買|購入|分譲|新築|中古/.test(i.label)); // 賃貸だけの店（長崎第一不動産）：「〇〇市の物件」は借りる側
+  if (rentOnly) for (const n of cl) if (n.cats.length === 1 && n.cats[0] === "購入・物件探し") n.cats = ["借りたい・部屋探し"];
   const top0 = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { sideAsk:true, alt:n.sideAsk } : {}), ...(n.prose ? { prose:true } : {}) })); // prose＝HPの文章から拾った（店に確かめてもらう）
   const top = top0.slice();
   if (omakase) for (const b of T1_OMAKASE) { if (top.length >= 3) break; if (!top.some(n => n.cats.includes(b.cats[0]))) top.push({ ...b, cats:b.cats.slice(), fill:true }); }

@@ -134,7 +134,7 @@ function op(kind, d, i) {
   else if (kind === "del") { if (!confirm(`「${l[i].label}」とその先を消しますか？`)) return; l.splice(i, 1); if (PATH.length > d) PATH = PATH[d] === i ? PATH.slice(0, d) : PATH[d] > i ? PATH.slice(0, d).concat(PATH[d] - 1, PATH.slice(d + 1)) : PATH; }
   else if (kind === "add") { l.push({ label:"新しい選択肢", kids:[] }); EDIT = `${d}:${l.length - 1}`; }
   else if (kind === "ed") { EDIT = `${d}:${i}`; }
-  else if (kind === "side") { t1Flip(l[i]); if (PATH[d] === i) PATH = PATH.slice(0, d + 1); } // 賃貸の向きを変えると、④から先は新しい向きの初期値
+  else if (kind === "side") { t1Flip(l[i]); PATH = PATH.slice(0, d).concat(i); } // 賃貸の向きを変えると、その行を選んで④を開く（新しい向きの初期値。ユーザー 11-18）
   else if (kind === "sideok") { delete l[i].sideAsk; }
   save(); render();
 }
