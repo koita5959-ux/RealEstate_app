@@ -111,3 +111,10 @@ async function readShopHP0(url) {
   if (j.cached) return { hp, msg:`今日 ${new Date(j.cached).toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit" })} に読み取った結果を使いました（費用0）。HPを直したときは、もう一度押すと読み直します。` };
   return { hp, msg:`読み取りました：${pages.join("・")}（${pages.length}ページ）。` + (j.reread ? `中身の欄が少なかったので読み直し、${j.reread.before}→${j.reread.after}欄。` : "") + (hp.form && hp.form !== "店自身" ? `HPの形：${hp.form}。` : "") + (j.costUsdEstimate ? `費用の目安 約${Math.max(1, Math.round(j.costUsdEstimate * 155))}円。` : "") };
 }
+
+// お試し設定（タイプ2）：まだ何も設定していなければ、サンプルHP「AIボット不動産」を読んだ状態から始める（サンプルHPで見たボットと同じ中身）
+if (window.RE_TRIAL && /2_talk_admin.html$/.test(location.pathname)) try {
+  if (!localStorage.getItem("reTalk")) { const h = SHOP_HP_BOT;
+    localStorage.setItem("reTalk", JSON.stringify({ lv:3, mode:"out", url:h.url, hp:{ ...h, sample:false }, own:{}, extra:{}, memo:"", name:h.name, what:h.what, good:h.good, team:"", strong:"", fit:h.fit, unfit:"", lic:"",
+      asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], tone:"mid", free:2, fv:2 })); }
+} catch (e) {}

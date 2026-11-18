@@ -117,8 +117,10 @@ async function t1ReadMenu(url, by) {
   return (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json();
 }
 function t1Shop() {
-  if (window.RE_SITE_BOT) return { v:3, url:SHOP_HP_BOT.url, top:[{ label:"売る", cats:["売却（仲介）"] }, { label:"買う", cats:["購入・物件探し"] }, { label:"相続", cats:["相続"] }, { label:"賃貸（貸したい方）", cats:["賃貸・管理"] }, { label:"賃貸（借りたい方）", cats:["借りたい・部屋探し"] }, { label:"買取", cats:["早く売る・買取"] }] }; // サンプルHPの業務案内
+  const BOT = () => ({ v:3, url:new URL("../sample/", location.href).href, top:[{ label:"売る", cats:["売却（仲介）"] }, { label:"買う", cats:["購入・物件探し"] }, { label:"相続", cats:["相続"] }, { label:"賃貸（貸したい方）", cats:["賃貸・管理"] }, { label:"賃貸（借りたい方）", cats:["借りたい・部屋探し"] }, { label:"買取", cats:["早く売る・買取"] }] }); // サンプルHPの業務案内
+  if (window.RE_SITE_BOT) return BOT();
   try { const s = JSON.parse(localStorage.getItem("reType1")); if (s && s.v === 3 && Array.isArray(s.top)) return s; } catch (e) { /* 初期値 */ }
+  if (window.RE_TRIAL) return BOT(); // お試し設定：まだ組んでいなければ、サンプルHPの状態から
   return t1Default();
 }
 // 子の一覧。trail は③からこの節まで（この節を含む）

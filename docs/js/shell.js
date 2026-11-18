@@ -102,14 +102,14 @@
         a.className = s.cls + (off ? " off" : "");
         a.href = BASE + s.url; a.textContent = s.label;
         if (off) { a.title = "まだ体験の記録がありません（メイン画面を開くと使えます）"; a.setAttribute("aria-disabled", "true"); }
-        if (window.RE_TRIAL) { a.target = "_blank"; a.rel = "noopener"; a.className = "btn-user" + (off ? " off" : ""); a.onclick = e => { if (off) { e.preventDefault(); return false; } }; }
+        if (window.RE_TRIAL) { a.textContent = "利用状況を見る"; a.target = "_blank"; a.rel = "noopener"; a.className = "btn-user" + (off ? " off" : ""); a.onclick = e => { if (off) { e.preventDefault(); return false; } }; }
         else a.onclick = e => Shell.go(key, e);
         nav.appendChild(a);
       }
       if (current === "admin") { // この設定のボットを、サンプルHPの枠で試す（新しいタブ・ボットの位置へ）
         let r = ""; try { r = localStorage.getItem("reSampleR") || ""; } catch (e) {}
         const a = document.createElement("a");
-        a.className = "btn-user"; a.textContent = "サンプルHPで試す"; a.target = "_blank"; a.rel = "noopener";
+        a.className = "btn-user"; a.textContent = window.RE_TRIAL ? "この設定でサンプルHPを試す ›" : "サンプルHPで試す"; a.target = "_blank"; a.rel = "noopener";
         a.href = new URL("../sample/", BASE).href + "?" + (r ? "r=" + encodeURIComponent(r) + "&" : "") + "type=" + TYPE[0] + "&mine=1#bot";
         a.onclick = e => { if (Shell.beforeTry && Shell.beforeTry() === false) { e.preventDefault(); return false; } };
         if (window.RE_TRIAL) a.classList.add("btn-try");
@@ -132,7 +132,7 @@
       for (const id of ["url", "hpUrl"]) { const u = document.getElementById(id); if (u && /\/RealEstate\/?$/.test(u.value)) { u.value = ""; u.placeholder = "https://…（御社のHPのトップのURL）"; } }
     }, 300));
     const tcss = document.createElement("style");
-    tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.gonav a.btn-try{background:#d98c1f;font-weight:700;padding:6px 14px}
+    tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.trial .gonav{gap:10px}.trial .gonav a{font-size:14px;padding:8px 16px;border-radius:999px;font-weight:700}.trial .gonav a.btn-user{background:#fff;color:#1d6fb8;border:1px solid #1d6fb8}.trial .gonav a.off{background:#fff;color:#a9b3bd;border-color:#c3c9d0}.gonav a.btn-try,.trial .gonav a.btn-try{background:#d98c1f;color:#fff;border:0;box-shadow:0 2px 6px rgba(217,140,31,.35)}.trial .gonav a.btn-try:hover{background:#c27a12}
     .trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
     .trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
     .trial .noticebar,.trial .trial-dev,.trial3 aside.side,.trial3 .trial-hide{display:none!important}.trial3 .wrap,.trial3 .layout{grid-template-columns:1fr!important}`;
