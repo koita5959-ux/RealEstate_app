@@ -66,9 +66,11 @@ function t1Classify(labels) {
     const sp = cats.filter(k => !T1P.small[k].generic);
     cats = (sp.length ? sp : cats.slice(-1)).slice(0, 3); // 一般語（売却など）は、具体的な小分類があれば外す。一般語だけなら表の下のもの（売却査定＝査定・相場）
     if (!cats.length) continue; // 大枠の見出し（事業内容など）からは足さない。中身はそのページの一覧から拾う
+    let sideAsk = null; // 借りる側と貸す側（管理）の両方に当たる見出しは、借りる側に寄せて店に向きを確かめてもらう（④を混ぜない）
+    if (cats.some(k => T1C.rentSide.includes(k)) && cats.includes("賃貸・管理")) { sideAsk = cats.filter(k => !T1C.rentSide.includes(k)); cats = cats.filter(k => T1C.rentSide.includes(k)); }
     const broad = !(head && hit(head).length) && hit(label).length >= 3; // 「不動産の賃貸・売買・仲介・管理」のような何でもの見出しは、はっきりしたリンクに譲る
     const key = cats.join("+"), had = by.get(key), weak = broad ? 1.5 : raw && raw.weak != null && raw.weak !== false ? +raw.weak : (/物件$|物件特集$/.test(label) && !/^(売買|賃貸|自社|売主)/.test(label)) ? 2 : 1;
-    if (!had || weak < had.weak || weak === had.weak && label.length < had.label.length) by.set(key, { label, cats, weak, biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
+    if (!had || weak < had.weak || weak === had.weak && label.length < had.label.length) by.set(key, { label, cats, weak, sideAsk, biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
   }
   const one = new Set([...by.values()].filter(n => n.cats.length === 1).map(n => n.cats[0]));
   return [...by.values()].filter(n => n.cats.length === 1 || !n.cats.every(c => one.has(c))) // 合わせ物は、中身が全部単独で出ていれば外す
@@ -91,8 +93,16 @@ const T1_BASE = [ // URLを入れる前の見本の③（HPを読んで0件の�
 ];
 function t1Default(items) { // HPから拾った見出し（小分類に当てたもの）だけが③になる。足りなくても補わない（出口の問い合わせで受ける）
   const cl = items && items.length ? t1Classify(items.map(i => ({ label:i.label, weak:/^(title|desc)$/.test(i.from) ? 2 : /:text$/.test(i.from || "") ? 0 : null }))) : []; // 同じ分類なら、事業内容の一覧（本文）＞メニューのリンク＞物件の絞り込み・タイトル・説明文の言葉
-  const top = cl.map(n => ({ label:n.label, cats:n.cats }));
+  const top = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { sideAsk:true, alt:n.sideAsk } : {}) }));
   return { v:3, url:"", top:items === undefined ? T1_BASE.map(n => ({ ...n })) : top };
+}
+// 賃貸の向き：借りる方向け（部屋探し・事業用）／貸す方（オーナー）向け（賃貸・管理）。どちらでもなければ null
+function t1Side(cats) { cats = cats || []; return cats.some(c => T1C.rentSide.includes(c)) ? "borrow" : cats.includes("賃貸・管理") ? "lend" : null; }
+// 向きを切り替える（店が管理画面で）。前の小分類は alt に取っておき、戻すときに使う。その先の初期値は作り直す
+function t1Flip(n) {
+  const to = t1Side(n.cats) === "borrow" ? "lend" : "borrow";
+  const next = n.alt && t1Side(n.alt) === to ? n.alt : to === "lend" ? ["賃貸・管理"] : ["借りたい・部屋探し"];
+  n.alt = n.cats; n.cats = next; delete n.sideAsk; delete n.kids;
 }
 // HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
 async function t1ReadMenu(url, by) {
