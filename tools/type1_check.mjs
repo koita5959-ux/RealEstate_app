@@ -20,7 +20,8 @@ for (const r of csv.rows) {
   const m = await menu(r.URL).catch(e => ({ error: String(e.message || e), items: [] }));
   const top = m.error ? [] : ctx.t1Default(m.items, m.omakase).top;
   out[r.URL] = { 社名: r.社名, 回: r.回, error: m.error || "", omakase: !!m.omakase, items: (m.items || []).map(i => i.label), third: top.map(n => n.label + "＝" + n.cats.join("+")),
-    fourth: top.map(n => n.label + "→" + ctx.t1Kids(n, null, [n]).map(k => k.label).join("・")) };
+    fourth: top.map(n => n.label + "→" + ctx.t1Kids(n, null, [n]).map(k => k.label).join("・")),
+    fifth: top.flatMap(n => ctx.t1Kids(n, null, [n]).map(k => n.label + "→" + k.label + "→" + ctx.t1Kids(k, null, [n, k]).map(x => x.label).join(" | "))) };
   const o = out[r.URL], p = prev[r.URL];
   const mark = !p ? "新" : JSON.stringify(p.third) === JSON.stringify(o.third) && JSON.stringify(p.fourth) === JSON.stringify(o.fourth) ? "　" : "差";
   console.log(`${mark} [${r.回}] ${r.社名}  ③${o.third.length}${o.error ? " ×" + o.error : ""}`);

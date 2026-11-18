@@ -126,7 +126,7 @@ function t1Kids(node, land, trail) {
   const t = trail || [node], cats = t[0].cats || [], words = t.map(n => n.label);
   if (t.length === 1) return t1Next(cats, words, [], T1_N).map(x => ({ label:x.label, gen:4, why:x.why }));
   if (t.length === 2 && node.gen === 4) {
-    if (node.label === "地域重視" && cats.some(c => T1C.rentSide.includes(c))) { // HPの物件の地区（学区・駅・郵便番号の町を混ぜて、物件の多い順）から3つ＋「その他の地域」
+    if ((node.label === "地域重視" && cats.some(c => T1C.rentSide.includes(c))) || /どのあたり|地域から探/.test(node.label)) { // 「どのあたり」「地域から」は地域を出すしかない（ユーザー 11-18） // HPの物件の地区（学区・駅・郵便番号の町を混ぜて、物件の多い順）から3つ＋「その他の地域」
       const a = (t1Shop().areas || []).slice(0, 3);
       return (a.length ? a.concat("その他の地域") : []).map(x => ({ label:x, gen:5, area:true, kids:[] })); // 取れない店は⑤なし（問い合わせだけ）。表の「HP判定利用」は見本の1行
     }
