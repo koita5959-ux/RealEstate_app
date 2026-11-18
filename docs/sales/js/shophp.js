@@ -118,3 +118,7 @@ if (window.RE_TRIAL && /2_talk_try.html$/.test(location.pathname)) try {
     localStorage.setItem("reTalk", JSON.stringify({ lv:3, mode:"out", url:h.url, hp:{ ...h, sample:false }, own:{}, extra:{}, memo:"", name:h.name, what:h.what, good:h.good, team:"", strong:"", fit:h.fit, unfit:"", lic:"",
       asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], tone:"mid", free:2, fv:2 })); }
 } catch (e) {}
+// TYPE3：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット不動産」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
+if (window.RE_EMBED && /3_ai_main\.html$/.test(location.pathname)) try {
+  if (!localStorage.getItem("reShopHP")) localStorage.setItem("reShopHP", JSON.stringify({ ...SHOP_HP_BOT, area:window.RE_AREA || "", sample:false }));
+} catch (e) {}

@@ -103,7 +103,7 @@
   reg = reg.replace(/ほか$/, "").trim();
   try { if (q.get("r")) localStorage.setItem("reSampleR", q.get("r")); } catch (e) {}
   var p = new URLSearchParams({ embed:"1" });
-  if (q.get("mine") !== "1") { p.set("site", "bot"); if (reg && reg !== "地域") p.set("area", reg); }
+  if (q.get("mine") !== "1") { if (t !== "3") p.set("site", "bot"); if (reg && reg !== "地域") p.set("area", reg); } // TYPE3 は枠の中で初期設定を作る（site=bot を使わない）
   if (q.get("by")) p.set("by", q.get("by"));
   var f = document.createElement("iframe");
   f.src = "../docs/sales/" + file + "?" + p.toString(); f.title = "AI相談ボット（TYPE" + t + "）"; f.loading = "eager";
