@@ -38,6 +38,20 @@
   window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
   window.RE_TRIAL = /_try.html$/.test(location.pathname); // お試し設定は別ファイル（*_try.html）。受注先向けに開発用の管理画面（*_admin.html）を直しても、こちらに漏れない
+  if (window.RE_EMBED) { // 枠の中のスクロール（会話の行へ送るなど）は、枠の中だけで行う。サンプルHPのページ全体を動かさない（開いたときにトップから見えるように）
+    Element.prototype.scrollIntoView = function (o) {
+      const block = o && typeof o === "object" ? o.block || "start" : (o === false ? "end" : "start");
+      for (let p = this.parentElement; p; p = p.parentElement) {
+        const cs = getComputedStyle(p);
+        if (!/(auto|scroll)/.test(cs.overflowY) || p.scrollHeight <= p.clientHeight) continue;
+        const r = this.getBoundingClientRect(), pr = p.getBoundingClientRect(), top = r.top - pr.top + p.scrollTop;
+        p.scrollTo({ top: block === "center" ? top - (p.clientHeight - r.height) / 2 : block === "end" ? top - p.clientHeight + r.height : top, behavior: o && o.behavior === "smooth" ? "smooth" : "auto" });
+        return;
+      }
+      const r = this.getBoundingClientRect(); // 箱の中でなければ、枠の中のページで送る（window.scrollTo は親に伝わらない）
+      window.scrollTo({ top: window.scrollY + (block === "center" ? r.top - (window.innerHeight - r.height) / 2 : r.top) });
+    };
+  }
   if (window.RE_EMBED) { const s = document.createElement("style"); s.textContent = ".appbar{display:none!important}details.trace,.trig{display:none!important}"; document.head.appendChild(s); }
   // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
   const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];
