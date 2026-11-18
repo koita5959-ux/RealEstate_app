@@ -17,6 +17,20 @@
   };
   const start = () => { paint(document.body); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 ? paint(n) : n.nodeType === 3 && n.parentElement && paint(n.parentElement)))).observe(document.body, { childList:true, subtree:true }); };
   if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+  // セールス版の保存場所は、プロトタイプと分ける（同じブラウザでプロトタイプの管理画面に読み込んだ店が、セールス版に出ないように）。
+  // このブラウザの保存（localStorage）の re… の名前に「sales:」を付け、画面どうしの合図（storage）もその名前で受ける
+  (function () {
+    const P = "sales:", S = Storage.prototype, ls = window.localStorage, g = S.getItem, st = S.setItem, rm = S.removeItem;
+    const k = (s, key) => s === ls && /^re/.test(String(key)) ? P + key : key;
+    S.getItem = function (key) { return g.call(this, k(this, key)); };
+    S.setItem = function (key, v) { return st.call(this, k(this, key), v); };
+    S.removeItem = function (key) { return rm.call(this, k(this, key)); };
+    const add = window.addEventListener;
+    window.addEventListener = function (type, fn, opt) {
+      if (type !== "storage") return add.call(this, type, fn, opt);
+      return add.call(this, type, e => { if (e.key !== null && !String(e.key).startsWith(P)) return; fn({ key:e.key === null ? null : e.key.slice(P.length), newValue:e.newValue, oldValue:e.oldValue, storageArea:e.storageArea }); }, opt);
+    };
+  })();
   const BASE = new URL("../", document.currentScript.src).href; // …/docs/
   // サンプルHPの枠の中（?embed=1）：ヘッダーと試験用の欄を隠す。?site=bot＝このブラウザの設定を使わず、サンプルHP「AIボット不動産」の初期状態で動かす
   const QS = new URLSearchParams(location.search);

@@ -101,7 +101,7 @@
   var file = { "1":"1_select_main.html", "2":"2_talk_main.html", "3":"3_ai_main.html" }[t];
   var reg = (document.querySelector("[data-region-line]") || {}).textContent || "";
   reg = reg.replace(/ほか$/, "").trim();
-  try { if (q.get("r")) localStorage.setItem("reSampleR", q.get("r")); } catch (e) {}
+  try { if (q.get("r")) localStorage.setItem("sales:reSampleR", q.get("r")); } catch (e) {}
   var p = new URLSearchParams({ embed:"1" });
   if (q.get("mine") !== "1") { if (t !== "3") p.set("site", "bot"); if (reg && reg !== "地域") p.set("area", reg); } // TYPE3 は枠の中で初期設定を作る（site=bot を使わない）
   if (q.get("by")) p.set("by", q.get("by"));
