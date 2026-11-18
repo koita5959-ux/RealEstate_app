@@ -23,7 +23,7 @@
   window.RE_EMBED = QS.get("embed") === "1";
   window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
-  window.RE_TRIAL = QS.get("trial") === "1"; // サンプルHPから来たテスト利用者向けの「お試し設定」（開発用の部品を出さない）
+  window.RE_TRIAL = /_try.html$/.test(location.pathname); // お試し設定は別ファイル（*_try.html）。受注先向けに開発用の管理画面（*_admin.html）を直しても、こちらに漏れない
   if (window.RE_EMBED) { const s = document.createElement("style"); s.textContent = ".appbar{display:none!important}details.trace,.trig{display:none!important}"; document.head.appendChild(s); }
   // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
   const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];
@@ -70,7 +70,7 @@
   const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  if (!window.RE_EMBED) window.name = SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  if (!window.RE_EMBED) window.name = window.RE_TRIAL ? "reTryWin" : SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
   // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 
