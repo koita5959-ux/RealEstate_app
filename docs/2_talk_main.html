@@ -464,7 +464,8 @@ const TALK_DEFAULT = {
   fit:"売るか残すか決めていない空き家、隣の土地と合わせると変わる土地",
   hp:{ unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] },
   mode:"out", tone:"mid", limit:null }; // limit 空＝上限なし。mode：out＝外野目線（初期）、staff＝社員目線
-const TALK = (() => { try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.lv ? {} : { limit:null }) } : TALK_DEFAULT; } catch (e) { return TALK_DEFAULT; } })();
+const TALK_BOT = () => ({ name:SHOP_HP_BOT.name, what:SHOP_HP_BOT.what, good:SHOP_HP_BOT.good, team:"", strong:"", fit:SHOP_HP_BOT.fit, asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], hp:{ unread:SHOP_HP_BOT.unread } }); // サンプルHPの枠（?site=bot）
+const TALK = (() => { if (window.RE_SITE_BOT) return { ...TALK_DEFAULT, ...TALK_BOT() }; try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.lv ? {} : { limit:null }) } : TALK_DEFAULT; } catch (e) { return TALK_DEFAULT; } })();
 { const w = document.getElementById("talkWho"); if (w) w.textContent = `このAIは${TALK.name}が設置しています（${TALK.mode === "staff" ? "社員目線" : "外から見た目線"}で話します）`; }
 window.addEventListener("storage", e => { if (e.key === "reTalk") location.reload(); }); // 管理画面で書き換えたら読み直す
 // ---- ④から先：管理画面（3_ai_admin.html）で店が書いた選択肢で進む ----

@@ -18,6 +18,12 @@
   const start = () => { paint(document.body); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 ? paint(n) : n.nodeType === 3 && n.parentElement && paint(n.parentElement)))).observe(document.body, { childList:true, subtree:true }); };
   if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
   const BASE = new URL("../", document.currentScript.src).href; // …/docs/
+  // サンプルHPの枠の中（?embed=1）：ヘッダーと試験用の欄を隠す。?site=bot＝このブラウザの設定を使わず、サンプルHP「AIボット不動産」の初期状態で動かす
+  const QS = new URLSearchParams(location.search);
+  window.RE_EMBED = QS.get("embed") === "1";
+  window.RE_SITE_BOT = QS.get("site") === "bot";
+  window.RE_AREA = QS.get("area") || "";
+  if (window.RE_EMBED) { const s = document.createElement("style"); s.textContent = ".appbar{display:none!important}details.trace,.trig{display:none!important}"; document.head.appendChild(s); }
   // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
   const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];
   // 体験の記録（このブラウザ）はタイプごとに分ける。AI型は前からの名前のまま
@@ -63,7 +69,7 @@
   const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  window.name = SCREENS[current].name; // 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  if (!window.RE_EMBED) window.name = SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
   // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 
@@ -96,6 +102,13 @@
         if (off) { a.title = "まだ体験の記録がありません（メイン画面を開くと使えます）"; a.setAttribute("aria-disabled", "true"); }
         a.onclick = e => Shell.go(key, e);
         nav.appendChild(a);
+      }
+      if (current === "admin") { // この設定のボットを、サンプルHPの枠で試す（新しいタブ・ボットの位置へ）
+        let r = ""; try { r = localStorage.getItem("reSampleR") || ""; } catch (e) {}
+        const a = document.createElement("a");
+        a.className = "btn-user"; a.textContent = "サンプルHPで試す"; a.target = "_blank"; a.rel = "noopener";
+        a.href = new URL("../sample/", BASE).href + "?" + (r ? "r=" + encodeURIComponent(r) + "&" : "") + "type=" + TYPE[0] + "&mine=1#bot";
+        nav.prepend(a);
       }
     },
   });

@@ -8,6 +8,15 @@ const SHOP_HP_SAMPLE = {
   fit:"売るか残すか決めていない空き家、隣の土地と合わせると変わる土地", unfit:"",
   strong:"敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること", lic:"",
   why:{}, unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
+// サンプルHP「AIボット不動産」（RealEstate_Site）の読み。サンプルHPの枠（?site=bot）では、このブラウザの設定より先にこれを使う＝開いてすぐ動く
+const SHOP_HP_BOT = {
+  url:"https://taskboard.asuscomm.com/RealEstate_app/sample/", sample:true, name:"AIボット不動産",
+  what:"地域の不動産の売る・買う・相続・賃貸・買取を、何でも受ける町の不動産会社",
+  good:"住み替えや空き家の売却、戸建て・マンション・土地の物件探し、相続した不動産の整理、お部屋探しと賃貸管理、古家付きなど売りにくい土地の買取",
+  team:"", fit:"売るか買うか、貸すか決めていない不動産のご相談全般", unfit:"",
+  strong:"", area:"", hours:"9:00〜18:00、水曜日・年末年始休み", lic:"",
+  why:{ what:"トップと業務案内（売る・買う・相続・賃貸・買取・その他）", good:"業務案内の各項目", hours:"会社概要" },
+  unread:["事務所の所在地（サンプルのため架空）", "扱っている物件の地区", "宅建の免許番号（サンプルのため架空）"] };
 // 店のこと：HPから読んだ欄（下書き。店が直せる）と、HPにないので店が書く欄（空白から）。タイプ2・3で同じ欄
 // [キー, 名前, 空欄の書き方の例, HPのどこから読むか]
 const SHOP_KNOW = [
@@ -33,7 +42,7 @@ const SHOP_EXTRA = [
   ["unreadAns", "HPから読めなかったことへの答え", "", "聞かれたときに、AIが答えられるようになります"],
   ["ng", "AIに言ってほしくないこと", "例：買取の話は、お客さんから出るまでしない", "AIはこれに触れません"]];
 // 店が直した欄（own）と書いた欄（extra）。このブラウザに "reShopKnow" として置き、タイプ2・3で共有する
-function shopKnow() { try { const k = JSON.parse(localStorage.getItem("reShopKnow")); if (k) return { own:k.own || {}, extra:k.extra || {} }; } catch (e) {} return { own:{}, extra:{} }; }
+function shopKnow() { if (window.RE_SITE_BOT) return { own:{}, extra:{} }; try { const k = JSON.parse(localStorage.getItem("reShopKnow")); if (k) return { own:k.own || {}, extra:k.extra || {} }; } catch (e) {} return { own:{}, extra:{} }; }
 function setShopKnow(k) { try { localStorage.setItem("reShopKnow", JSON.stringify({ own:k.own || {}, extra:k.extra || {} })); } catch (e) {} }
 // AIへ渡す「弊社のこと」（社員として話すとき。タイプ3と、タイプ2の社員目線）。直した欄はHPの読みより優先し、空欄は渡さない
 function shopKnowText(hp, know) {
@@ -52,7 +61,7 @@ function shopKnowText(hp, know) {
   if (un.length && !x("unreadAns")) c += "\n・ホームページから分からないこと：" + un.join("、") + "。聞かれたら「担当からお答えします」と伝え、推測で答えません。";
   return c;
 }
-function shopHP() { try { const h = JSON.parse(localStorage.getItem("reShopHP")); if (h && (h.name || h.unreadable)) return h; } catch (e) {} return SHOP_HP_SAMPLE; }
+function shopHP() { if (window.RE_SITE_BOT) return { ...SHOP_HP_BOT, area:window.RE_AREA || "" }; try { const h = JSON.parse(localStorage.getItem("reShopHP")); if (h && (h.name || h.unreadable)) return h; } catch (e) {} return SHOP_HP_SAMPLE; }
 function setShopHP(h) { try { localStorage.setItem("reShopHP", JSON.stringify(h)); } catch (e) {} }
 // 読み取り中は画面を暗くし、経過秒と段階を出す（終わるまで操作させない）
 function readingCover(url) {
