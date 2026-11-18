@@ -131,10 +131,18 @@
     if (n !== "1") window.addEventListener("load", () => setTimeout(() => { // 見本サイト（遠見不動産）のURLのままなら空にして、御社のURLを入れてもらう
       for (const id of ["url", "hpUrl"]) { const u = document.getElementById(id); if (u && /\/RealEstate\/?$/.test(u.value)) { u.value = ""; u.placeholder = "https://…（御社のHPのトップのURL）"; } }
     }, 300));
+    // URLの欄がサンプルHP（もとのHP）のままなら、色を付けて御社のURLへの変更を促す
+    window.addEventListener("load", () => setTimeout(() => {
+      const u = document.getElementById("url") || document.getElementById("hpUrl"); if (!u) return;
+      const tip = document.createElement("div"); tip.className = "try-urltip"; tip.textContent = "いまはサンプルHP「AIボット不動産」のURLです。御社のHPのURLに書き換えて、読み込んでください。";
+      (u.closest("div.url") || u.parentElement).after(tip);
+      const mark = () => { const on = !u.value.trim() || /RealEstate_app\/sample\/?(\?.*)?$/.test(u.value.trim()); u.classList.toggle("try-sample", on); tip.hidden = !on; };
+      u.addEventListener("input", mark); mark(); setInterval(mark, 1000); // 読み込み後に画面が書き換えても追う
+    }, 400));
     const tcss = document.createElement("style");
     tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.trial .gonav{gap:10px}.trial .gonav a{font-size:14px;padding:8px 16px;border-radius:999px;font-weight:700}.trial .gonav a.btn-user{background:#fff;color:#1d6fb8;border:1px solid #1d6fb8}.trial .gonav a.off{background:#fff;color:#a9b3bd;border-color:#c3c9d0}.gonav a.btn-try,.trial .gonav a.btn-try{background:#d98c1f;color:#fff;border:0;box-shadow:0 2px 6px rgba(217,140,31,.35)}.trial .gonav a.btn-try:hover{background:#c27a12}
     .trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
-    .trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
+    input.try-sample{background:#fff4c2!important;border-color:#e0a800!important;box-shadow:0 0 0 3px rgba(224,168,0,.25)}.try-urltip{margin:6px 0 2px;color:#8a5a00;font-size:12.5px;font-weight:700}.trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
     .trial .noticebar,.trial .trial-dev,.trial3 aside.side,.trial3 .trial-hide{display:none!important}.trial3 .wrap,.trial3 .layout{grid-template-columns:1fr!important}`;
     document.head.appendChild(tcss);
   }
