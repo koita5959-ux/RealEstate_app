@@ -455,6 +455,8 @@ function loadSaved() {
 document.getElementById("commit").onclick = commit;
 document.getElementById("commitTop").onclick = () => { commit(); document.getElementById("checks").scrollIntoView({ block:"center" }); };
 // 移動：未確定なら、移動する（下書きは捨てる）か、とどまるかを選ぶ
+Shell.beforeTry = () => { if (!dirty || commit()) return true; document.getElementById("checks").scrollIntoView({ block:"center" }); return false; }; // お試し：サンプルHPへ行く前に反映
+if (window.RE_TRIAL) for (const id of ["rules", "sample"]) { const el = document.getElementById(id); if (el) { el.classList.add("trial-hide"); const h = el.previousElementSibling; if (h && h.tagName === "H2") h.classList.add("trial-hide"); } }
 Shell.beforeGo = key => { // メイン画面へ行くとき、未確定の下書きがあれば三択を出す（ほかの画面へ行くのは下書きに影響しない）
   if (key === "user" && dirty) { const d = document.getElementById("leave"); d.returnValue = ""; d.showModal(); return false; }
   return true;

@@ -23,6 +23,7 @@
   window.RE_EMBED = QS.get("embed") === "1";
   window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
+  window.RE_TRIAL = QS.get("trial") === "1"; // サンプルHPから来たテスト利用者向けの「お試し設定」（開発用の部品を出さない）
   if (window.RE_EMBED) { const s = document.createElement("style"); s.textContent = ".appbar{display:none!important}details.trace,.trig{display:none!important}"; document.head.appendChild(s); }
   // タイプ：画面のファイル名の頭（1_select_／2_talk_／3_ai_）。開発利用状況など頭のない画面は AI型へ
   const TYPE = (location.pathname.match(/\/(\d_[a-z]+_)[a-z]+\.html$/) || [, "3_ai_"])[1];
@@ -94,13 +95,15 @@
     refresh() { // セッションの有無で、「利用状況」のグレー表示を切り替える
       nav.innerHTML = "";
       for (const key of ORDER) {
+        if (window.RE_TRIAL && key !== "report") continue; // お試し設定：利用状況（タイプ2・3）だけ
         if (key === current || (SCREENS[key].only && SCREENS[key].only !== TYPE) || SCREENS[key].not === TYPE) continue;
         const s = SCREENS[key], off = s.needsSession && !hasSession();
         const a = document.createElement("a");
         a.className = s.cls + (off ? " off" : "");
         a.href = BASE + s.url; a.textContent = s.label;
         if (off) { a.title = "まだ体験の記録がありません（メイン画面を開くと使えます）"; a.setAttribute("aria-disabled", "true"); }
-        a.onclick = e => Shell.go(key, e);
+        if (window.RE_TRIAL) { a.target = "_blank"; a.rel = "noopener"; a.className = "btn-user" + (off ? " off" : ""); a.onclick = e => { if (off) { e.preventDefault(); return false; } }; }
+        else a.onclick = e => Shell.go(key, e);
         nav.appendChild(a);
       }
       if (current === "admin") { // この設定のボットを、サンプルHPの枠で試す（新しいタブ・ボットの位置へ）
@@ -108,11 +111,33 @@
         const a = document.createElement("a");
         a.className = "btn-user"; a.textContent = "サンプルHPで試す"; a.target = "_blank"; a.rel = "noopener";
         a.href = new URL("../sample/", BASE).href + "?" + (r ? "r=" + encodeURIComponent(r) + "&" : "") + "type=" + TYPE[0] + "&mine=1#bot";
+        a.onclick = e => { if (Shell.beforeTry && Shell.beforeTry() === false) { e.preventDefault(); return false; } };
+        if (window.RE_TRIAL) a.classList.add("btn-try");
         nav.prepend(a);
       }
     },
   });
   Shell.refresh();
+  if (window.RE_TRIAL && current === "admin") {
+    const n = TYPE[0];
+    h1.textContent = "TYPE" + n + " お試し設定 ― 御社のHPで試す";
+    document.body.classList.add("trial", "trial" + n);
+    const steps = { "1":["御社のHPのURLを入れて「読み込み」", "③の選択肢（HPの業務内容から拾ったもの）を見て、直す・消す・足す（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットを動かす"],
+      "2":["御社のHPのURLを入れて「読み取る」（AIが店の姿をまとめます。30秒ほど）", "読み取った内容を見て、違う所を直す・足りない所を書く（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットと話す"],
+      "3":["御社のHPのURLを入れて「読み取る」（AIが店の姿をまとめます。30秒ほど）", "業態と選択肢を見て、直す・足す", "右上の「サンプルHPで試す」で、この設定のボットを動かす（書き換えはそのとき反映されます）"] }[n];
+    const g = document.createElement("div"); g.className = "trial-guide";
+    g.innerHTML = "<b>お試しの手順</b><ol>" + steps.map(t => "<li>" + t.replace(/[<>&]/g, "") + "</li>").join("") + "</ol><small>この画面の設定は、このブラウザの中だけに保存されます。ほかの人には見えません。</small>";
+    bar.after(g);
+    if (n !== "1") window.addEventListener("load", () => setTimeout(() => { // 見本サイト（遠見不動産）のURLのままなら空にして、御社のURLを入れてもらう
+      for (const id of ["url", "hpUrl"]) { const u = document.getElementById(id); if (u && /\/RealEstate\/?$/.test(u.value)) { u.value = ""; u.placeholder = "https://…（御社のHPのトップのURL）"; } }
+    }, 300));
+    const tcss = document.createElement("style");
+    tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.gonav a.btn-try{background:#d98c1f;font-weight:700;padding:6px 14px}
+    .trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
+    .trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
+    .trial .noticebar,.trial .trial-dev,.trial3 aside.side,.trial3 .trial-hide{display:none!important}.trial3 .wrap,.trial3 .layout{grid-template-columns:1fr!important}`;
+    document.head.appendChild(tcss);
+  }
   window.addEventListener("storage", e => { if (e.key === SKEY || e.key === null) Shell.refresh(); });
 })();
 
