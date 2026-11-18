@@ -6,6 +6,7 @@ import dns from 'dns/promises';
 import net from 'net';
 import { pathToFileURL } from 'url';
 
+const bare = h => String(h).replace(/^www\./i, ''); // 「www.」のあるなしは同じサイト
 const UA = 'Mozilla/5.0 (RealEstate_app siteread; +https://taskboard.asuscomm.com/RealEstate_app/)';
 const PROFILE_WORDS = /会社概要|会社案内|会社情報|企業情報|事務所概要|事務所案内|店舗情報|店舗案内|アクセス|プロフィール|運営会社|運営者|私たちについて|当社について|company|profile|about|access|outline|gaiyou|gaiyo/i;
 const CASE_WORDS = /事例|実績|お客様の声|お客さまの声|売却事例|解決事例|取扱物件|取引事例|case|works|voice/i; // 合う相談・合いにくい相談は事例の偏りから読む
@@ -126,17 +127,17 @@ async function read(url) {
   const host = new URL(top.url).host;
   const seen = new Set([top.url]);
   const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
-    && (new URL(l.url).host === host || /about|company|profile/i.test(l.url)));
+    && (bare(new URL(l.url).host) === bare(host) || /about|company|profile/i.test(l.url)));
   let prof = [...new Map(cands.map(l => [l.url, { ...l, kind: 'profile' }])).values()];
   const notAccess = prof.filter(l => !/アクセス|access/i.test(l.label + ' ' + l.url));
   if (notAccess.length) prof = notAccess; // 会社概要があれば、アクセス（地図と住所だけ）は読まない
   const uniq = prof.slice(0, 2);
   const cases = p.links.filter(l => CASE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url) && !uniq.some(u => u.url === l.url)
-    && new URL(l.url).host === host);
+    && bare(new URL(l.url).host) === bare(host));
   if (cases.length) uniq.push({ ...cases[0], kind: 'case' });
   // 店が何をするかのページ（売却サポート・業務内容など）。1回目は1つ、残りは読み直しの候補に取っておく
   const services = [...new Map(p.links.filter(l => SERVICE_WORDS.test(l.label + ' ' + l.url) && !SKIP_WORDS.test(l.label + ' ' + l.url)
-    && !seen.has(l.url) && !uniq.some(u => u.url === l.url) && new URL(l.url).host === host).map(l => [l.url, { ...l, kind: 'service' }])).values()];
+    && !seen.has(l.url) && !uniq.some(u => u.url === l.url) && bare(new URL(l.url).host) === bare(host)).map(l => [l.url, { ...l, kind: 'service' }])).values()];
   const rank = l => { const s = l.label + ' ' + l.url; return /売却|売りたい/.test(s) ? 0 : /相続|空き家/.test(s) ? 1 : /業務|事業|サービス|service|business/i.test(s) ? 2 : 3; };
   services.sort((a, b) => rank(a) - rank(b)); // 売却 → 相続・空き家 → 業務内容 → そのほか
   if (services.length) uniq.push(services.shift());
@@ -180,7 +181,11 @@ async function menu(url, opt = {}) {
     if (seen.has(label) || names.some(n => label.startsWith(n) || n.startsWith(label))) continue; seen.add(label);
     meta.push({ label, url: top.url, from: src, biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
   }
-  const same = l => { try { return new URL(l.url).host === host && l.url.replace(/\/$/, '') !== top.url.replace(/\/$/, ''); } catch { return false; } };
+  for (const m of (p.desc + ' ' + p.title).matchAll(/([^\s！!、。]{1,4}たい)[！!]/g)) { // 「売りたい！買いたい！貸したい！借りたい！」
+    const label = m[1] + '方';
+    if (!seen.has(label)) { seen.add(label); meta.push({ label, url: top.url, from: 'desc', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] }); }
+  }
+  const same = l => { try { return bare(new URL(l.url).host) === bare(host) && l.url.replace(/\/$/, '') !== top.url.replace(/\/$/, ''); } catch { return false; } };
   const prop = p.links.find(l => same(l) && PROP_WORDS.test(l.label + ' ' + l.url) && !/お問い?合わせ|リクエスト|contact|form/i.test(l.label + ' ' + l.url));
   const prof = [...new Map(p.links.filter(l => same(l) && (PROFILE_WORDS.test(l.label + ' ' + l.url) || /事業内容|業務内容|業務案内|事業紹介|サービス|会社紹介|企業概要|店舗概要|について$/.test(l.label))
     && !/アクセス|access|地図|map/i.test(l.label + ' ' + l.url) && !/挨拶|理念|スタッフ|message|philosophy|staff/i.test(l.label + ' ' + l.url)).map(l => [decodeURI(l.url).toLowerCase().replace(/\/+$/, ''), l])).values()].slice(0, 3);
@@ -198,7 +203,7 @@ function metaList(t, max = 12) {
 }
 // 見出しの手入れ：（施工事例）などの添え書きを外す・「分譲地：〇〇町1号地」は前だけ・「賃貸物件一覧」は一覧を外す
 function tidy(label) {
-  const t = label.replace(/^[■□●○◆◇・※★☆]+/, '').replace(/[（(][^）)]*(事例|実績|引渡)[^）)]*[）)]/g, '').replace(/^(.{2,10}?)[：:◆].*$/, '$1').replace(/(を|から).*(探す|検索)$|一覧$|検索$/, '').trim();
+  const t = label.replace(/^[■□●○◆◇・※★☆]+/, '').replace(/^(\S{2,8})\s+\S*(お探し|方|こちら|ご案内)\S*$/, '$1').replace(/[（(][^）)]*(事例|実績|引渡)[^）)]*[）)]/g, '').replace(/^(.{2,10}?)[：:◆].*$/, '$1').replace(/(を|から).*(探す|検索)$|一覧$|検索$/, '').trim();
   return t.length >= 3 || !/^物件$/.test(t) ? t : label;
 }
 // 個々の物件・宣伝・会社名・キーワードの羅列は見出しにしない
@@ -226,7 +231,7 @@ function collect(p, pageUrl, host, seen, items, from) {
     if (/^賃貸|^貸|賃貸物件|index-r|chintai|rent/i.test(label + ' ' + l.url) && !/管理|経営/.test(label)) group = '賃貸'; else if (/^売買|^売|売買物件|index-s|baibai|sale/i.test(label + ' ' + l.url)) group = '売買'; else if (!BARE_TYPE.test(label)) group = '';
     if (group === '賃貸' && BARE_TYPE.test(label)) label = (/^(土地|駐車場|月極駐車場|店舗|事務所|店舗・事務所|倉庫)$/.test(label) ? '貸' : '賃貸 ') + label;
     if (LISTING.test(label)) continue;
-    const outside = new URL(l.url).host !== host; // 物件検索は外のサービスに飛ぶ店が多い。外へのリンクは、短い物件の見出し（売買物件・賃貸物件）だけ拾う
+    const outside = bare(new URL(l.url).host) !== bare(host); // 物件検索は外のサービスに飛ぶ店が多い。外へのリンクは、短い物件の見出し（売買物件・賃貸物件）だけ拾う
     if (!label || label.length > 24 || seen.has(label) || MENU_SKIP.test(label) || (outside && !(label.length <= 8 && MENU_WORDS.test(label)))) continue;
     if (!(SERVICE_WORDS.test(label + ' ' + l.url) || MENU_WORDS.test(label)) || SKIP_WORDS.test(label + ' ' + l.url) || PROFILE_WORDS.test(label)) continue;
     seen.add(label);
