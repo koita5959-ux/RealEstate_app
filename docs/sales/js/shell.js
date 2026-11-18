@@ -165,12 +165,12 @@
       let done = u.value.trim(); // 開いたときに入っているURL（読み込み済み）は点灯しない
       const rb = document.getElementById("read") || document.getElementById("readBtn") || document.getElementById("hpRead");
       if (rb) rb.addEventListener("click", () => { done = u.value.trim(); mark(); });
-      u.addEventListener("input", mark); mark(); setInterval(mark, 1000); // 読み込み後に画面が書き換えても追う
+      for (const ev of ["input", "change", "paste", "keyup"]) u.addEventListener(ev, () => setTimeout(mark, 0)); mark(); setInterval(mark, 1000); // 読み込み後に画面が書き換えても追う
     }, 400));
     const tcss = document.createElement("style");
     tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.trial .gonav{gap:10px}.trial .gonav a{font-size:14px;padding:8px 16px;border-radius:999px;font-weight:700}.trial .gonav a.btn-user{background:#fff;color:#1d6fb8;border:1px solid #1d6fb8}.trial .gonav a.off{background:#fff;color:#a9b3bd;border-color:#c3c9d0}.gonav a.btn-try,.trial .gonav a.btn-try{background:#d98c1f;color:#fff;border:0;box-shadow:0 2px 6px rgba(217,140,31,.35)}.trial .gonav a.btn-try:hover{background:#c27a12}
     .trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
-    input.try-sample{background:#fff4c2!important;border-color:#e0a800!important;box-shadow:0 0 0 3px rgba(224,168,0,.25)}button.try-go{background:#d98c1f!important;border-color:#d98c1f!important;color:#fff!important;font-weight:700;box-shadow:0 0 0 3px rgba(217,140,31,.3);animation:tryGo 1.4s ease-in-out infinite}@keyframes tryGo{50%{box-shadow:0 0 0 6px rgba(217,140,31,.12)}}.try-urltip{margin:6px 0 2px;color:#8a5a00;font-size:12.5px;font-weight:700}.trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
+    input.try-sample{background:#fff4c2!important;border-color:#e0a800!important;box-shadow:0 0 0 3px rgba(224,168,0,.25)}.trial1 #read:not(.try-go){background:#fff!important;color:#b03a2e!important;border:1px solid #d9b3ae!important;box-shadow:none}button.try-go{background:#d98c1f!important;border-color:#d98c1f!important;color:#fff!important;font-weight:700;box-shadow:0 0 0 3px rgba(217,140,31,.3);animation:tryGo 1.4s ease-in-out infinite}@keyframes tryGo{50%{box-shadow:0 0 0 6px rgba(217,140,31,.12)}}.try-urltip{margin:6px 0 2px;color:#8a5a00;font-size:12.5px;font-weight:700}.trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
     .trial .noticebar,.trial .trial-dev,.trial3 aside.side,.trial3 .trial-hide{display:none!important}.trial3 .wrap,.trial3 .layout{grid-template-columns:1fr!important}`;
     document.head.appendChild(tcss);
   }
