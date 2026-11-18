@@ -145,6 +145,15 @@
     if (n !== "1") window.addEventListener("load", () => setTimeout(() => { // 見本サイト（遠見不動産）のURLのままなら空にして、御社のURLを入れてもらう
       for (const id of ["url", "hpUrl"]) { const u = document.getElementById(id); if (u && /\/RealEstate\/?$/.test(u.value)) { u.value = ""; u.placeholder = "https://…（御社のHPのトップのURL）"; } }
     }, 300));
+    // サンプルHPの TYPE ボタンから来たとき（?url=）：そのURLを「あなたのHP」に入れて読み込む。読み込んだらURLから外す（リロードで読み直さない）
+    window.addEventListener("load", () => setTimeout(() => {
+      const src = QS.get("url"); if (!src) return;
+      const u = document.getElementById("url") || document.getElementById("hpUrl"), b = document.getElementById("read") || document.getElementById("readBtn") || document.getElementById("hpRead");
+      if (!u || !b) return;
+      u.value = src; u.dispatchEvent(new Event("input"));
+      const c = window.confirm; window.confirm = () => true; try { b.click(); } finally { setTimeout(() => { window.confirm = c; }, 0); }
+      const q = new URLSearchParams(location.search); q.delete("url"); history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+    }, 300));
     // URLの欄がサンプルHP（もとのHP）のままなら、色を付けて御社のURLへの変更を促す
     window.addEventListener("load", () => setTimeout(() => {
       const u = document.getElementById("url") || document.getElementById("hpUrl"); if (!u) return;

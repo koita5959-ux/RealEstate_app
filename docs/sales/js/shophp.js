@@ -92,6 +92,8 @@ async function readShopHP(url) {
 }
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
+  if (/RealEstate_app\/sample\/?(\?[^#]*)?(#.*)?$/.test(url)) { const area = new URLSearchParams(location.search).get("area") || ""; // サンプルHPは、読み取り済みの中身を使う（AIなし・費用なし）
+    return { hp:{ ...SHOP_HP_BOT, url, area, sample:false }, msg:"サンプルHP「AIボット不動産」を読み取りました（費用0）。" }; }
   const by = new URLSearchParams(location.search).get("by") || "visitor", force = READ_LAST_CACHED === url;
   const r = await fetch("../../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(150000) });
   const j = await r.json().catch(() => ({}));

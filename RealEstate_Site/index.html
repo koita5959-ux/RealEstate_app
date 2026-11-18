@@ -111,6 +111,8 @@
   var lab = document.createElement("p"); lab.className = "bot-now";
   lab.textContent = "表示中：TYPE" + t + (q.get("mine") === "1" ? "（管理画面の設定）" : "（このサンプルHPの初期状態）");
   document.querySelector(".bot-slot-wrap").prepend(lab);
+  var here = location.origin + location.pathname + (q.get("r") ? "?r=" + encodeURIComponent(q.get("r")) : ""); // TYPE ボタン：このサンプルHPのURLを持ってお試し設定を開き、読み込む
+  document.querySelectorAll(".bot-mode-btn").forEach(function (a) { a.href = a.getAttribute("href").split("?")[0] + "?url=" + encodeURIComponent(here) + (reg && reg !== "地域" ? "&area=" + encodeURIComponent(reg) : ""); });
   if (location.hash === "#bot") setTimeout(function () { document.getElementById("bot").scrollIntoView(); }, 50);
 })();
 </script>
