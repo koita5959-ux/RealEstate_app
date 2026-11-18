@@ -18,8 +18,8 @@ const prev = prevFile ? JSON.parse(fs.readFileSync(path.join(dir, prevFile), "ut
 const out = {};
 for (const r of csv.rows) {
   const m = await menu(r.URL).catch(e => ({ error: String(e.message || e), items: [] }));
-  const top = m.error ? [] : ctx.t1Default(m.items).top;
-  out[r.URL] = { 社名: r.社名, 回: r.回, error: m.error || "", items: (m.items || []).map(i => i.label), third: top.map(n => n.label + "＝" + n.cats.join("+")),
+  const top = m.error ? [] : ctx.t1Default(m.items, m.omakase).top;
+  out[r.URL] = { 社名: r.社名, 回: r.回, error: m.error || "", omakase: !!m.omakase, items: (m.items || []).map(i => i.label), third: top.map(n => n.label + "＝" + n.cats.join("+")),
     fourth: top.map(n => n.label + "→" + ctx.t1Kids(n, null, [n]).map(k => k.label).join("・")) };
   const o = out[r.URL], p = prev[r.URL];
   const mark = !p ? "新" : JSON.stringify(p.third) === JSON.stringify(o.third) && JSON.stringify(p.fourth) === JSON.stringify(o.fourth) ? "　" : "差";

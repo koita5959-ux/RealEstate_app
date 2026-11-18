@@ -70,7 +70,7 @@ function t1Classify(labels) {
     if (cats.some(k => T1C.rentSide.includes(k)) && cats.includes("賃貸・管理")) { sideAsk = cats.filter(k => !T1C.rentSide.includes(k)); cats = cats.filter(k => T1C.rentSide.includes(k)); }
     const broad = !(head && hit(head).length) && hit(label).length >= 3; // 「不動産の賃貸・売買・仲介・管理」のような何でもの見出しは、はっきりしたリンクに譲る
     const key = cats.join("+"), had = by.get(key), weak = broad ? 1.5 : raw && raw.weak != null && raw.weak !== false ? +raw.weak : (/物件$|物件特集$/.test(label) && !/^(売買|賃貸|自社|売主)/.test(label)) ? 2 : 1;
-    if (!had || weak < had.weak || weak === had.weak && label.length < had.label.length) by.set(key, { label, cats, weak, sideAsk, biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
+    if (!had || weak < had.weak || weak === had.weak && label.length < had.label.length) by.set(key, { label, cats, weak, sideAsk, prose:!!(raw && raw.prose), biz:T1P.small[cats[0]].biz, at:had ? had.at : by.size });
   }
   const one = new Set([...by.values()].filter(n => n.cats.length === 1).map(n => n.cats[0]));
   return [...by.values()].filter(n => n.cats.length === 1 || !n.cats.every(c => one.has(c))) // 合わせ物は、中身が全部単独で出ていれば外す
@@ -91,9 +91,12 @@ const T1_BASE = [ // URLを入れる前の見本の③（HPを読んで0件の�
   { label:"売りたい", cats:["売却（仲介）"] }, { label:"早く手放したい", cats:["早く売る・買取"] },
   { label:"土地を活かしたい", cats:["土地活用", "空き家・空き地"] }, { label:"相続した・相続する", cats:["相続"] },
 ];
-function t1Default(items) { // HPから拾った見出し（小分類に当てたもの）だけが③になる。足りなくても補わない（出口の問い合わせで受ける）
-  const cl = items && items.length ? t1Classify(items.map(i => ({ label:i.label, weak:/^(title|desc)$/.test(i.from) ? 2 : /:text$/.test(i.from || "") ? 0 : null }))) : []; // 同じ分類なら、事業内容の一覧（本文）＞メニューのリンク＞物件の絞り込み・タイトル・説明文の言葉
-  const top = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { sideAsk:true, alt:n.sideAsk } : {}) }));
+const T1_OMAKASE = [{ label:"売りたい方", cats:["売却（仲介）"] }, { label:"買いたい方", cats:["購入・物件探し"] }, { label:"貸したい方", cats:["賃貸・管理"] }, { label:"借りたい方", cats:["借りたい・部屋探し"] }];
+function t1Default(items, omakase) { // omakase＝「不動産のことなら何でも」型の店。③が3つに届かなければ、基本の取引から足す（相続・お金の話は足さない。ユーザー 11-18） // HPから拾った見出し（小分類に当てたもの）だけが③になる。足りなくても補わない（出口の問い合わせで受ける）
+  const cl = items && items.length ? t1Classify(items.map(i => ({ label:i.label, prose:/:prose$/.test(i.from || ""), weak:/:prose$/.test(i.from || "") ? 3 : /^(title|desc)$/.test(i.from || "") ? 2 : /:text$/.test(i.from || "") ? 0 : null }))) : []; // 同じ分類なら、事業内容の一覧（本文）＞メニューのリンク＞物件の絞り込み・タイトル・説明文の言葉
+  const top0 = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { sideAsk:true, alt:n.sideAsk } : {}), ...(n.prose ? { prose:true } : {}) })); // prose＝HPの文章から拾った（店に確かめてもらう）
+  const top = top0.slice();
+  if (omakase) for (const b of T1_OMAKASE) { if (top.length >= 3) break; if (!top.some(n => n.cats.includes(b.cats[0]))) top.push({ ...b, cats:b.cats.slice(), fill:true }); }
   return { v:3, url:"", top:items === undefined ? T1_BASE.map(n => ({ ...n })) : top };
 }
 // 賃貸の向き：借りる方向け（部屋探し・事業用）／貸す方（オーナー）向け（賃貸・管理）。どちらでもなければ null

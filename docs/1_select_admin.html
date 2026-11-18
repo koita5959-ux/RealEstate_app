@@ -92,7 +92,7 @@ const isAuto = d => d > 0 && !trailTo(d).trail[d - 1].kids;
 
 function itemHtml(n, d, i, sel) {
   const t = trailTo(d).trail.concat(n), kids = t1Kids(n, land(), t);
-  const sub = n.fill ? "補い（HPから取れなかった分）／小分類：" + n.cats.join("＋") : n.cats ? "小分類：" + n.cats.join("＋") : n.why ? "候補の表から（" + n.why + "）" : n.gen ? "" : "店が書いた選択肢";
+  const sub = n.fill ? "補い（「不動産のことなら何でも」型の店なので、基本の取引を足しました）／小分類：" + n.cats.join("＋") : n.cats ? (n.prose ? "HPの文章から拾いました（店の業務か確かめてください）／" : "") + "小分類：" + n.cats.join("＋") : n.why ? "候補の表から（" + n.why + "）" : n.gen ? "" : "店が書いた選択肢";
   const sd = d === 0 && t1Side(n.cats, n.label), sideHtml = !sd ? "" : `<span class="side${n.sideAsk ? " ask" : ""}">${n.sideAsk ? "向きを確かめてください：今は" : ""}${sd === "borrow" ? "借りる方向け" : "貸す方（オーナー）向け"}<button data-op="side" data-at="${d}:${i}" title="向きを変える">${sd === "borrow" ? "貸す方向けにする" : "借りる方向けにする"}</button>${n.sideAsk ? `<button data-op="sideok" data-at="${d}:${i}">このままでよい</button>` : ""}</span>`;
   const k = kids.length ? `<span class="k">→ ${QN[d + 1]} ${kids.length}つ</span>` : `<span class="k leaf">→ 子なし（問い合わせだけ）</span>`;
   const label = EDIT === `${d}:${i}` ? `<input data-in="${d}:${i}" value="${esc(n.label)}">` : `<span class="l">${esc(n.label)}</span>`;
@@ -167,7 +167,7 @@ document.addEventListener("change", e => {
 document.getElementById("read").onclick = async () => {
   const url = document.getElementById("url").value.trim(), msg = document.getElementById("readMsg");
   if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
-  let items = [], areas = [], note = "";
+  let items = [], areas = [], note = "", omakase = false;
   if (url) {
     const btn = document.getElementById("read"), t0 = Date.now();
     btn.disabled = true; msg.className = "hint loading";
@@ -176,12 +176,12 @@ document.getElementById("read").onclick = async () => {
     try {
       const by = new URLSearchParams(location.search).get("by") || "visitor";
       const r = await t1ReadMenu(url, by);
-      items = r.items || []; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
+      items = r.items || []; omakase = !!r.omakase; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
       note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました（トップ・物件情報・会社概要を読みました）。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
     } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
     clearInterval(timer); btn.disabled = false; msg.className = "hint done"; // 読み込みの結果の一行は赤で残す
   }
-  SHOP = t1Default(url ? items : undefined); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
+  SHOP = t1Default(url ? items : undefined, omakase); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
   msg.textContent = note || "";
 };
 document.getElementById("url").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && !document.getElementById("read").disabled) { e.preventDefault(); document.getElementById("read").click(); } }); // URLの欄でエンター＝読み込み

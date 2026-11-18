@@ -197,7 +197,10 @@ async function menu(url, opt = {}) {
     const g = await get(l.url);
     if (g.ok) { collect(parse(g.html, g.url), g.url, host, seen, items, from); pages.push({ url: g.url, from }); }
   }
-  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, items: items.concat(meta), pages };
+  const firm = items.filter(i => !/:prose$/.test(i.from || '')), named = new Set(firm.map(i => i.label));
+  const prose = items.filter(i => /:prose$/.test(i.from || '') && !named.has(i.label));
+  const omakase = /(不動産|土地|住まい)[^。]{0,12}(なんでも|何でも|おまかせ|お任せ|幅広く|総合)|(なんでも|何でも)[^。]{0,6}ご相談/.test(p.title + ' ' + p.desc + ' ' + p.text); // 「不動産のことなら何でも」型の店
+  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, omakase, items: firm.concat(meta, prose), pages };
 }
 function metaList(t, max = 12) {
   return String(t || '').split(/[|｜\/／・、,，。]|\s[-–—]\s/).map(x => x.replace(/^.*?[市区町村県]で?の/, '').replace(/^(不動産の?)(?=..)/, '').replace(/(なら|のことなら|の事なら).*$/, '').trim())
@@ -225,6 +228,21 @@ function bodyList(text) {
   }
   return [...new Set(Object.values(best).flat())];
 }
+// 文章で業務を説明するHP（田舎の「おまかせ」型・リゾート）：業務を述べる文だけを見て、【】の中身と短い言葉を拾う。弱い材料（メニューで取れなかった分類を埋めるだけ）
+const PROSE_VERB = /お手伝い|ご紹介|承って|承り|対応|取り扱|取扱|ご提案|サポート|アドバイザー|探しております|募集|行って|おまかせ|お任せ/;
+const PROSE_ACT = /売買|仲介|管理|活用|査定|買取|買い取|相続|リフォーム|リノベ|分譲|建築|紹介|探し|売却|賃貸|コンサル/;
+const PROSE_WORDS = /田舎暮らし|リゾート|別荘|移住|二拠点|古民家|セカンドハウス/;
+function proseList(text) {
+  const out = [];
+  for (const sen of text.match(/[^。！!？?]{8,200}[。！!]/g) || []) {
+    if (!PROSE_VERB.test(sen)) continue;
+    if (/(土地|物件|建物|住宅|家|マンション)[^。]{0,8}(探しております|探しています|募集しております|募集中|買い取ります|買取ります)/.test(sen)) out.push('土地・建物を売りたい方'); // 店が仕入れたい合図
+    for (const m of sen.matchAll(/【\s*([^】]{2,14}?)\s*】/g)) out.push(m[1].replace(/\s+/g, ''));
+    for (const f of sen.split(/[、，,（）()【】「」\s]|での|での|として|の|を|や|など|及び|および/))
+      if (f.length >= 2 && f.length <= 10 && (PROSE_ACT.test(f) || PROSE_WORDS.test(f)) && !MENU_SKIP.test(f) && !/※|生活|人生|無料|屋さん/.test(f)) out.push(f); // 物の名前（店舗・駐車場・アパート）は拾わない。業務の言葉だけ
+  }
+  return [...new Set(out)];
+}
 function collect(p, pageUrl, host, seen, items, from) {
   let group = ''; // メニューのまとまり（「賃貸物件一覧」の下の「一戸建て」は借りる側）
   for (const l of p.links) {
@@ -238,6 +256,10 @@ function collect(p, pageUrl, host, seen, items, from) {
     if (!(SERVICE_WORDS.test(label + ' ' + l.url) || MENU_WORDS.test(label)) || SKIP_WORDS.test(label + ' ' + l.url) || PROFILE_WORDS.test(label)) continue;
     seen.add(label);
     items.push({ label, url: l.url, ...(from ? { from } : {}), biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
+  }
+  if (from === null || from === 'profile') for (const label of proseList(p.text)) { // トップと会社概要の文章
+    if (seen.has(label) || LISTING.test(label) || items.some(i => i.label === label)) continue;
+    items.push({ label, url: pageUrl, from: (from || 'top') + ':prose', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
   }
   // 会社紹介の「アパートを建てたい方、売りたい方、空室で困っている方」は、店が受ける相談そのもの
   if (from === 'profile') for (const m of p.text.matchAll(/(?:^|[\s、。，,]|とくに|特に)([^\s、。，,]{1,10}?(?:たい方|で困っている方|でお困りの方))/g)) {
