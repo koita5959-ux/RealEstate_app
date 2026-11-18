@@ -10,6 +10,7 @@ services:
       - ./docs:/usr/share/nginx/html/docs:ro
       - ./RealEstate_Site:/usr/share/nginx/html/sample:ro # サンプルHPの画像・CSS（index.html は api が返す）
       - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./secrets/mailhog.htpasswd:/etc/nginx/mailhog.htpasswd:ro # MailHog の画面の入口（admin のパスワードから作る）
     restart: unless-stopped
 
   api:
@@ -38,8 +39,10 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
-  mailhog: # 試験用のメール受け（送ったメールを外に出さず受け止める）。画面 http://192.168.0.123:8042/
+  mailhog: # 試験用のメール受け（送ったメールを外に出さず受け止める）。画面 https://taskboard.asuscomm.com/RealEstate_app/mailhog/ （LAN からは http://192.168.0.123:8042/RealEstate_app/mailhog/）
     image: mailhog/mailhog
+    environment:
+      MH_UI_WEB_PATH: RealEstate_app/mailhog
     ports:
       - "8042:8025"
     restart: unless-stopped
