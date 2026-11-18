@@ -169,6 +169,7 @@ document.getElementById("read").onclick = async () => {
   const url = document.getElementById("url").value.trim(), msg = document.getElementById("readMsg");
   if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
   let items = [], areas = [], note = "", omakase = false;
+  if (/RealEstate_app.sample.?$/.test(url)) { try { localStorage.removeItem("reType1"); } catch (e) {} SHOP = t1Shop(); PATH = []; EDIT = null; save(); render(); msg.textContent = "サンプルHP「AIボット不動産」の業務案内に戻しました。"; return; } // セールス版：サンプルHPは業務案内の6つ
   if (url) {
     const btn = document.getElementById("read"), t0 = Date.now();
     btn.disabled = true; msg.className = "hint loading";
