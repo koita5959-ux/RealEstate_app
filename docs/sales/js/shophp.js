@@ -124,5 +124,7 @@ if (window.RE_TRIAL && /2_talk_try.html$/.test(location.pathname)) try {
 } catch (e) {}
 // TYPE3：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット不動産」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
 if (window.RE_EMBED && /3_ai_main\.html$/.test(location.pathname)) try {
-  if (!localStorage.getItem("reShopHP")) localStorage.setItem("reShopHP", JSON.stringify({ ...SHOP_HP_BOT, area:window.RE_AREA || "", sample:false }));
+  let h = null; try { h = JSON.parse(localStorage.getItem("reShopHP")); } catch (e) {}
+  if (!h) localStorage.setItem("reShopHP", JSON.stringify({ ...SHOP_HP_BOT, area:window.RE_AREA || "", sample:false }));
+  else if (/RealEstate_app\/sample\//.test(h.url || "") && window.RE_AREA && h.area !== window.RE_AREA) localStorage.setItem("reShopHP", JSON.stringify({ ...h, area:window.RE_AREA })); // サンプルHPの設定のままなら、開いた地区（?r=）に合わせ直す
 } catch (e) {}
