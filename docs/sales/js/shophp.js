@@ -92,7 +92,9 @@ async function readShopHP(url) {
 }
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
-  if (/RealEstate_app\/sample\/?(\?[^#]*)?(#.*)?$/.test(url)) { const area = new URLSearchParams(location.search).get("area") || ""; // サンプルHPは、読み取り済みの中身を使う（AIなし・費用なし）
+  if (/RealEstate_app\/sample\/?(\?[^#]*)?(#.*)?$/.test(url)) { // サンプルHPは、読み取り済みの中身を使う（AIなし・費用なし）。地区名だけはそのURL（?r=）のページから取る
+    let area = new URLSearchParams(location.search).get("area") || "";
+    try { const t = await (await fetch(url, { signal:AbortSignal.timeout(8000) })).text(); const m = t.match(/data-region-line>([^<]*)</); if (m) area = m[1].replace(/ほか$/, "").replace(/^地域$/, "").trim(); } catch (e) { /* 取れなければ前の地区名 */ }
     return { hp:{ ...SHOP_HP_BOT, url, area, sample:false }, msg:"サンプルHP「AIボット不動産」を読み取りました（費用0）。" }; }
   const by = new URLSearchParams(location.search).get("by") || "visitor", force = READ_LAST_CACHED === url;
   const r = await fetch("../../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(150000) });
