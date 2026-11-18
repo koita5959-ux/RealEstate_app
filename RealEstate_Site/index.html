@@ -116,5 +116,24 @@
   if (location.hash === "#bot") setTimeout(function () { document.getElementById("bot").scrollIntoView(); }, 50);
 })();
 </script>
+<script>
+// お問い合わせフォーム：メールで送る（試験中は MailHog が受け止める）。送れたら「お預かりしました」を出す
+(function () {
+  var form = document.querySelector("[data-inquiry]"), done = document.querySelector(".inquiry-done");
+  if (!form) return;
+  var btn = form.querySelector("button");
+  done.querySelector("button").onclick = function () { done.hidden = true; };
+  btn.onclick = function () {
+    if (!form.reportValidity()) return;
+    var v = function (n) { return (form.elements[n] || {}).value || ""; };
+    var reg = ((document.querySelector("[data-region-line]") || {}).textContent || "").replace(/ほか$/, "").trim();
+    btn.disabled = true;
+    fetch("../api/inquiry", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ kind:"site", name:v("name"), company:v("company"), email:v("email"), tel:v("tel"), msg:v("message"), area:reg === "地域" ? "" : reg, page:location.href }) })
+      .then(function (r) { if (!r.ok) throw 0; form.reset(); done.hidden = false; })
+      .catch(function () { alert("送れませんでした。時間をおいてもう一度お試しください。"); })
+      .then(function () { btn.disabled = false; });
+  };
+})();
+</script>
 </body>
 </html>

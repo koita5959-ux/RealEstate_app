@@ -731,7 +731,7 @@ const INQ_FORM = `<b>弊社へのお問い合わせ</b>
       <label>連絡の希望</label><select id="fWay"><option>電話がよい</option><option>メールがよい</option><option>どちらでも</option></select>
       <textarea id="fWhen" rows="1" placeholder="連絡してよい時間帯（例：平日の夕方）"></textarea>
       <label>この相談のほかに、伝えたいこと</label><textarea id="fMsg" rows="3"></textarea>
-      <div class="hint" style="color:#b4472b">試作のため、入力した内容は送信されず、記録もしません。実際のお名前・連絡先は入れないでください。</div>
+      <div class="hint" style="color:#b4472b">試験中のため、メールは外には届きません（試験用の受け箱に入ります）。実際のお名前・連絡先は入れないでください。</div>
       <div class="hint">本番では、ここまでの相談の内容が、メールに自動で添えられます。</div>
       <button id="inqSend" class="primary">この内容で送る</button>
       <button id="inqBack" class="small">相談に戻る</button>`;
@@ -741,7 +741,19 @@ function inqSentMark(box) {
   const send = box.querySelector("#inqSend"); if (send) send.classList.add("off");
   const back = box.querySelector("#inqBack"); if (back) back.remove();
   box.classList.add("sent");
-  box.insertAdjacentHTML("beforeend", `<div class="sheet" style="margin-top:8px">送信しました。担当者からのご連絡をお待ちください。<br><small>試作のため、実際には送られていません。</small></div>`);
+  box.insertAdjacentHTML("beforeend", `<div class="sheet" style="margin-top:8px">送信しました。担当者からのご連絡をお待ちください。<br><small>試験中のため、メールは試験用の受け箱に入ります。</small></div>`);
+}
+// 問い合わせをメールで送る（店へ＋メールがあれば客へ控え）。添えるもの＝ここまでの会話の文字とデータシート
+async function sendInquiry(box) {
+  const v = id => (document.getElementById(id) || {}).value || "";
+  const talk = [...document.querySelectorAll("#talk > *")].filter(x => !x.classList.contains("inqrow")).map(x => x.innerText.trim()).filter(Boolean).join("\n\n");
+  const sheet = (typeof S !== "undefined" && S && S.sheet) ? Object.entries(S.sheet).filter(([, x]) => x != null && x !== "").map(([k, x]) => `${k}：${String(x).replace(/<[^>]+>/g, "")}`).join("\n") : "";
+  const body = { kind:"bot", type:location.pathname.match(/(\d)_\w+_main/)?.[1] || "", sid:SID, by:BY, name:v("fName"), email:v("fMail"), tel:v("fTel"), way:v("fWay"), when:v("fWhen"), msg:v("fMsg"),
+    talk, sheet, area:window.RE_AREA || "", page:(document.referrer || location.href).slice(0, 300) };
+  let ok = false;
+  try { const r = await fetch("../../api/inquiry", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) }); ok = r.ok; } catch (e) {}
+  inqSentMark(box);
+  if (!ok) box.querySelector(".sheet:last-child").innerHTML = "送れませんでした。時間をおいてもう一度お試しください。";
 }
 function inquiryBar() {
   const bar = document.getElementById("inq");
@@ -759,7 +771,7 @@ function inquiryBar() {
     document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
       if (!inqOk()) return; // お名前と、メールか電話のどちらかが必要
-      inqSentMark(box);
+      sendInquiry(box);
       ev("inquiry_send"); // 送った状態を記録（お名前・連絡先・伝えたいことの中身は記録しない。連絡の希望だけ）
     };
   };

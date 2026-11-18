@@ -608,6 +608,36 @@ async function handleLand(req, res, url) {
 }
 
 import { renderSample, logSample, regionKnown } from "./sample.js";
+import { sendMail } from "./mail.js";
+// 問い合わせをメールで送る（ボットの3タイプ・サンプルHPのフォーム）。店へ1通＋メールがあれば控えを客へ1通。
+// 記録には送ったこと・種類・成否だけ残す（お名前・連絡先・本文は残さない。中身は届いたメールで見る）
+const inqHits = new Map();
+const DATA_DIR_INQ = process.env.DATA_DIR || "/data";
+async function handleInquiry(req, res) {
+  const ip = String(req.headers["x-real-ip"] || req.socket.remoteAddress || "");
+  const now = Date.now(), h = (inqHits.get(ip) || []).filter((t) => now - t < 600_000);
+  if (h.length >= 5) return send(res, 429, { error: "rate_limited" });
+  h.push(now); inqHits.set(ip, h);
+  const b = await readBody(req, 65_536), t = (v, n) => String(v || "").trim().slice(0, n);
+  const f = { kind: b.kind === "site" ? "site" : "bot", type: t(b.type, 4), sid: t(b.sid, 64), by: t(b.by, 40), name: t(b.name, 100), company: t(b.company, 100),
+    email: t(b.email, 200), tel: t(b.tel, 40), way: t(b.way, 40), when: t(b.when, 200), msg: t(b.msg, 4000), talk: t(b.talk, 20000), sheet: t(b.sheet, 6000), area: t(b.area, 200), page: t(b.page, 300) };
+  if (!f.name || !(f.email || f.tel) || (f.kind === "site" && !f.msg)) return send(res, 400, { error: "missing" });
+  const what = f.kind === "site" ? "サンプルHPのお問い合わせフォーム" : `AIボット（TYPE${f.type}）の問い合わせ`;
+  const lines = [`${what}から届きました。`, "", `お名前：${f.name}`, ...(f.company ? [`会社名・屋号：${f.company}`] : []), `メール：${f.email || "（なし）"}`, `電話：${f.tel || "（なし）"}`,
+    ...(f.way ? [`連絡の希望：${f.way}`] : []), ...(f.when ? [`連絡してよい時間帯：${f.when}`] : []), ...(f.area ? [`地域：${f.area}`] : []), "",
+    "■ 伝えたいこと", f.msg || "（なし）", ...(f.sheet ? ["", "■ データシート", f.sheet] : []), ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "",
+    "――", `送信元：${f.page || "-"}`, ...(f.sid ? [`セッション：${f.sid}`] : []), `日時：${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`];
+  const row = { at: new Date().toISOString(), kind: f.kind, type: f.type, sid: f.sid, by: f.by, mail: !!f.email, tel: !!f.tel };
+  try {
+    await sendMail({ subject: `【問い合わせ】${f.name} 様（${what}）`, text: lines.join("\n"), replyTo: f.email });
+    if (f.email) await sendMail({ to: [f.email], subject: "お問い合わせを受け付けました（AIボット不動産）",
+      text: [`${f.name} 様`, "", "お問い合わせありがとうございます。次の内容でお預かりしました。", "担当者から改めてご連絡します。", "", "■ 伝えたいこと", f.msg || "（なし）",
+        ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "", "――", "AIボット不動産（このメールは送信専用です）"].join("\n") }).catch((e) => { row.copyErr = e.message; });
+    row.ok = true;
+  } catch (e) { row.ok = false; row.err = e.message; }
+  try { fs.appendFileSync(path.join(DATA_DIR_INQ, `inquiry-${row.at.slice(0, 10)}.jsonl`), JSON.stringify(row) + "\n", { mode: 0o600 }); } catch { /* 記録できなくても返事は返す */ }
+  return row.ok ? send(res, 200, { ok: true }) : send(res, 502, { error: "mail_failed", detail: row.err });
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
@@ -618,6 +648,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/chat") return await handleChat(req, res);
     if (req.method === "POST" && url.pathname === "/api/shopread") return await handleShopRead(req, res);
     if (req.method === "POST" && url.pathname === "/api/shopmenu") return await handleShopMenu(req, res);
+    if (req.method === "POST" && url.pathname === "/api/inquiry") return await handleInquiry(req, res);
     if (req.method === "POST" && url.pathname === "/api/event") return await handleEvent(req, res);
     if (req.method === "POST" && url.pathname === "/api/session") return await handleSession(req, res);
     if (req.method === "POST" && url.pathname === "/api/admit") return await handleAdmit(req, res);

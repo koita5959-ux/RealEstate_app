@@ -20,6 +20,10 @@ services:
       MODEL: claude-opus-5-5     # 変更例: claude-haiku-5-5（安い）/ claude-sonnet-5-5
       EFFORT: low
       DAILY_USD_CAP: "2"         # 1日の推定費用の上限（USD）。超えると止まる
+      SMTP_HOST: mailhog         # 問い合わせのメール。試験は MailHog が受け止める（外に出ない）。本番で本物の SMTP に替える
+      SMTP_PORT: "1025"
+      MAIL_FROM: bot@example.test   # 差出人（本番前に決める）
+      MAIL_TO: shop@example.test    # 店の宛先（本番前に決める）
       # DISABLED: "1"            # 停止スイッチ（data/DISABLED というファイルでも止まる）
     secrets:
       - anthropic_api_key
@@ -32,6 +36,12 @@ services:
       - ./docs/data/muni.json:/app/muni.json:ro # 物件の町名を拾う（shop/listings.js）
       - ./_works/2026-11-14_ClaudeCode_送付用の地区一覧:/regions:ro
     mem_limit: 256m
+    restart: unless-stopped
+
+  mailhog: # 試験用のメール受け（送ったメールを外に出さず受け止める）。画面 http://192.168.0.123:8042/
+    image: mailhog/mailhog
+    ports:
+      - "8042:8025"
     restart: unless-stopped
 
 secrets:
