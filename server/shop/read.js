@@ -31,7 +31,7 @@ async function safeUrl(u) {
   catch { return false; }
 }
 
-async function get(url) {
+async function get(url, opt = {}) {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 15000);
   try {
@@ -51,6 +51,8 @@ async function get(url) {
     let html;
     try { html = new TextDecoder(cs.toLowerCase().replace('x-sjis', 'shift_jis')).decode(buf); }
     catch { html = buf.toString('utf8'); }
+    const mr = html.length < 6000 && html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["']?\s*\d*\s*;\s*url=([^"'>\s]+)/i); // ページの中の転送（古いHPの空のトップ）。1回だけ追う
+    if (mr && !opt.noRefresh) { clearTimeout(t); return get(new URL(decode(mr[1]), url).href, { noRefresh: true }); }
     return { ok: r.ok, status: r.status, url, html };
   } catch (e) {
     return { ok: false, status: 0, url, error: String(e.name === 'AbortError' ? 'timeout' : e.message || e) };
