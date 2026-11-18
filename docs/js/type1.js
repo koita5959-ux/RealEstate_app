@@ -97,11 +97,12 @@ function t1Default(items) { // HPから拾った見出し（小分類に当て�
   return { v:3, url:"", top:items === undefined ? T1_BASE.map(n => ({ ...n })) : top };
 }
 // 賃貸の向き：借りる方向け（部屋探し・事業用）／貸す方（オーナー）向け（賃貸・管理）。どちらでもなければ null
-function t1Side(cats) { cats = cats || []; return cats.some(c => T1C.rentSide.includes(c)) ? "borrow" : cats.includes("賃貸・管理") ? "lend" : null; }
+const T1_PARK = /駐車|パーキング|月極/;
+function t1Side(cats, label) { cats = cats || []; return cats.some(c => T1C.rentSide.includes(c)) ? "borrow" : cats.includes("賃貸・管理") || cats.includes("土地活用") && T1_PARK.test(label || "") ? "lend" : null; } // 駐車場の見出しで土地活用＝貸す側
 // 向きを切り替える（店が管理画面で）。前の小分類は alt に取っておき、戻すときに使う。その先の初期値は作り直す
 function t1Flip(n) {
-  const to = t1Side(n.cats) === "borrow" ? "lend" : "borrow";
-  const next = n.alt && t1Side(n.alt) === to ? n.alt : to === "lend" ? ["賃貸・管理"] : ["借りたい・部屋探し"];
+  const park = T1_PARK.test(n.label), to = t1Side(n.cats, n.label) === "borrow" ? "lend" : "borrow";
+  const next = n.alt && t1Side(n.alt, n.label) === to ? n.alt : to === "lend" ? [park ? "土地活用" : "賃貸・管理"] : [park ? "駐車場を借りたい" : "借りたい・部屋探し"];
   n.alt = n.cats; n.cats = next; delete n.sideAsk; delete n.kids;
 }
 // HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
