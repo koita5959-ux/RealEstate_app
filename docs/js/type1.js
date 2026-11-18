@@ -35,7 +35,8 @@ function t1Next(cats, ctx, chosen, n, shown) { // shown：前の段で見せて�
   const closed = cats.length && cats.every(c => (T1C.closed || []).includes(c)); // 土地の話に混ぜない小分類（借りる・リフォーム）は、ほかの小分類の行を混ぜない
   for (const r of T1Q.rows) {
     if (!r.選択肢 || (chosen || []).includes(r.選択肢)) continue;
-    const mine = r.小分類.split("|").some(c => cats.includes(c)), cond = r.前の言葉, hit = cond && new RegExp(cond).test(text);
+    const neg = /^!/.test(r.前の言葉 || ""); if (neg && new RegExp(r.前の言葉.slice(1)).test(text)) continue; // 「!言葉」＝その言葉の後には出さない（分譲地を買う客に「まとめて売る」：ユーザー 11-18）
+    const mine = r.小分類.split("|").some(c => cats.includes(c)), cond = neg ? "" : r.前の言葉, hit = cond && new RegExp(cond).test(text);
     if (cond && !hit) continue;
     if (!mine && (!hit || closed)) continue;
     const score = (+r.重み || 1) + (mine ? (hit ? 1 : 0) : -1) - (!hit && (shown || []).includes(r.選択肢) ? 2 : 0);
