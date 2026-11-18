@@ -19,6 +19,7 @@
   .side button { margin-left:.4em; font-size:.95em; padding:0 .4em; }
   button.main:disabled { opacity:.55; cursor:wait; }
   .loading { color:var(--red); font-weight:600; }
+  .done { color:var(--red); }
   .loading::before { content:""; display:inline-block; width:.9em; height:.9em; margin-right:.4em; vertical-align:-.1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .lands { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
@@ -178,7 +179,7 @@ document.getElementById("read").onclick = async () => {
       items = r.items || []; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
       note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました（トップ・物件情報・会社概要を読みました）。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
     } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
-    clearInterval(timer); btn.disabled = false; msg.className = "hint";
+    clearInterval(timer); btn.disabled = false; msg.className = "hint done"; // 読み込みの結果の一行は赤で残す
   }
   SHOP = t1Default(url ? items : undefined); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
   msg.textContent = note || "";
