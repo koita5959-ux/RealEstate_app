@@ -164,7 +164,7 @@ const MENU_SKIP = /^物件$|新着|ピックアップ|詳細|こちら|もっと
 const MENU_WORDS = /物件|賃貸|売買|土地|マンション|戸建|住まい|管理|仲介|分譲|開発|新築|建築|リフォーム/; // メニューでは、物件の種類・賃貸も業務の印として拾う
 // 本文の業務一覧：見出し → 一覧 → 次の項目（所属団体・免許・資格…）で止める。見出しは何度も出る（ナビにも）ので、業務の言葉がいちばん多く取れた所を使う
 const BODY_HEAD = /(?:主な)?(?:業務内容|事業内容|事業の内容|営業品目|業務案内|取扱業務|取扱い業務|営業内容|事業概要|事業紹介|サービス内容|資産活用|主な取扱物件|取扱物件|取扱い物件)/g;
-const BODY_STOP = /PRコメント|コメント|所属団体|加盟団体|免許|許可|登録番号|資格|代表者?|設立|創業|資本金|従業員|社員数|取引銀行|保証協会|アクセス|所在地|住所|営業時間|定休日|お問い?合わせ|このページの先頭|ページトップ|Copyright|©|個人情報/;
+const BODY_STOP = /挨拶|ご挨拶|PRコメント|コメント|所属団体|加盟団体|免許|許可|登録番号|資格|代表者?|設立|創業|資本金|従業員|社員数|取引銀行|保証協会|アクセス|所在地|住所|営業時間|定休日|お問い?合わせ|このページの先頭|ページトップ|Copyright|©|個人情報/;
 const BIZ_WORDS = /不動産|売買|仲介|代理|賃貸|貸|管理|売却|購入|買取|相続|土地|建物|住宅|戸建|一戸建|マンション|アパート|新築|中古|分譲|建築|注文|請負|リフォーム|リノベ|改装|改築|増築|外構|エクステリア|設計|施工|駐車場|事務所|店舗|倉庫|工場|活用|経営|運用|コンサル|鑑定|査定|保険|競売|開発|造成|空き家|空家|リゾート|物件|介護|医療|福祉/;
 const PROP_WORDS = /物件情報|物件一覧|物件検索|売買物件|賃貸物件|売物件|物件|property|bukken/i;
 // 読むページ：トップ（＝渡されたURL）＞物件情報（同じサイト内の1ページ）＞会社概要・事業内容（最大3ページ）。③の数で打ち切らない
@@ -210,6 +210,7 @@ function bodyList(text) {
     let tail = text.slice(m.index + m[0].length, m.index + m[0].length + 500);
     const s = tail.search(BODY_STOP); if (s >= 0) tail = tail.slice(0, s);
     const got = tail.split(/\s+|[\/／|｜◎●○■□◆◇※★☆]|(?:^|\s)・|[①-⑳]|(?:[0-9０-９]{1,2}[．.、)）])/)
+      .flatMap(x => x && x.length > 30 && !/ます|です|ため|ており|など|をはじめ|ように|を/.test(x) ? x.split(/[、，,]/) : [x]) // 長い一覧（「売買・仲介・賃貸・管理、損保代理店、コンサルティング」）だけ読点で分ける。文は分けない
       .map(x => (x || '').replace(/^[\s:：・、]+|[\s。、・]+$/g, '').replace(/^について$/, '').trim())
       .filter(x => x.length >= 2 && x.length <= 30 && BIZ_WORDS.test(x) && !MENU_SKIP.test(x));
     const k = m[0].replace(/^主な/, '');
@@ -235,6 +236,12 @@ function collect(p, pageUrl, host, seen, items, from) {
   if (from === 'profile') for (const m of p.text.matchAll(/(?:^|[\s、。，,]|とくに|特に)([^\s、。，,]{1,10}?(?:たい方|で困っている方|でお困りの方))/g)) {
     const label = m[1].replace(/^(とくに|特に)/, '');
     if (seen.has(label) || LISTING.test(label)) continue;
+    seen.add(label); items.push({ label, url: pageUrl, from: 'profile:text', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
+  }
+  // 「買いたい」「売りたい」ご希望の方（PRコメントの括弧つきの言葉）
+  if (from === 'profile') for (const m of p.text.matchAll(/「([^」]{1,8}たい)」/g)) {
+    const label = m[1] + '方';
+    if (seen.has(label)) continue;
     seen.add(label); items.push({ label, url: pageUrl, from: 'profile:text', biz: (BIZ_OF.find(([re]) => re.test(label)) || [, 'b3'])[1] });
   }
   // 本文の「事業内容」などの一覧（リンクでない業務の一覧）も拾う
