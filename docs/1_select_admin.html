@@ -137,6 +137,7 @@ function op(kind, d, i) {
   else if (kind === "side") { t1Flip(l[i]); PATH = PATH.slice(0, d).concat(i); } // 賃貸の向きを変えると、その行を選んで④を開く（新しい向きの初期値。ユーザー 11-18）
   else if (kind === "sideok") { delete l[i].sideAsk; }
   save(); render();
+  if (kind === "side") { const box = document.getElementById("cols"); box.scrollLeft = box.scrollWidth; } // 開いた④を見せる
 }
 function rename(d, i, v) { // 直したら、その先は空白に戻る
   EDIT = null; v = v.trim();
