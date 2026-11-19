@@ -622,7 +622,8 @@ async function handleInquiry(req, res) {
   const f = { kind: b.kind === "site" ? "site" : "bot", type: t(b.type, 4), sid: t(b.sid, 64), by: t(b.by, 40), name: t(b.name, 100), company: t(b.company, 100),
     email: t(b.email, 200), tel: t(b.tel, 40), way: t(b.way, 40), when: t(b.when, 200), msg: t(b.msg, 4000), talk: t(b.talk, 20000), sheet: t(b.sheet, 6000), area: t(b.area, 200), page: t(b.page, 300) };
   if (!f.name || !f.email || (f.kind === "site" && !f.msg)) return send(res, 400, { error: "missing" });
-  if (!/^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(f.email)) return send(res, 400, { error: "bad_email" }); // メールは必須・形を確かめる（ユーザー 11-19）
+  if (!/^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(f.email)) return send(res, 400, { error: "bad_email" });
+  if (f.way === "電話がよい" && f.tel.replace(/[^\d０-９]/g, "").length < 10) return send(res, 400, { error: "need_tel" }); // 電話を希望なら番号が要る（ユーザー 11-19） // メールは必須・形を確かめる（ユーザー 11-19）
   const what = f.kind === "site" ? "サンプルHPのお問い合わせフォーム" : `AIボット（TYPE${f.type}）の問い合わせ`;
   const lines = [`${what}から届きました。`, "", `お名前：${f.name}`, ...(f.company ? [`会社名・屋号：${f.company}`] : []), `メール：${f.email || "（なし）"}`, `電話：${f.tel || "（なし）"}`,
     ...(f.way ? [`連絡の希望：${f.way}`] : []), ...(f.when ? [`連絡してよい時間帯：${f.when}`] : []), ...(f.area ? [`地域：${f.area}`] : []), "",
