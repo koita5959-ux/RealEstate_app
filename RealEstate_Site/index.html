@@ -87,7 +87,7 @@
 
     <section id="contact" class="section contact-section"><div class="container narrow"><p class="section-kicker">CONTACT</p><h2>お問い合わせ</h2><p class="lead">ご相談は、下記フォームまたはお電話でお気軽にお寄せください。</p>
       <form class="inquiry" data-inquiry>
-        <label>お名前 <em>必須</em><input type="text" name="name" required></label><label>会社名・屋号 <span>任意</span><input type="text" name="company"></label><label>メールアドレス <em>必須</em><input type="email" name="email" required></label><label>電話番号 <span>任意</span><input type="tel" name="tel"></label><label class="field-full">ご質問・ご相談内容 <em>必須</em><textarea name="message" rows="6" required></textarea></label>
+        <label>お名前 <em>必須</em><input type="text" name="name" required></label><label>会社名・屋号 <span>任意</span><input type="text" name="company"></label><label>メールアドレス <em>必須</em><input type="email" name="email" required pattern="[^\s@&lt;&gt;,&quot;]+@[^\s@&lt;&gt;,&quot;]+\.[^\s@&lt;&gt;,&quot;]+" title="メールアドレスの形で入力してください（例：name@example.jp）" placeholder="例：name@example.jp"></label><label>電話番号 <span>任意</span><input type="tel" name="tel"></label><label class="field-full">ご質問・ご相談内容 <em>必須</em><textarea name="message" rows="6" required></textarea></label>
         <p class="form-note">※この見本ではお問い合わせは開発元へ届きます。御社サイトに実装したときは、御社へのメール送信に変わります。</p><button class="button" type="button">お問い合わせを送る <span aria-hidden="true">→</span></button>
       </form></div>
     </section>

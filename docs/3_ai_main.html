@@ -742,7 +742,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","
 // 押すと、会話の次の番号の行として記入欄が出る（番号の流れを途切れさせない）
 const INQ_FORM = `<b>弊社へのお問い合わせ</b>
       <label>お名前</label><input id="fName" type="text">
-      <label>メール</label><input id="fMail" type="email">
+      <label>メール（必須）</label><input id="fMail" type="email" placeholder="例：name@example.jp"><div id="fMailErr" style="color:#b3261e;font-size:13px" hidden>メールアドレスの形が違います（例：name@example.jp）</div>
       <label>電話</label><input id="fTel" type="tel">
       <label>連絡の希望</label><select id="fWay"><option>電話がよい</option><option>メールがよい</option><option>どちらでも</option></select>
       <textarea id="fWhen" rows="1" placeholder="連絡してよい時間帯（例：平日の夕方）"></textarea>
@@ -769,12 +769,14 @@ function inquiryBar(ended) {
     document.getElementById("talk").appendChild(box);
     box.insertAdjacentHTML("beforeend", INQ_FORM);
     box.scrollIntoView({ block:"start" });
-    const inqOk = () => !!document.getElementById("fName").value.trim() && !!(document.getElementById("fMail").value.trim() || document.getElementById("fTel").value.trim());
+    const mailOk = () => /^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(document.getElementById("fMail").value.trim()); // メールは必須・形を確かめる（サーバーと同じ決まり。ユーザー 11-19）
+    const inqOk = () => !!document.getElementById("fName").value.trim() && mailOk();
+    document.getElementById("fMail").addEventListener("blur", () => { const v = document.getElementById("fMail").value.trim(); document.getElementById("fMailErr").hidden = !v || mailOk(); });
     const refreshInq = () => lamp(document.getElementById("inqSend"), inqOk());
     ["fName", "fMail", "fTel"].forEach(id => document.getElementById(id).addEventListener("input", refreshInq)); refreshInq();
     document.getElementById("inqBack").onclick = () => { box.remove(); inquiryBar(); };
     document.getElementById("inqSend").onclick = () => {
-      if (!inqOk()) return; // お名前と、メールか電話のどちらかが必要
+      if (!inqOk()) { document.getElementById("fMailErr").hidden = mailOk() || !document.getElementById("fMail").value.trim(); return; } // お名前とメール（形を確かめる）が必要
       inqSentMark(box);
       ev("inquiry_send"); // 送った状態を記録（お名前・連絡先・伝えたいことの中身は記録しない。連絡の希望だけ）
     };
