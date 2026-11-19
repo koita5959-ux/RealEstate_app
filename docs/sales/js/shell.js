@@ -37,6 +37,14 @@
   window.RE_EMBED = QS.get("embed") === "1";
   window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
+  // 対象地域（店の対応している地域）：店が直した欄 → HPの読み → ?area= の順
+  window.reTargetArea = () => { try { const k = typeof shopKnow === "function" ? shopKnow().own.area : null, h = typeof shopHP === "function" ? shopHP().area : ""; return String((k ?? h) || window.RE_AREA || "").trim(); } catch (e) { return window.RE_AREA || ""; } };
+  if (window.RE_EMBED) document.addEventListener("DOMContentLoaded", () => { // サンプルHPの枠：上の帯の右に「表示中：TYPE…」、市区町村の見出しの横に対象地域（ユーザー 11-19）
+    const now = QS.get("now"), log = document.querySelector(".logline");
+    if (now && log) { log.style.display = "flex"; log.style.gap = "8px"; const s = document.createElement("span"); s.textContent = now; s.style.cssText = "margin-left:auto;white-space:nowrap;background:#fff7c2;padding:0 6px;border-radius:4px"; log.append(s); }
+    const h2 = document.querySelector("#step0 h2"), a = window.reTargetArea();
+    if (h2 && a) h2.insertAdjacentHTML("beforeend", `<span style="font-size:13px;font-weight:normal;color:#b3261e;margin-left:8px">対象地域：${a.replace(/[<>&]/g, "")}</span>`);
+  });
   window.RE_TRIAL = /_try.html$/.test(location.pathname); // お試し設定は別ファイル（*_try.html）。受注先向けに開発用の管理画面（*_admin.html）を直しても、こちらに漏れない
   if (window.RE_EMBED) { // 枠の中のスクロール（会話の行へ送るなど）は、枠の中だけで行う。サンプルHPのページ全体を動かさない（開いたときにトップから見えるように）
     Element.prototype.scrollIntoView = function (o) {
@@ -172,6 +180,7 @@
     window.addEventListener("load", () => setTimeout(() => {
       const u = document.getElementById("url") || document.getElementById("hpUrl"); if (!u) return;
       const tip = document.createElement("div"); tip.className = "try-urltip"; tip.textContent = "いまはサンプルHP「AIボット不動産」のURLです。御社のHPのURLに書き換えて、読み込んでください。";
+      const ta = window.reTargetArea(); if (ta) tip.insertAdjacentHTML("beforeend", `<span style="margin-left:12px;color:#b3261e">対象地域：${ta.replace(/[<>&]/g, "")}</span>`); // ユーザー 11-19
       (u.closest("div.url") || u.parentElement).after(tip);
       // テキスト比較（ユーザー 11-18）：読み込んだURLと一字でも違えば黄色を消し、読み込みボタンを点灯。読み込んだURLがサンプルHPのままなら黄色
       const mark = () => { const v = u.value.trim(), on = !v || (v === done && /RealEstate_app\/sample\/?(\?.*)?$/.test(v)); u.classList.toggle("try-sample", on); tip.hidden = !on;

@@ -105,12 +105,10 @@
   var p = new URLSearchParams({ embed:"1" });
   if (q.get("mine") !== "1") { if (t !== "3") p.set("site", "bot"); if (reg && reg !== "地域") p.set("area", reg); } // TYPE3 は枠の中で初期設定を作る（site=bot を使わない）
   if (q.get("by")) p.set("by", q.get("by"));
+  p.set("now", "表示中：TYPE" + t + (q.get("mine") === "1" ? "（管理画面の設定）" : "（このサンプルHPの初期状態）")); // 枠の上の帯の右に出す（ユーザー 11-19）
   var f = document.createElement("iframe");
   f.src = "../docs/sales/" + file + "?" + p.toString(); f.title = "AI相談ボット（TYPE" + t + "）"; f.loading = "eager";
   document.getElementById("bot-slot").appendChild(f);
-  var lab = document.createElement("p"); lab.className = "bot-now";
-  lab.textContent = "表示中：TYPE" + t + (q.get("mine") === "1" ? "（管理画面の設定）" : "（このサンプルHPの初期状態）");
-  document.querySelector(".bot-slot-wrap").prepend(lab);
   var here = location.origin + location.pathname + (q.get("r") ? "?r=" + encodeURIComponent(q.get("r")) : ""); // TYPE ボタン：このサンプルHPのURLを持ってお試し設定を開き、読み込む
   document.querySelectorAll(".bot-mode-btn").forEach(function (a) { a.href = a.getAttribute("href").split("?")[0] + "?url=" + encodeURIComponent(here) + (reg && reg !== "地域" ? "&area=" + encodeURIComponent(reg) : ""); });
   if (location.hash === "#bot") setTimeout(function () { document.getElementById("bot").scrollIntoView(); }, 50);

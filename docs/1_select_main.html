@@ -100,7 +100,8 @@
   .row.done textarea.other, .row.done .textline button:not(.chosen) { display:none; }
   input[type=text], input[type=email], input[type=tel], select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:15px; margin-bottom:4px; }
   button.small { font-size:12px; padding:5px 10px; }
-  button.inq { width:100%; margin-top:18px; border-style:dashed; }
+  button.inq { width:100%; margin-top:18px; padding:13px 16px; border:0; border-radius:999px; background:var(--accent); color:#fff; font-size:16px; font-weight:bold; box-shadow:0 3px 10px rgba(29,111,184,.35); } /* 問い合わせは角丸の強調（ユーザー 11-19） */
+  button.inq:hover { filter:brightness(1.08); }
   #inq { border-top:1px solid var(--line); margin-top:16px; }
   details { font-size:12px; color:var(--sub); margin-top:16px; }
   .logline { font-size:12px; color:var(--sub); padding:4px 14px; border-bottom:1px solid var(--line); flex:none; }
@@ -114,6 +115,8 @@
   .t1b.grey { opacity:.55; }
   .t1b.first { border-color:#1f5fa8; }
   .t1b.t1off { display:none; }
+  .t1row .t1b.mail, .t1row .t1b.final { border:0; border-radius:999px; background:var(--accent); color:#fff; padding:10px 18px; box-shadow:0 3px 10px rgba(29,111,184,.35); } /* 段の中の問い合わせの出口も角丸の強調 */
+  .t1b.mail .t1s, .t1b.final .t1s { color:#e3eefa; }
 </style>
 </head>
 <body>
