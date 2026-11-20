@@ -98,7 +98,8 @@ function t1Default(items, omakase) { // omakase＝「不動産のことなら何
   const cl = items && items.length ? t1Classify(items.map(i => ({ label:i.label, prose:/:prose$/.test(i.from || ""), weak:/:prose$/.test(i.from || "") ? 3 : /^(title|desc)$/.test(i.from || "") ? 2 : /:text$/.test(i.from || "") ? 0 : null }))) : []; // 同じ分類なら、事業内容の一覧（本文）＞メニューのリンク＞物件の絞り込み・タイトル・説明文の言葉
   const rentOnly = (items || []).some(i => /賃貸|貸|借り|部屋/.test(i.label)) && !(items || []).some(i => /売|買|購入|分譲|新築|中古/.test(i.label)); // 賃貸だけの店（長崎第一不動産）：「〇〇市の物件」は借りる側
   if (rentOnly) for (const n of cl) if (n.cats.length === 1 && n.cats[0] === "購入・物件探し") n.cats = ["借りたい・部屋探し"];
-  const top0 = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { sideAsk:true, alt:n.sideAsk } : {}), ...(n.prose ? { prose:true } : {}) })); // prose＝HPの文章から拾った（店に確かめてもらう）
+  const top0 = cl.map(n => ({ label:n.label, cats:n.cats, ...(n.sideAsk ? { alt:n.sideAsk } : {}), ...(n.prose ? { prose:true } : {}) })); // prose＝HPの文章から拾った（店に確かめてもらう）
+  for (const n of top0) if (n.alt) t1SetDir(n, "both"); // 貸す・借りるの両方に読める見出しは、最初から「両方」（ユーザー 11-20）
   const top = top0.slice();
   if (omakase) for (const b of T1_OMAKASE) { if (top.length >= 3) break; if (!top.some(n => n.cats.includes(b.cats[0]))) top.push({ ...b, cats:b.cats.slice(), fill:true }); }
   return { v:3, url:"", top:items === undefined ? T1_BASE.map(n => ({ ...n })) : top };
@@ -106,11 +107,24 @@ function t1Default(items, omakase) { // omakase＝「不動産のことなら何
 // 賃貸の向き：借りる方向け（部屋探し・事業用）／貸す方（オーナー）向け（賃貸・管理）。どちらでもなければ null
 const T1_PARK = /駐車|パーキング|月極/;
 function t1Side(cats, label) { cats = cats || []; return cats.some(c => T1C.rentSide.includes(c)) ? "borrow" : cats.includes("賃貸・管理") || cats.includes("土地活用") && T1_PARK.test(label || "") ? "lend" : null; } // 駐車場の見出しで土地活用＝貸す側
-// 向きを切り替える（店が管理画面で）。前の小分類は alt に取っておき、戻すときに使う。その先の初期値は作り直す
-function t1Flip(n) {
-  const park = T1_PARK.test(n.label), to = t1Side(n.cats, n.label) === "borrow" ? "lend" : "borrow";
-  const next = n.alt && t1Side(n.alt, n.label) === to ? n.alt : to === "lend" ? [park ? "土地活用" : "賃貸・管理"] : [park ? "駐車場を借りたい" : "借りたい・部屋探し"];
-  n.alt = n.cats; n.cats = next; delete n.sideAsk; delete n.kids;
+// ③の向きの3択：売買＝売りたい／買いたい／両方、賃貸＝貸したい／借りたい／両方（ユーザー 11-20）。x＝売る・貸す側、y＝買う・借りる側
+const T1_DIRS = { sale:{ x:"売りたい", y:"買いたい" }, rent:{ x:"貸したい", y:"借りたい" } };
+function t1Dir(n) { // 向きのない行は null
+  if (!n || !n.cats) return null;
+  if (n.pair) return { kind:n.pair.kind, dir:n.dir, x:n.pair.x, y:n.pair.y };
+  const c = n.cats, s = t1Side(c, n.label), park = T1_PARK.test(n.label || "");
+  const kind = s ? "rent" : c.includes("購入・物件探し") || c.includes("売却（仲介）") ? "sale" : null;
+  if (!kind) return null;
+  const dir = s ? (s === "borrow" ? "y" : "x") : c.includes("購入・物件探し") ? "y" : "x", other = dir === "x" ? "y" : "x";
+  const def = kind === "rent" ? { x:[park ? "土地活用" : "賃貸・管理"], y:[park ? "駐車場を借りたい" : "借りたい・部屋探し"] } : { x:["売却（仲介）"], y:["購入・物件探し"] };
+  return { kind, dir, [dir]:c.slice(), [other]:n.alt || def[other] }; // alt＝読み取りで反対側にも当たった小分類
+}
+// 向きを変える（店が管理画面で）。両方の側の小分類を pair に取っておく。その先の初期値は作り直す
+function t1SetDir(n, dir) {
+  const p = t1Dir(n); if (!p || p.dir === dir) return;
+  n.pair = { kind:p.kind, x:p.x, y:p.y }; n.dir = dir;
+  n.cats = dir === "both" ? [...new Set(p.x.concat(p.y))] : p[dir].slice();
+  delete n.alt; delete n.sideAsk; delete n.kids;
 }
 // HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
 async function t1ReadMenu(url, by) {
@@ -126,8 +140,18 @@ function t1Shop() {
 // 子の一覧。trail は③からこの節まで（この節を含む）
 function t1Kids(node, land, trail) {
   if (node.kids) return node.kids;
-  const t = trail || [node], cats = t[0].cats || [], words = t.map(n => n.label);
-  if (t.length === 1) return t1Next(cats, words, [], T1_N).map(x => ({ label:x.label, gen:4, why:x.why }));
+  const t = trail || [node], words = t.map(n => n.label);
+  let cats = t[0].cats || [];
+  if (t.length === 1) {
+    const p = t1Dir(node);
+    if (p && p.dir === "both") { // 両方：売る（貸す）側と買う（借りる）側の④を交互に。数は多くてよいが、同じ名前は一つだけ（ユーザー 11-20）
+      const a = t1Next(p.x, words, [], T1_N), b = t1Next(p.y, words, [], T1_N), seen = new Set(), out = [];
+      for (let k = 0; k < T1_N; k++) for (const [x, sc] of [[a[k], p.x], [b[k], p.y]]) if (x && !seen.has(x.label) && seen.add(x.label)) out.push({ label:x.label, gen:4, why:x.why, sc });
+      return out;
+    }
+    return t1Next(cats, words, [], T1_N).map(x => ({ label:x.label, gen:4, why:x.why }));
+  }
+  if (node.sc) cats = node.sc; // 両方の④は、出てきた側の小分類で⑤を出す
   if (t.length === 2 && node.gen === 4) {
     if ((node.label === "地域重視" && cats.some(c => T1C.rentSide.includes(c))) || /どのあたり|地域から探/.test(node.label)) { // 「どのあたり」「地域から」は地域を出すしかない（ユーザー 11-18） // HPの物件の地区（学区・駅・郵便番号の町を混ぜて、物件の多い順）から3つ＋「その他の地域」
       const a = (t1Shop().areas || []).slice(0, 3);
@@ -145,13 +169,14 @@ function t1Fix(node, land, trail) {
 }
 function t1Tpl(node) { // 店が書いた文があればそれ。なければ初期の文（③は小分類ごと、④⑤は候補の表の「返す文」）
   if (node.text != null) return node.text;
+  if (node.cats && node.dir === "both" && node.pair) return node.pair.kind === "rent" ? "賃貸のご相談ですね。" : "売買のご相談ですね。";
   if (node.cats) return (T1C.reply3 || {})[node.cats[0]] || "";
   if (node.area) return node.label + "ですね、詳しいご要望はありますか？";
   const r = T1Q.rows.find(x => x.選択肢 === node.label); return r ? r.返す文 || "" : "";
 }
 function t1Text(node, land) { return t1Fill(t1Tpl(node), land); }
 // 問いと締めは、③の小分類に専用の文があればそれ（借りる・リフォームは土地の見立てでないので。type1_categories.json の ask）
-const t1AskSet = cats => (cats || []).map(c => (T1C.ask || {})[c]).find(Boolean) || {};
+const t1AskSet = cats => { cats = cats || []; const r = cats.filter(c => T1C.rentSide.includes(c)).length; return r && r < cats.length ? {} : cats.map(c => (T1C.ask || {})[c]).find(Boolean) || {}; }; // 貸す・借りるの「両方」は共通の問い
 function t1AskOf(node, depth, cats) { const a = t1AskSet(cats || node.cats); return node.ask != null ? node.ask : depth === 0 ? a.ask3 || T1_ASK3 : a.ask4 || T1_ASK4; }
 function t1Close(cats) { return t1AskSet(cats).close || T1D.rules.close; }
 const T1_HOLE = /\{([^}]+)\}/g;
