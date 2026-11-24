@@ -187,5 +187,6 @@ document.getElementById("read").onclick = async () => {
 document.getElementById("url").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && !document.getElementById("read").disabled) { e.preventDefault(); document.getElementById("read").click(); } }); // URLの欄でエンター＝読み込み
 t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
 </script>
+<script src="js/satei.js"></script>
 </body>
 </html>
