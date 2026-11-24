@@ -120,7 +120,7 @@
   Shell.refresh();
   if (window.RE_TRIAL && current === "admin") {
     const n = TYPE[0];
-    h1.textContent = "TYPE" + n + " お試し設定 ― 御社のHPで試す";
+    h1.textContent = ({ "1":"TYPE1", "2":"TalkSession", "3":"MultiSession" }[n] || "TYPE" + n) + " お試し設定 ― 御社のHPで試す";
     document.body.classList.add("trial", "trial" + n);
     const steps = { "1":["御社のHPのURLを入れて「読み込み」", "③の選択肢（HPの業務内容から拾ったもの）を見て、直す・消す・足す（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットを動かす"],
       "2":["御社のHPのURLを入れて「読み取る」（AIが店の姿をまとめます。30秒ほど）", "読み取った内容を見て、違う所を直す・足りない所を書く（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットと話す"],

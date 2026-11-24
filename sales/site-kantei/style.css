@@ -163,3 +163,5 @@ nav a{font-size:14px;font-weight:600;text-decoration:none}
 nav{gap:22px}nav a{font-size:13.5px;white-space:nowrap;letter-spacing:.02em}.header-inner{gap:20px}
 @media(max-width:1180px){nav{gap:14px}nav a{font-size:12.5px}}
 @media(max-width:1040px){nav{display:none}}
+
+.bot-mode-btn{min-width:116px}/* 名称（TalkSession・MultiSession）の幅にそろえる 11-24 */

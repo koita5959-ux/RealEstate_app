@@ -10,3 +10,5 @@
 #bot .container{width:min(1400px,calc(100% - 40px))}#bot .lead{max-width:none}@media(max-width:760px){#bot .container{width:calc(100% - 32px)}}
 .listing-ph{position:relative;overflow:hidden}.listing-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.listing-ph span{position:absolute;left:10px;top:10px;font-size:12px;padding:3px 9px}
 /* 広告ページとの行き来のボタン：両ページで同じ形・色（11-18） */.pr-link{padding:9px 18px;border:0;border-radius:999px;background:var(--gold);color:#fff;font-size:14px;font-weight:700;line-height:1.3;white-space:nowrap;box-shadow:0 2px 8px rgba(188,138,69,.35)}.pr-link:hover{background:#a5752f;color:#fff}.pr-link .sm{display:none}@media(max-width:760px){.pr-link{font-size:12px;padding:7px 12px}.pr-link .lg{display:none}.pr-link .sm{display:inline}}
+
+.bot-mode-btn{min-width:116px}/* 名称（TalkSession・MultiSession）の幅にそろえる 11-24 */

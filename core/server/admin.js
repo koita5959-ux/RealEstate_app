@@ -389,7 +389,7 @@ export async function adminHandler(req, res, url, ctx) {
     const pick = (re) => (c0.match(re) || [])[1] || "";
     const company = pick(/【あなたを置いた会社：([^（】]+)/) || pick(/【弊社のこと（あなたは(.+?)の社員/) || (pick(/・どんな会社か：([^\n]{0,40})/) ? "（HPの読み）" + pick(/・どんな会社か：([^\n]{0,40})/) : "");
     const head = [
-      "タイプ：" + (first.type === "talk" ? "2 対話型" + (first.mode ? "（" + (first.mode === "staff" ? "社員目線" : "外野目線") + "）" : "") : "3 AI型"),
+      "タイプ：" + (first.type === "talk" ? "2 TalkSession" + (first.mode ? "（" + (first.mode === "staff" ? "社員目線" : "外野目線") + "）" : "") : "3 MultiSession"),
       company && "会社：" + company,
       pick(/弊社の業態：([^\n]+)/) && "業態：" + pick(/弊社の業態：([^\n]+)/),
       "場所：" + (first.meta?.place || "—"),
@@ -402,7 +402,7 @@ export async function adminHandler(req, res, url, ctx) {
     const ctxs = [["最初の返事", first], ...(last !== first ? [["最後の返事", last]] : [])];
     const tail = ctxs.map(([k, r]) => `── AIへ渡した説明（${k}・${r.meta?.q ? num[r.meta.q - 1] || "" : ""}）\n${r.contextFixed ? "【店のこと】\n" + r.contextFixed + "\n\n" : ""}${r.context || "（記録なし）"}${r.memo ? "\n\n【AIが書いたメモ】\n" + JSON.stringify(r.memo) : ""}`).join("\n\n");
     const text = `${head}\n\n＝＝ 会話 ＝＝\n${body}\n\n＝＝ AIへ渡したもの（土地の条件・HPの読み・指示） ＝＝\n${tail}\n`;
-    const name = `session_${new Date(first.ts).toISOString().slice(0, 10)}_${first.type === "talk" ? "Type2" : "Type3"}_${sid.slice(0, 8)}.txt`;
+    const name = `session_${new Date(first.ts).toISOString().slice(0, 10)}_${first.type === "talk" ? "TalkSession" : "MultiSession"}_${sid.slice(0, 8)}.txt`;
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="${name}"` });
     res.end("﻿" + text); return true;
   }

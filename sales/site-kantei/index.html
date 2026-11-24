@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{{REGION}}を中心に、売る・買う・相続・賃料などの場面で、物件そのものの値打ちを根拠とあわせてお示しするAIボット鑑定のサンプルサイトです。">
   <title>{{REGION}}の不動産鑑定｜AIボット鑑定</title>
-  <link rel="stylesheet" href="style.css?v=1124d">
+  <link rel="stylesheet" href="style.css?v=1124n">
 </head>
 <body>
   <div id="sample-notice" role="note">これは営業用のサンプルサイトです。「AIボット鑑定」は架空の不動産鑑定事務所です。</div>
@@ -67,8 +67,8 @@
         <div class="bot-modes">
           <p class="bot-modes-head">このチャットボットは、２種のモードが用意されています</p>
           <ul>
-            <li><a class="bot-mode-btn" href="../sales/2_talk_try.html" target="_blank" rel="noopener">TYPE2</a><span>HP情報を読み取り初期値を修正し実装します。対話型セッションとしてAI利用契約が別途必要です</span></li>
-            <li><a class="bot-mode-btn" href="../sales/3_ai_try.html" target="_blank" rel="noopener">TYPE3</a><span>HP情報を読み取り初期値を修正し実装します。ボタンと対話の複合でサイト業者側の選択を踏まえた回答を意図し対話を誘導する流れが企画できます。AI利用契約が別途必要です。</span></li>
+            <li><a class="bot-mode-btn" href="../sales/2_talk_try.html" target="_blank" rel="noopener">TalkSession</a><span>HP情報を読み取り初期値を修正し実装します。対話型セッションとしてAI利用契約が別途必要です</span></li>
+            <li><a class="bot-mode-btn" href="../sales/3_ai_try.html" target="_blank" rel="noopener">MultiSession</a><span>HP情報を読み取り初期値を修正し実装します。ボタンと対話の複合でサイト業者側の選択を踏まえた回答を意図し対話を誘導する流れが企画できます。AI利用契約が別途必要です。</span></li>
           </ul>
           <p class="bot-modes-note">※この２種の機能テストは、URLの指定ができるので、ボットセッションテストも指定HPを想定したシミュレーションが可能です</p>
         </div>
@@ -150,9 +150,9 @@
   var p = new URLSearchParams({ embed:"1", site:"kantei" });
   if (reg && reg !== "地域") p.set("area", reg);
   if (q.get("by")) p.set("by", q.get("by"));
-  p.set("now", "表示中：TYPE" + t + "（このサンプルHPの初期状態）");
+  p.set("now", "表示中：" + { "1":"TYPE1", "2":"TalkSession", "3":"MultiSession" }[t] + "（このサンプルHPの初期状態）");
   var f = document.createElement("iframe");
-  f.src = "../sales/" + file + "?" + p.toString(); f.title = "AI相談ボット（TYPE" + t + "）"; f.loading = "eager";
+  f.src = "../sales/" + file + "?" + p.toString(); f.title = "AI相談ボット（" + { "1":"TYPE1", "2":"TalkSession", "3":"MultiSession" }[t] + "）"; f.loading = "eager";
   document.getElementById("bot-slot").appendChild(f);
   var here = location.origin + location.pathname + (q.get("r") ? "?r=" + encodeURIComponent(q.get("r")) : ""); // TYPE ボタン：このサンプルHPのURLを持ってお試し設定を開き、読み込む
   document.querySelectorAll(".bot-mode-btn").forEach(function (a) { a.href = a.getAttribute("href").split("?")[0] + "?url=" + encodeURIComponent(here) + (reg && reg !== "地域" ? "&area=" + encodeURIComponent(reg) : ""); });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>設定画面（試作）</title>
+<title>設定画面（MultiSession・試作）</title>
 <style>
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; --lock:#eef1f4; --app:#6b4fa0; }
   * { box-sizing:border-box; }
@@ -87,7 +87,7 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="admin" data-title="3. 管理画面 ― 試作（コンテンツ：3 AI型）">
+<header id="appbar" data-current="admin" data-title="MultiSession ― 管理画面（試作）">
   <span class="appextra"><button id="commitTop" class="topcommit" title="書き換えをメイン画面に反映します（下の「設定を変更する」と同じ）"></button></span>
 </header>
 <script src="js/shell.js"></script>
@@ -369,7 +369,7 @@ function renderHelp() {
   const last = NUM[FIRST + steps.length - 1];
   document.getElementById("help").innerHTML = `
     <h3>概要</h3>
-    <p>AI型コンテンツの設定画面です。利用者は地図に土地のピンを立てて「評価する」を押し、土地評価データーを見たあと、設問とボタンで相談を進めます。ボタンの段が終わると、書いてAIと話し（フリートーク）、総回数で締めます。</p>
+    <p>MultiSession の設定画面です。利用者は地図に土地のピンを立てて「評価する」を押し、土地評価データーを見たあと、設問とボタンで相談を進めます。ボタンの段が終わると、書いてAIと話し（フリートーク）、総回数で締めます。</p>
     <p>左の番号は、メイン画面の番号と同じです。書き換えは「設定を変更する」（左の下か、上の「未更新あり ― 設定を変更する」）を押すまで、メイン画面に届きません。押すと、開いているメイン画面は最初から読み直されます。押さずにメイン画面へ移ると、書き換えを捨てるか確かめます。</p>
     <h3>あなたのHP</h3>
     <p>店のホームページのURLを入れて「読み取る」を押すと、AIがHPを読み、店のこと（呼び名・何をしている店か・得意な相談など）を下書きにします。読みは直せます。直した欄は、AIが直した方を使います。</p>
