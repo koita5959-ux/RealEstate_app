@@ -1,13 +1,13 @@
-// タイプ1の見返し試験（AIなし・費用0）：docs/data/type1_test_urls.csv の全URLを読み、③（HPの見出し→小分類）を控えて、前回と違う店だけ書き出す。
+// タイプ1の見返し試験（AIなし・費用0）：dev/web/data/type1_test_urls.csv の全URLを読み、③（HPの見出し→小分類）を控えて、前回と違う店だけ書き出す。
 // 使い方（サーバーで）：node tools/type1_check.mjs [控えの名前]   控えは data/type1_check/<名前>.json（既定は日時）。前回＝その前の控え
 import fs from "fs";
 import path from "path";
 import vm from "vm";
-import { menu } from "../server/shop/read.js";
+import { menu } from "../core/server/shop/read.js";
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const docs = path.join(root, "docs");
+const docs = path.join(root, "dev", "web");
 // 画面と同じ type1.js を、ファイルを読む fetch で動かす
-const ctx = vm.createContext({ console, fetch: async (u) => { const t = fs.readFileSync(path.join(docs, u), "utf8"); return { text: async () => t, json: async () => JSON.parse(t) }; }, localStorage: { getItem: () => null } });
+const ctx = vm.createContext({ console, fetch: async (u) => { const t = fs.readFileSync(path.join(docs, u), "utf8"); return { text: async () => t, json: async () => JSON.parse(t) }; }, localStorage: { getItem: () => null }, window: {} }); // type1.js が window.RE_SITE_BOT などを見る（11-18〜）
 vm.runInContext(fs.readFileSync(path.join(docs, "js/type1.js"), "utf8") + "\n;globalThis.t1Load=t1Load;globalThis.t1Default=t1Default;globalThis.t1Kids=t1Kids;", ctx);
 await ctx.t1Load();
 const csv = vm.runInContext("t1Csv", ctx)(fs.readFileSync(path.join(docs, "data/type1_test_urls.csv"), "utf8"));

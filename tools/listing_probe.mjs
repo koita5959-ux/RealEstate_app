@@ -1,10 +1,10 @@
 // 物件ページの探し方・町名の拾い方を試す（AIなし）。node tools/listing_probe.mjs <URLを1行ずつ> <出力JSON>
 // 売買のみ。町名 → 国土地理院の住所検索で座標 → /api/around で学区・駅。
 import fs from "fs";
-import { get, parse } from "../server/shop/read.js";
+import { get, parse } from "../core/server/shop/read.js";
 import { round } from "./postal_round.mjs";
 
-const MUNI = JSON.parse(fs.readFileSync(new URL("../docs/data/muni.json", import.meta.url)));
+const MUNI = JSON.parse(fs.readFileSync(new URL("../dev/web/data/muni.json", import.meta.url)));
 const BUY = /物件|売買|売物件|売り物件|土地|売地|戸建|一戸建|中古|新築|分譲|マンション|bukken|property|estate|sale|baibai|tochi|kodate|search|list/i;
 const RENT = /賃貸|貸家|貸地|貸店舗|rent|chintai|月極|駐車場/i;
 const GUESS = ["bukken/", "property/", "estate/", "sale/", "baibai/", "tochi/", "search/", "list/", "buy/"];
