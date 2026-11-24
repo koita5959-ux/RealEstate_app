@@ -9,6 +9,7 @@ services:
       - "127.0.0.1:8110:80"
     volumes:
       - ./dev/web:/usr/share/nginx/html/dev:ro       # 開発の本線 /RealEstate_app/dev/
+      - ./dev-satei/web:/usr/share/nginx/html/dev-satei:ro # 作業の版：査定スキル（仕上がったら dev へ）
       - ./sales/web:/usr/share/nginx/html/sales:ro   # セールス版のボット・お試し設定 /RealEstate_app/sales/
       - ./archive:/usr/share/nginx/html/archive:ro   # 古い試作
       - ./sales/site:/usr/share/nginx/html/sample:ro # サンプルHPの画像・CSS（index.html は api が返す）
@@ -39,6 +40,7 @@ services:
       - ./sales/site:/site:ro # サンプルHP（?r= で地区名を差し込む）
       - ./dev/web/data/muni.json:/app/muni.json:ro
       - ./dev/prompts:/prompts/dev:ro     # AIへの指示（版ごと。画面の場所で使い分ける）
+      - ./dev-satei/prompts:/prompts/dev-satei:ro
       - ./sales/prompts:/prompts/sales:ro # 物件の町名を拾う（shop/listings.js）
       - ./_works/2026-11-14_ClaudeCode_送付用の地区一覧:/regions:ro
     mem_limit: 256m

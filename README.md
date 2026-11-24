@@ -14,6 +14,7 @@ RealEstate_app/
 ├─ dev/           開発の本線（プロトタイプ）            → /RealEstate_app/dev/
 │  ├─ web/        メイン画面・管理画面・利用状況（*_main / *_admin / *_report）、js/、data/
 │  └─ prompts/    AIへの指示（system.txt＝TYPE3、system_talk*.txt＝TYPE2）
+├─ dev-satei/     作業の版：査定スキル（建物の簡易の見立て）→ /RealEstate_app/dev-satei/。仕上がったら dev へ
 ├─ sales/         セールス版（開発の安定版を写す）
 │  ├─ web/        サンプルHPの枠に入るボット・お試し設定（*_main / *_try / *_report） → /RealEstate_app/sales/
 │  ├─ site/       サンプルHP「AIボット不動産」と広告ページ                           → /RealEstate_app/sample/
