@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 const SITE = "/site/index.html";
+const SITE_KANTEI = "/site-kantei/index.html"; // 鑑定士版のサンプルHP「AIボット鑑定」（11-24）
 const PR = "/site/pr/index.html"; // 広告ページ（不動産向けチャットボットのセールス概要）
 const CONF = "/site/site.json";   // 開発元の表記など（一か所で直す）
 const REGIONS = "/regions/地区一覧.csv";
@@ -23,7 +24,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 function conf() { try { return JSON.parse(fs.readFileSync(CONF, "utf8")); } catch { return {}; } }
 
-// page：空＝サンプルHP、"pr"＝広告ページ。どちらも ?r= を引き継いで行き来する
+// page：空＝サンプルHP、"pr"＝広告ページ、"kantei"＝鑑定士版のサンプルHP（広告ページはまだない）。どちらも ?r= を引き継いで行き来する
 export function renderSample(r, page) {
   const c = conf(), dev = esc(c.developer || "開発元（準備中）");
   const rq = loadRegions().has(r) ? `?r=${encodeURIComponent(r)}` : "";
@@ -31,7 +32,7 @@ export function renderSample(r, page) {
     const top = "../" + rq;
     return fs.readFileSync(PR, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{SAMPLE_URL}}", top + "#bot").replaceAll("{{CONTACT_URL}}", top + "#contact");
   }
-  let html = fs.readFileSync(SITE, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{PR_URL}}", "pr/" + rq);
+  let html = fs.readFileSync(page === "kantei" ? SITE_KANTEI : SITE, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{PR_URL}}", "pr/" + rq);
   const name = loadRegions().get(r);
   if (name) return html.replaceAll("{{REGION}}", esc(name));
   // 地区の指定がない・一覧にないとき（監修書 2-1）

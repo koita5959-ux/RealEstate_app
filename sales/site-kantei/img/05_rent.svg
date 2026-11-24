@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <!-- 地代・家賃：アパートの外観 -->
+  <rect width="400" height="300" fill="#e7ece6"/>
+  <rect x="0" y="255" width="400" height="45" fill="#a9bdb1"/>
+  <rect x="70" y="70" width="260" height="190" fill="#f6f4ee" stroke="#5d7a6b" stroke-width="3"/>
+  <rect x="60" y="58" width="280" height="16" fill="#4f6d5e"/>
+  <rect x="70" y="160" width="260" height="10" fill="#c9d8cf"/>
+  <g fill="#c9d8cf" stroke="#5d7a6b" stroke-width="2">
+    <rect x="90" y="95" width="45" height="45"/><rect x="155" y="95" width="45" height="45"/><rect x="220" y="95" width="45" height="45"/><rect x="285" y="95" width="30" height="45"/>
+    <rect x="90" y="190" width="45" height="45"/><rect x="155" y="190" width="45" height="45"/><rect x="220" y="190" width="45" height="45"/>
+  </g>
+  <rect x="285" y="190" width="30" height="70" fill="#7d9487"/>
+  <circle cx="40" cy="225" r="28" fill="#6f8a7c"/><rect x="36" y="230" width="8" height="30" fill="#5d4b36"/>
+</svg>

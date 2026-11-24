@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <!-- 売るとき：家の外観の一部と、値打ちを記した書類（文字なし） -->
+  <rect width="400" height="300" fill="#e7ece6"/>
+  <rect x="40" y="110" width="170" height="150" fill="#f6f4ee" stroke="#5d7a6b" stroke-width="3"/>
+  <path d="M25 115 L125 45 L225 115Z" fill="#4f6d5e"/>
+  <rect x="70" y="150" width="40" height="40" fill="#c9d8cf" stroke="#5d7a6b" stroke-width="2"/>
+  <rect x="140" y="180" width="40" height="80" fill="#a9bdb1"/>
+  <g transform="rotate(-6 300 190)">
+    <rect x="235" y="110" width="130" height="165" fill="#fff" stroke="#8a9a90" stroke-width="2"/>
+    <rect x="255" y="132" width="90" height="8" fill="#1f4a3d"/>
+    <rect x="255" y="155" width="80" height="5" fill="#b9c4bd"/><rect x="255" y="168" width="90" height="5" fill="#b9c4bd"/><rect x="255" y="181" width="70" height="5" fill="#b9c4bd"/>
+    <rect x="255" y="205" width="90" height="28" fill="#eef0e6" stroke="#a8863f" stroke-width="2"/>
+    <circle cx="335" cy="252" r="10" fill="none" stroke="#a8863f" stroke-width="3"/>
+  </g>
+</svg>

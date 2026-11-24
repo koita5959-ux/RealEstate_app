@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <!-- 買うとき：内見の玄関先（扉が少し開いている・人はいない） -->
+  <rect width="400" height="300" fill="#eef0e6"/>
+  <rect x="0" y="240" width="400" height="60" fill="#cfc8b6"/>
+  <rect x="110" y="40" width="180" height="205" fill="#f6f4ee" stroke="#5d7a6b" stroke-width="4"/>
+  <path d="M120 50 L200 62 L200 238 L120 238Z" fill="#7d9487"/>
+  <rect x="200" y="50" width="80" height="188" fill="#dfe7e0"/>
+  <circle cx="188" cy="150" r="5" fill="#a8863f"/>
+  <rect x="60" y="215" width="40" height="30" fill="#5d7a6b"/><path d="M55 215 C60 180 100 180 105 215Z" fill="#6f8a7c"/>
+  <rect x="300" y="226" width="60" height="16" rx="3" fill="#a9bdb1"/>
+</svg>
