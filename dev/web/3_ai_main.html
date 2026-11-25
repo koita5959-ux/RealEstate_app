@@ -632,7 +632,7 @@ function aiContext(n, ask) {
 // 店のこと（1セッションの中で変わらない）。contextFixed として送り、サーバーがキャッシュに載せる
 function aiShopBlock() {
   const H = shopHP(), KT = shopKnowText(H.unreadable ? {} : H, shopKnow());
-  return KT.trim() ? "【弊社のこと（ホームページの読みと、弊社が書き足したこと）】" + KT : "";
+  return KT.trim() ? "【弊社のこと】" + KT : "";
 }
 function memoBlock() {
   if (!S || !S.memo) return "";

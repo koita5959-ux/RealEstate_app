@@ -46,8 +46,8 @@ function shopKnow() { if (window.RE_SITE_BOT) return { own:{}, extra:{} }; try {
 function setShopKnow(k) { try { localStorage.setItem("reShopKnow", JSON.stringify({ own:k.own || {}, extra:k.extra || {} })); } catch (e) {} }
 // AIへ渡す「弊社のこと」（社員として話すとき。タイプ3と、タイプ2の社員目線）。直した欄はHPの読みより優先し、空欄は渡さない
 function shopKnowText(hp, know) {
-  const v = k => String((know.own[k] ?? hp[k]) || "").trim(), x = k => String(know.extra[k] || "").trim(), why = hp.why || {};
-  const line = (l, k) => v(k) ? `\n・${l}：${v(k)}` + (why[k] && know.own[k] == null ? `（HPの根拠：${why[k]}）` : "") : "";
+  const v = k => String((know.own[k] ?? hp[k]) || "").trim(), x = k => String(know.extra[k] || "").trim();
+  const line = (l, k) => v(k) ? `\n・${l}：${v(k)}` : ""; // HPの根拠は管理画面と記録だけ。社員が自社のHPを出どころのように話さないよう、AIへは渡さない（11-25）
   let c = line("どんな会社か", "what") + line("立場と理由", "stance") + line("店の考え（話し方の芯にします）", "voice") + line("よく受けている相談", "good")
     + line("よくあるお客さんの悩み", "worries") + line("弊社に合う相談", "fit") + line("弊社に合いにくい相談", "unfit") + line("弊社の強み", "strong")
     + line("連携している専門家", "team") + line("対応している地域", "area") + line("営業時間・定休日", "hours")
@@ -58,7 +58,7 @@ function shopKnowText(hp, know) {
   for (const [k, l] of SHOP_EXTRA) if (x(k)) c += `\n・${k === "ng" ? "言ってほしくないこと（触れません）" : k === "take" ? "弊社が引き受けること（約束してよいのはここに書かれた範囲だけ）" : l}：${x(k)}`;
   if (!x("take")) c += "\n・弊社が引き受けること：書かれていません。現地を見る・調べる以上の約束（値段・日程・費用）はしません。";
   const un = (hp.unread || []).filter(Boolean);
-  if (un.length && !x("unreadAns")) c += "\n・ホームページから分からないこと：" + un.join("、") + "。聞かれたら「担当からお答えします」と伝え、推測で答えません。";
+  if (un.length && !x("unreadAns")) c += "\n・担当からお答えすること：" + un.join("、") + "。聞かれたら「担当からお答えします」と伝え、推測で答えません。";
   return c;
 }
 function shopHP() { if (window.RE_SITE_BOT) return { ...SHOP_HP_BOT, area:window.RE_AREA || "" }; try { const h = JSON.parse(localStorage.getItem("reShopHP")); if (h && (h.name || h.unreadable)) return h; } catch (e) {} return SHOP_HP_SAMPLE; }

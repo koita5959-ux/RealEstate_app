@@ -112,7 +112,7 @@
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="js/shell.js?v=1119b"></script>
-<script src="js/shophp.js?v=1119a"></script>
+<script src="js/shophp.js?v=1125a"></script>
 <script src="js/around.js?v=1118e"></script>
 <div class="logline">入力内容を含む、機能改善のためのログを自動で記録します。開発調査に利用させていただきます。</div>
 <div class="wrap">
@@ -1139,7 +1139,7 @@ function talkShopBlock() {
   const nm = TALK.name, staff = TALK.mode === "staff";
   const hp = TALK.hp || {}, ex = TALK.extra || {}, line = (l, v, why) => v ? `\n・${l}：${v}` + (why ? `（根拠：${why}）` : "") : "";
   const w = hp.why || {}; let c;
-  if (staff) c = `\n\n【弊社のこと（あなたは${nm}の社員として話します。ホームページの読みと、弊社が書き足したこと）】`
+  if (staff) c = `\n\n【弊社のこと（あなたは${nm}の社員として話します）】`
     + shopKnowText({ ...TALK, why:w, unread:hp.unread || [] }, { own:TALK.own || {}, extra:ex }) + line("宅建の免許", TALK.lic) + line("弊社から伝えたいこと", TALK.memo)
     + "\n「店の考え」は、名前を出して語るより、受け止め方・話し方に出します。"
     + (ex.way ? "\n締めで引き受けるときは、「相談を受けたら、最初にすること」に沿って具体的に言います。" : "");

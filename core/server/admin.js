@@ -276,7 +276,7 @@ export function publicStats(ctx) {
 
 // ---- セッションの再表示の部品 ----
 function turnsOf(dir, sid) {
-  return readJsonl(dir, "log").filter((r) => r.sid === sid).map((r) => ({ ts: r.ts, status: r.status, reason: r.reason, q: r.meta?.q, press: r.meta?.press, user: r.userText, reply: r.reply, inTok: r.inputTokens, outTok: r.outputTokens, costUsd: r.costUsd, ms: r.ms }));
+  return readJsonl(dir, "log").filter((r) => r.sid === sid).map((r) => ({ ts: r.ts, status: r.status, reason: r.reason, q: r.meta?.q, press: r.meta?.press, user: r.userText, reply: r.reply, inTok: r.inputTokens, outTok: r.outputTokens, costUsd: r.costUsd, ms: r.ms, mode: r.mode }));
 }
 // 保存した記録がない（この機能を入れる前の）セッションを、ログと画面の動きの記録から復元する。復元できない項目（面積・地価など）は空になる。
 function reconstruct(ctx, sid) {
@@ -421,7 +421,7 @@ export async function adminHandler(req, res, url, ctx) {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(sid)) return json(400, { error: "bad_sid" });
     const turns = turnsOf(ctx.DATA_DIR, sid);
     const rec = readJson(path.join(ctx.DATA_DIR, "sessions", sid + ".json"), null);
-    if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, snapshot: rec.snapshot || null, turns, reconstructed: !!rec.reconstructed });
+    if (rec) return json(200, { sid, by: rec.by, savedAt: rec.savedAt, state: rec.state, snapshot: rec.snapshot || null, turns, reconstructed: !!rec.reconstructed, hasSettings: !!rec.state?.settings });
     const re = reconstruct(ctx, sid);
     if (!re) return json(404, { error: "not_found" });
     return json(200, { sid, by: re.by, savedAt: re.savedAt, state: re.state, turns, reconstructed: true, pin: re.pin });

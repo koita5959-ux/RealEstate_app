@@ -15,6 +15,8 @@
   .wrap { flex:1; position:relative; }
   iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
   iframe[hidden] { display:none; }
+  .warn { display:none; padding:6px 12px; background:#fff3cd; color:#7a4b00; font-size:13px; border-bottom:1px solid #e0c36a; }
+  .warn.show { display:block; }
 </style>
 </head>
 <body>
@@ -24,6 +26,7 @@
   <button class="tab admin" data-k="admin">管理画面</button>
   <span class="note" id="msg">記録を読み込んでいます…</span>
 </div>
+<div class="warn" id="warn"></div>
 <div class="wrap">
   <iframe id="f-user"></iframe>
   <iframe id="f-admin" hidden></iframe>
@@ -46,8 +49,20 @@ addEventListener("message", e => {
   if (e.data.type === "re-replay-failed") { msg.textContent = "記録を読み込めませんでした（" + e.data.message + "）"; }
 });
 setTimeout(loadAdmin, 15000); // 合図が来なくても、管理画面は開けるようにする
+// 11-25 より前の記録には店の設定がなく、管理画面は今のブラウザの設定を出す。そのことと、記録に残る目線を管理画面のタブの上に出す
+const warn = document.getElementById("warn");
+let warnText = "";
+fetch("../api/admin/session?sid=" + encodeURIComponent(sid), { cache:"no-store" }).then(r => r.ok ? r.json() : null).then(d => {
+  if (!d || d.hasSettings) return;
+  const modes = [...new Set((d.turns || []).map(t => t.mode).filter(Boolean))];
+  const mt = modes.map(m => m === "staff" ? "社員目線" : "外野目線").join("・");
+  warnText = "この記録には当時の管理画面の設定が残っていません。下は今のブラウザの設定です（当時と違うことがあります）。" + (type === "talk" && mt ? "記録に残る目線：" + mt : "");
+  warn.textContent = warnText;
+  warn.classList.toggle("show", !fa.hidden);
+}).catch(() => {});
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+  warn.classList.toggle("show", !!warnText && b.dataset.k === "admin");
   if (b.dataset.k === "admin") loadAdmin();
   fu.hidden = b.dataset.k !== "user"; fa.hidden = b.dataset.k !== "admin";
 });
