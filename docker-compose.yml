@@ -11,10 +11,12 @@ services:
       - ./dev/web:/usr/share/nginx/html/dev:ro       # 開発の本線 /RealEstate_app/dev/
       - ./dev-old/web:/usr/share/nginx/html/dev-old:ro # 査定スキルを入れる前の開発版 /RealEstate_app/dev-old/（比べる用・11-25）
       - ./sales/web:/usr/share/nginx/html/sales:ro
+      - ./pr-fudosan/web:/usr/share/nginx/html/pr-fudosan:ro # 不動産PR版のボット・管理画面 /RealEstate_app/pr-fudosan/
+      - ./pr-kantei/web:/usr/share/nginx/html/pr-kantei:ro   # 鑑定PR版のボット・管理画面 /RealEstate_app/pr-kantei/
       - ./sales-kantei/web:/usr/share/nginx/html/sales-kantei:ro # 鑑定PR版のボット・お試し設定 /RealEstate_app/sales-kantei/（11-25）   # セールス版のボット・お試し設定 /RealEstate_app/sales/
       - ./archive:/usr/share/nginx/html/archive:ro   # 古い試作
-      - ./sales/site:/usr/share/nginx/html/sample:ro # サンプルHPの画像・CSS（index.html は api が返す）
-      - ./sales/site-kantei:/usr/share/nginx/html/sample-kantei:ro # 鑑定士版のサンプルHP（同上）
+      - ./pr-fudosan/site:/usr/share/nginx/html/sample:ro # サンプルHPの画像・CSS（index.html は api が返す）
+      - ./pr-kantei/site:/usr/share/nginx/html/sample-kantei:ro # 鑑定士版のサンプルHP（同上）
       - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
       - ./secrets/mailhog.htpasswd:/etc/nginx/mailhog.htpasswd:ro # MailHog の画面の入口（admin のパスワードから作る）
     restart: unless-stopped
@@ -39,12 +41,14 @@ services:
       - google_maps_embed_key # ストリートビューの埋め込み。サイトを限定したキー（画面に渡す）
     volumes:
       - ./data:/data
-      - ./sales/site:/site:ro # サンプルHP（?r= で地区名を差し込む）
-      - ./sales/site-kantei:/site-kantei:ro # 鑑定士版のサンプルHP
-      - ./dev/web/data/muni.json:/app/muni.json:ro
+      - ./pr-fudosan/site:/site:ro # サンプルHP（?r= で地区名を差し込む）
+      - ./pr-kantei/site:/site-kantei:ro # 鑑定士版のサンプルHP
+      - ./pr-fudosan/web/data/muni.json:/app/muni.json:ro
       - ./dev/prompts:/prompts/dev:ro     # AIへの指示（版ごと。画面の場所で使い分ける）
       - ./dev-old/prompts:/prompts/dev-old:ro # 査定スキル前の開発版の指示
       - ./sales/prompts:/prompts/sales:ro
+      - ./pr-fudosan/prompts:/prompts/pr-fudosan:ro # 不動産PR版のAIへの指示
+      - ./pr-kantei/prompts:/prompts/pr-kantei:ro   # 鑑定PR版のAIへの指示
       - ./sales/prompts:/prompts/sales-kantei:ro # 鑑定PR版も不動産PR版と同じ指示 # 物件の町名を拾う（shop/listings.js）
       - ./_works/2026-11-14_ClaudeCode_送付用の地区一覧:/regions:ro
     mem_limit: 256m

@@ -13,6 +13,13 @@ function savedType(dir, sid) {
   try { t = (JSON.parse(fs.readFileSync(path.join(dir, "sessions", sid + ".json"), "utf8")).state || {}).type || ""; } catch { /* 読めなければ種類なし */ }
   typeCache.set(sid, t); return t;
 }
+const verCache = new Map(); // sid → 記録した画面の版（pr-fudosan・pr-kantei など）
+function savedVer(dir, sid) {
+  if (verCache.has(sid)) return verCache.get(sid);
+  let v = "";
+  try { v = JSON.parse(fs.readFileSync(path.join(dir, "sessions", sid + ".json"), "utf8")).ver || ""; } catch { /* 読めなければ版なし */ }
+  if (v) verCache.set(sid, v); return v;
+}
 const IDLE_MS = 30 * 60_000; // 最後の動きから30分で「終了」とみなす
 
 // ---- 記録の読み込み ----
@@ -181,7 +188,7 @@ export function summarize(ctx) {
   try { saved = new Set(fs.readdirSync(path.join(dir, "sessions")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5))); } catch { /* まだ無い */ }
   for (const s of sess.values()) if (s.screen !== "read" && s.screen !== "select" && saved.has(s.sid) && savedType(dir, s.sid) === "select") s.screen = "select"; // 11-17 より前のタイプ1は "talk" で記録されていた。保存された状態の種類で見分ける
   const now = Date.now();
-  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), canReplay: s.screen !== "read" && (s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3)), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
+  const sessions = [...sess.values()].map((s) => ({ ...s, hasState: saved.has(s.sid), ver: saved.has(s.sid) ? savedVer(dir, s.sid) : "", canReplay: s.screen !== "read" && (s.rounds > 0 || s.maxQ > 0 || (saved.has(s.sid) && s.reach >= 3)), active: !s.ended && s.last && now - new Date(s.last).getTime() < IDLE_MS })).sort((a, b) => (b.last || "").localeCompare(a.last || ""));
 
   // 日別（日本時間）
   const dayMap = new Map();

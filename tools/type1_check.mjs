@@ -1,4 +1,4 @@
-// タイプ1の見返し試験（AIなし・費用0）：dev/web/data/type1_test_urls.csv の全URLを読み、③（HPの見出し→小分類）を控えて、前回と違う店だけ書き出す。
+// タイプ1の見返し試験（AIなし・費用0）：pr-fudosan/web/data/type1_test_urls.csv の全URLを読み、③（HPの見出し→小分類）を控えて、前回と違う店だけ書き出す。
 // 使い方（サーバーで）：node tools/type1_check.mjs [控えの名前]   控えは data/type1_check/<名前>.json（既定は日時）。前回＝その前の控え
 import fs from "fs";
 import path from "path";

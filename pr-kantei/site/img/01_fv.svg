@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" preserveAspectRatio="xMidYMid slice">
+  <!-- 地方都市の住宅地を高台から見た遠景（イラスト・文字なし） -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9d8cf"/><stop offset="1" stop-color="#eef0e6"/></linearGradient>
+  </defs>
+  <rect width="1600" height="700" fill="url(#sky)"/>
+  <path d="M0 330 L180 250 L330 300 L520 210 L700 280 L880 230 L1060 290 L1250 220 L1430 270 L1600 240 V700 H0Z" fill="#a9bdb1"/>
+  <path d="M0 390 L240 340 L460 380 L700 330 L960 375 L1200 335 L1600 370 V700 H0Z" fill="#8ea798"/>
+  <g fill="#e9e6dc" stroke="#7d9487" stroke-width="2">
+    <rect x="120" y="420" width="70" height="50"/><path d="M110 420 L155 390 L200 420Z" fill="#6f8a7c"/>
+    <rect x="240" y="440" width="90" height="55"/><path d="M230 440 L285 405 L340 440Z" fill="#5d7a6b"/>
+    <rect x="390" y="415" width="60" height="45"/><path d="M382 415 L420 388 L458 415Z" fill="#6f8a7c"/>
+    <rect x="520" y="430" width="110" height="70"/><rect x="540" y="400" width="70" height="30"/>
+    <rect x="700" y="380" width="80" height="120"/><rect x="790" y="410" width="60" height="90"/>
+    <rect x="900" y="430" width="90" height="55"/><path d="M890 430 L945 395 L1000 430Z" fill="#5d7a6b"/>
+    <rect x="1050" y="420" width="70" height="50"/><path d="M1040 420 L1085 390 L1130 420Z" fill="#6f8a7c"/>
+    <rect x="1180" y="440" width="100" height="60"/><path d="M1170 440 L1230 400 L1290 440Z" fill="#5d7a6b"/>
+    <rect x="1340" y="425" width="70" height="50"/><path d="M1330 425 L1375 395 L1420 425Z" fill="#6f8a7c"/>
+  </g>
+  <path d="M0 520 C300 490 600 540 900 505 S1400 520 1600 500 V700 H0Z" fill="#6f8a7c"/>
+  <path d="M0 590 C350 560 700 610 1050 575 S1450 590 1600 580 V700 H0Z" fill="#4f6d5e"/>
+  <path d="M0 640 C400 620 900 660 1600 630 V700 H0Z" fill="#3b5648"/>
+</svg>

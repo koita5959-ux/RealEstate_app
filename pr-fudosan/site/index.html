@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{REGION}}を中心に、売買・相続・賃貸などの不動産相談を承るAIボット不動産のサンプルサイトです。">
+  <title>{{REGION}}の不動産相談｜AIボット不動産</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="sample-notice" role="note">これは営業用のサンプルサイトです。「AIボット不動産」は架空の会社です。</div>
+
+  <header id="header">
+    <div class="container header-inner">
+      <a class="brand" href="#fv" aria-label="AIボット不動産 トップへ">AIボット<span>不動産</span></a>
+      <a class="pr-link" href="{{PR_URL}}"><span class="lg">不動産向けチャットボット セールス概要</span><span class="sm">セールス概要</span> ›</a>
+      <nav aria-label="ページ内メニュー"><a href="#services">業務案内</a><a href="#bot">AI相談</a><a href="#listings">物件情報</a><a href="#company">会社概要</a><a href="#contact">お問い合わせ</a></nav>
+      <a class="tel" href="tel:0000000000"><small>お電話でのご相談</small>000-0000-0000</a>
+    </div>
+  </header>
+
+  <main>
+    <section id="fv" class="hero">
+      <div class="container hero-content">
+        <p class="eyebrow">くらしと不動産の、身近な相談窓口</p>
+        <h1><span class="region" data-region-line>{{REGION}}ほか</span>地域密着の不動産相談</h1>
+        <p class="hero-copy">売る、買う、相続、賃貸まで。<br>住まいや土地のことを、わかりやすくお手伝いします。</p>
+        <a class="button button-light" href="#bot">AIに相談してみる <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section id="services" class="section">
+      <div class="container">
+        <p class="section-kicker">SERVICES</p><h2>業務案内</h2>
+        <p class="lead">{{REGION}}を中心に、不動産に関するさまざまなご相談を承ります。</p>
+        <div class="service-grid">
+          <article class="service-card"><img src="img/02_sell.jpg" alt="売却を検討する一戸建てのイメージ"><div><h3>売る</h3><p>住み替えや空き家の売却など、ご事情に合わせた売却方法をご一緒に考えます。</p></div></article>
+          <article class="service-card"><img src="img/03_buy.jpg" alt="明るい住まいのイメージ"><div><h3>買う</h3><p>戸建て、マンション、土地など、ご希望の暮らしに合う物件探しをお手伝いします。</p></div></article>
+          <article class="service-card"><img src="img/04_inherit.jpg" alt="相続した家のイメージ"><div><h3>相続</h3><p>相続した不動産の扱いに迷うときも、状況を伺いながら整理のお手伝いをします。</p></div></article>
+          <article class="service-card"><img src="img/05_rent.jpg" alt="賃貸アパートのイメージ"><div><h3>賃貸</h3><p>お部屋探しから賃貸管理のご相談まで、地域の住まいに関するご希望を伺います。</p></div></article>
+          <article class="service-card"><img src="img/06_other.jpg" alt="間取り図と鍵のイメージ"><div><h3>買取・その他</h3><p>早く現金化したい、古家付きで売りにくいといった場合には、買取のご提案も行います。</p></div></article>
+        </div>
+        <p class="services-close">不動産のことなら、何でもお気軽にご相談ください。</p>
+        <p class="image-note">画像はイメージです（AI生成）</p>
+      </div>
+    </section>
+
+    <section id="bot" class="section section-tint" data-read="skip">
+      <div class="container narrow"><p class="section-kicker">AI CONSULTATION</p><h2>AI利用によるセッションにも対応したチャットボット</h2>
+        <p class="lead">AIボットが、お客様の土地やご事情を伺い、内容を整理したうえで担当者へおつなぎします。</p>
+        <div class="bot-features"><div><b>地図から始められます</b><p>場所を示すだけで、土地や周辺のことを相談できます。</p></div><div><b>公開データをもとにお話しします</b><p>土地に関する公開情報をもとに、考えを整理します。</p></div><div><b>24時間いつでも</b><p>気になったときに、ご自身のペースでお試しいただけます。</p></div><div><b>担当者へつながります</b><p>ご相談の最後は、お問い合わせへお進みいただけます。</p></div></div>
+      </div>
+      <div class="bot-slot-wrap"><div id="bot-slot" aria-label="AI相談ボット"></div></div>
+      <div class="container narrow">
+        <div class="bot-modes">
+          <p class="bot-modes-head">このチャットボットは、３種のモードが用意されています</p>
+          <ul>
+            <li><a class="bot-mode-btn" href="../pr-fudosan/1_select_try.html" target="_blank" rel="noopener">TYPE1</a><span>HP情報を読み取り選択式ボタンを初期状態で読み取りその修正を踏まえ実装できる（ランニングコスト０円）</span></li>
+            <li><a class="bot-mode-btn" href="../pr-fudosan/2_talk_try.html" target="_blank" rel="noopener">TYPE2</a><span>HP情報を読み取り初期値を修正し実装します。対話型セッションとしてAI利用契約が別途必要です</span></li>
+            <li><a class="bot-mode-btn" href="../pr-fudosan/3_ai_try.html" target="_blank" rel="noopener">TYPE3</a><span>HP情報を読み取り初期値を修正し実装します。ボタンと対話の複合でサイト業者側の選択を踏まえた回答を意図し対話を誘導する流れが企画できます。AI利用契約が別途必要です。</span></li>
+          </ul>
+          <p class="bot-modes-note">※この３種の機能テストは、URLの指定ができるので、ボットセッションテストも指定HPを想定したシミュレーションが可能です</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="listings" class="section">
+      <div class="container"><p class="section-kicker">PROPERTIES</p><h2>物件情報</h2>
+        <p class="lead">{{REGION}}で扱っている物件の一部です。</p>
+        <div class="listing-grid">
+          <article class="listing-card"><div class="listing-ph" data-kind="売土地"><img src="img/10_land.jpg" alt="売土地のイメージ" loading="lazy" onerror="this.remove()"><span>売土地</span></div><div class="listing-body"><p class="listing-price">1,480万円</p><p class="listing-area">住宅地</p><p>土地 165.2㎡（約50坪）</p><p class="listing-note">第一種低層住居専用地域／南側道路</p></div></article>
+          <article class="listing-card"><div class="listing-ph" data-kind="中古戸建"><img src="img/11_used.jpg" alt="中古戸建のイメージ" loading="lazy" onerror="this.remove()"><span>中古戸建</span></div><div class="listing-body"><p class="listing-price">2,180万円</p><p class="listing-area">駅徒歩12分</p><p>4LDK／土地 198㎡・建物 112㎡</p><p class="listing-note">築22年・リフォーム済み</p></div></article>
+          <article class="listing-card"><div class="listing-ph" data-kind="古家付き土地"><img src="img/12_oldhouse.jpg" alt="古家付き土地のイメージ" loading="lazy" onerror="this.remove()"><span>古家付き土地</span></div><div class="listing-body"><p class="listing-price">680万円</p><p class="listing-area">旧市街</p><p>土地 132㎡（約40坪）</p><p class="listing-note">現況渡し・買取のご相談も可</p></div></article>
+          <article class="listing-card"><div class="listing-ph" data-kind="新築戸建"><img src="img/13_new.jpg" alt="新築戸建のイメージ" loading="lazy" onerror="this.remove()"><span>新築戸建</span></div><div class="listing-body"><p class="listing-price">3,290万円</p><p class="listing-area">分譲地</p><p>3LDK＋WIC／土地 150㎡</p><p class="listing-note">全4区画・建築条件なし区画あり</p></div></article>
+          <article class="listing-card"><div class="listing-ph" data-kind="マンション"><img src="img/14_mansion.jpg" alt="マンションのイメージ" loading="lazy" onerror="this.remove()"><span>マンション</span></div><div class="listing-body"><p class="listing-price">2,450万円</p><p class="listing-area">駅徒歩5分</p><p>3LDK／72.5㎡・8階</p><p class="listing-note">築15年・南向き</p></div></article>
+          <article class="listing-card"><div class="listing-ph" data-kind="賃貸アパート"><img src="img/15_apart.jpg" alt="賃貸アパートのイメージ" loading="lazy" onerror="this.remove()"><span>賃貸アパート</span></div><div class="listing-body"><p class="listing-price">月 4.2万円</p><p class="listing-area">大学近く</p><p>1K／24㎡</p><p class="listing-note">駐車場1台付き・ペット相談</p></div></article>
+        </div>
+        <p class="image-note">※サンプルのため架空の物件です。画像はイメージです（AI生成）</p>
+      </div>
+    </section>
+
+    <section id="company" class="section">
+      <div class="container"><p class="section-kicker">COMPANY</p><h2>会社概要</h2>
+        <div class="company-layout"><div class="company-image"><img src="img/07_company.jpg" alt="相談カウンターのイメージ"></div><div class="company-table"><table><tbody><tr><th>屋号</th><td>AIボット不動産</td></tr><tr><th>所在地</th><td>{{REGION}}内（サンプルのため架空）</td></tr><tr><th>電話番号</th><td><a href="tel:0000000000">000-0000-0000</a></td></tr><tr><th>営業時間</th><td>9:00〜18:00</td></tr><tr><th>定休日</th><td>水曜日・年末年始</td></tr><tr><th>免許番号</th><td>○○県知事（2）第00000号<br><small>※サンプルのため架空の番号です</small></td></tr><tr><th>業務内容</th><td>不動産売買・賃貸・管理・相続相談・買取相談</td></tr></tbody></table></div></div>
+      </div>
+    </section>
+
+    <section id="contact" class="section contact-section"><div class="container narrow"><p class="section-kicker">CONTACT</p><h2>お問い合わせ</h2><p class="lead">ご相談は、下記フォームまたはお電話でお気軽にお寄せください。</p>
+      <form class="inquiry" data-inquiry>
+        <label>お名前 <em>必須</em><input type="text" name="name" required></label><label>会社名・屋号 <span>任意</span><input type="text" name="company"></label><label>メールアドレス <em>必須</em><input type="email" name="email" required pattern="[^\s@&lt;&gt;,&quot;]+@[^\s@&lt;&gt;,&quot;]+\.[^\s@&lt;&gt;,&quot;]+" title="メールアドレスの形で入力してください（例：name@example.jp）" placeholder="例：name@example.jp"></label><label>電話番号 <span>任意</span><input type="tel" name="tel"></label><label class="field-full">ご質問・ご相談内容 <em>必須</em><textarea name="message" rows="6" required></textarea></label>
+        <p class="form-note">※この見本ではお問い合わせは開発元へ届きます。御社サイトに実装したときは、御社へのメール送信に変わります。</p><button class="button" type="button">お問い合わせを送る <span aria-hidden="true">→</span></button>
+      </form></div>
+    </section>
+  </main>
+  <footer id="footer"><div class="container footer-inner"><p class="brand">AIボット<span>不動産</span></p><p>このサイトの運営・お問い合わせ先：{{DEVELOPER}}</p><small>© AI Bot Real Estate. All Rights Reserved.</small></div></footer>
+  <div class="inquiry-done" hidden><div><p>メールをお預かりしました。<br>確認後、担当者からご連絡します。</p><button type="button">OK</button></div></div>
+<script>
+// ボットの枠：?type=1|2|3（初期はタイプ3）。?mine=1＝管理画面から来た＝このブラウザの設定で動かす。なければサンプルHPの初期状態（site=bot）
+(function () {
+  var q = new URLSearchParams(location.search), t = { "1":"1_select_main.html", "2":"2_talk_main.html", "3":"3_ai_main.html" }[q.get("type")] ? q.get("type") : "3";
+  var file = { "1":"1_select_main.html", "2":"2_talk_main.html", "3":"3_ai_main.html" }[t];
+  var reg = (document.querySelector("[data-region-line]") || {}).textContent || "";
+  reg = reg.replace(/ほか$/, "").trim();
+  try { if (q.get("r")) localStorage.setItem("sales:reSampleR", q.get("r")); } catch (e) {}
+  var p = new URLSearchParams({ embed:"1" });
+  if (q.get("mine") !== "1") { if (t !== "3") p.set("site", "bot"); if (reg && reg !== "地域") p.set("area", reg); } // TYPE3 は枠の中で初期設定を作る（site=bot を使わない）
+  if (q.get("by")) p.set("by", q.get("by"));
+  p.set("now", "表示中：TYPE" + t + (q.get("mine") === "1" ? "（管理画面の設定）" : "（このサンプルHPの初期状態）")); // 枠の上の帯の右に出す（ユーザー 11-19）
+  var f = document.createElement("iframe");
+  f.src = "../pr-fudosan/" + file + "?" + p.toString(); f.title = "AI相談ボット（TYPE" + t + "）"; f.loading = "eager";
+  document.getElementById("bot-slot").appendChild(f);
+  var here = location.origin + location.pathname + (q.get("r") ? "?r=" + encodeURIComponent(q.get("r")) : ""); // TYPE ボタン：このサンプルHPのURLを持ってお試し設定を開き、読み込む
+  document.querySelectorAll(".bot-mode-btn").forEach(function (a) { a.href = a.getAttribute("href").split("?")[0] + "?url=" + encodeURIComponent(here) + (reg && reg !== "地域" ? "&area=" + encodeURIComponent(reg) : ""); });
+  if (location.hash === "#bot") setTimeout(function () { document.getElementById("bot").scrollIntoView(); }, 50);
+})();
+</script>
+<script>
+// お問い合わせフォーム：メールで送る（試験中は MailHog が受け止める）。送れたら「お預かりしました」を出す
+(function () {
+  var form = document.querySelector("[data-inquiry]"), done = document.querySelector(".inquiry-done");
+  if (!form) return;
+  var btn = form.querySelector("button");
+  done.querySelector("button").onclick = function () { done.hidden = true; };
+  btn.onclick = function () {
+    if (!form.reportValidity()) return;
+    var v = function (n) { return (form.elements[n] || {}).value || ""; };
+    var reg = ((document.querySelector("[data-region-line]") || {}).textContent || "").replace(/ほか$/, "").trim();
+    btn.disabled = true;
+    fetch("../api/inquiry", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ kind:"site", name:v("name"), company:v("company"), email:v("email"), tel:v("tel"), msg:v("message"), area:reg === "地域" ? "" : reg, page:location.href }) })
+      .then(function (r) { if (!r.ok) throw 0; form.reset(); done.hidden = false; })
+      .catch(function () { alert("送れませんでした。時間をおいてもう一度お試しください。"); })
+      .then(function () { btn.disabled = false; });
+  };
+})();
+</script>
+</body>
+</html>

@@ -152,7 +152,8 @@ function askRestore(d) { // 確認：メイン画面の今の表示は置き換�
 function replay(sid) {
   const row = (D.sessions || []).find(x => x.sid === sid);
   const type = row && (row.screen === "talk" || row.screen === "select") ? row.screen : "ai";
-  const w = window.open(BASE + "../../dev/replay.html?sid=" + encodeURIComponent(sid) + "&type=" + type, "_blank", "popup,width=1280,height=900");
+  const ver = row && /kantei/.test(row.ver || "") && type !== "select" ? "pr-kantei" : "pr-fudosan"; // 記録した版で開く。版のない古い記録は不動産PR版
+  const w = window.open(BASE + "../../" + ver + "/replay.html?sid=" + encodeURIComponent(sid) + "&type=" + type, "_blank", "popup,width=1280,height=900");
   if (!w) toast("新しい窓を開けませんでした（ポップアップを許可してください）", true);
   return false;
 }

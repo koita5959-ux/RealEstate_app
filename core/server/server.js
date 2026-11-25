@@ -35,12 +35,12 @@ const MAP_KEY_FILE = env.MAP_KEY_FILE || "/run/secrets/google_maps_embed_key"; /
 const PROMPTS_DIR = env.PROMPTS_DIR || "/prompts";
 const promptCache = new Map();
 function verOf(req) {
-  const m = /\/RealEstate_app\/(clients\/[A-Za-z0-9_-]+|[A-Za-z0-9_-]+)\//.exec(req.headers.referer || "");
-  const v = m ? m[1] : "dev";
-  return v === "sample" ? "sales" : v; // サンプルHPから開いた枠はセールス版
+  const m = /^https?:\/\/[^/]+(?:\/RealEstate_app)?\/(clients\/[A-Za-z0-9_-]+|[A-Za-z0-9_-]+)\//.exec(req.headers.referer || ""); // 公開（/RealEstate_app/…）でも、中の試験（頭なし）でも
+  const v = m ? m[1] : "pr-fudosan";
+  return v === "sample" ? "pr-fudosan" : v === "sample-kantei" ? "pr-kantei" : v; // サンプルHPのページそのものは、その版
 }
 function prompt(ver, name) {
-  for (const v of [ver, "dev"]) {
+  for (const v of [ver, "pr-fudosan"]) {
     const f = path.join(PROMPTS_DIR, v, name);
     try {
       const t = fs.statSync(f).mtimeMs, c = promptCache.get(f);
@@ -48,11 +48,11 @@ function prompt(ver, name) {
       const text = fs.readFileSync(f, "utf8").trim();
       promptCache.set(f, { t, text });
       return text;
-    } catch { /* この版になければ dev の指示 */ }
+    } catch { /* この版になければ不動産PR版の指示 */ }
   }
   throw new Error("prompt missing: " + name);
 }
-for (const n of ["system.txt", "system_talk.txt", "system_talk_staff.txt"]) prompt("dev", n); // 起動時に dev の指示があるか確かめる
+for (const n of ["system.txt", "system_talk.txt", "system_talk_staff.txt"]) prompt("pr-fudosan", n); // 起動時に不動産PR版の指示があるか確かめる
 
 // 価格（USD / 100万トークン）。推定用。Console の請求額が正。
 const PRICES = {
@@ -551,7 +551,7 @@ function cleanState(s) {
     sheet, signals: (Array.isArray(s.signals) ? s.signals : []).slice(0, 20).map((x) => clip(x, 200)),
     usage: { n: num(s.usage?.n), tin: num(s.usage?.tin), tout: num(s.usage?.tout), costUsd: num(s.usage?.costUsd) },
     ...(s.type === "talk" || s.type === "select" ? { type: s.type } : {}), // 画面の種類（再表示でどの画面が戻すかを決める。なければ MultiSession）
-    ...(s.settings && typeof s.settings === "object" ? { settings: Object.fromEntries(["reAdmin", "reTalk", "reType1", "reShopKnow", "reShopHP"].filter((k) => typeof s.settings[k] === "string").map((k) => [k, clip(s.settings[k], 60000)])) } : {}), // 管理画面の設定（再表示で書き戻す。survey.js の SET_KEYS と同じ）
+    ...(s.settings && typeof s.settings === "object" ? { settings: Object.fromEntries(["reAdmin", "reTalk", "reType1", "reShopKnow", "reShopHP", "reSatei"].filter((k) => typeof s.settings[k] === "string").map((k) => [k, clip(s.settings[k], 60000)])) } : {}), // 管理画面の設定（再表示で書き戻す。survey.js の SET_KEYS と同じ）
     pub: p.ready ? { ready: true, avgUsd: num(p.avgUsd), p90Usd: num(p.p90Usd), sessions: num(p.sessions), usdJpy: num(p.usdJpy) || 150 } : { ready: false, usdJpy: num(p.usdJpy) || 150 },
   };
 }
@@ -582,7 +582,7 @@ async function handleSession(req, res) {
   if (!b.reconstructed) seen(sid);
   // 復元したもの（reconstructed）は、元のセッションの時刻を残せる
   const savedAt = b.reconstructed && /^\d{4}-\d\d-\d\dT[\d:.]{8,12}Z$/.test(String(b.savedAt || "")) ? String(b.savedAt) : new Date().toISOString();
-  const rec = { sid, by: clip(b.by, 32) || "visitor", savedAt, state: cleanState(b.state), snapshot: cleanSnapshot(b.snapshot), reconstructed: !!b.reconstructed };
+  const rec = { sid, by: clip(b.by, 32) || "visitor", ver: verOf(req), savedAt, state: cleanState(b.state), snapshot: cleanSnapshot(b.snapshot), reconstructed: !!b.reconstructed };
   try {
     const f = path.join(SESSIONS_DIR, sid + ".json");
     fs.writeFileSync(f + ".tmp", JSON.stringify(rec), { mode: 0o600 });
