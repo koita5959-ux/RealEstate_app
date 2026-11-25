@@ -1160,7 +1160,7 @@ if ("BroadcastChannel" in window) {
   const userCh = new BroadcastChannel("reUser");
   userCh.onmessage = e => {
     if (!e.data || e.data.type !== "restore" || !e.data.data) return;
-    if (e.data.data.state && e.data.data.state.type === "talk") return; // 対話型の記録は対話型の画面が戻す
+    if (e.data.data.state && (e.data.data.state.type === "talk" || e.data.data.state.type === "select")) return; // TalkSession・タイプ1の記録は、それぞれの画面が戻す
     try { restoreSession(e.data.data); userCh.postMessage({ type:"restored", sid:e.data.data.sid }); }
     catch (err) { REPLAYING = false; userCh.postMessage({ type:"restore-failed", sid:e.data.data.sid, message:String(err && err.message || err) }); }
   };

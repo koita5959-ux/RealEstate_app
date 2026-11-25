@@ -550,6 +550,8 @@ function cleanState(s) {
     path: (Array.isArray(s.path) ? s.path : []).slice(0, 40).map((x) => ({ press: clip(x?.press, 80), q: num(x?.q) | 0, opt: num(x?.opt) | 0, type: clip(x?.type, 300), ...(x?.br === 0 || x?.br === 1 ? { br: x.br } : {}) })),
     sheet, signals: (Array.isArray(s.signals) ? s.signals : []).slice(0, 20).map((x) => clip(x, 200)),
     usage: { n: num(s.usage?.n), tin: num(s.usage?.tin), tout: num(s.usage?.tout), costUsd: num(s.usage?.costUsd) },
+    ...(s.type === "talk" || s.type === "select" ? { type: s.type } : {}), // 画面の種類（再表示でどの画面が戻すかを決める。なければ MultiSession）
+    ...(s.settings && typeof s.settings === "object" ? { settings: Object.fromEntries(["reAdmin", "reTalk", "reType1", "reShopKnow", "reShopHP"].filter((k) => typeof s.settings[k] === "string").map((k) => [k, clip(s.settings[k], 60000)])) } : {}), // 管理画面の設定（再表示で書き戻す。survey.js の SET_KEYS と同じ）
     pub: p.ready ? { ready: true, avgUsd: num(p.avgUsd), p90Usd: num(p.p90Usd), sessions: num(p.sessions), usdJpy: num(p.usdJpy) || 150 } : { ready: false, usdJpy: num(p.usdJpy) || 150 },
   };
 }

@@ -152,7 +152,10 @@ async function replay(sid) {
   try {
     const r = await fetch(BASE + "session?sid=" + encodeURIComponent(sid), { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
-    const d = await r.json(); sendReplay(d, true, !(d.state && d.state.type === "select")); // 確認なしで全部（メイン画面・管理画面の設定・利用状況）。タイプ1は利用状況なし
+    const d = await r.json();
+    const row = (D.sessions || []).find(x => x.sid === sid); // 種類が記録にない古いセッション（11-25 より前）は、表の種類で補う
+    if (d.state && !d.state.type && row && (row.screen === "talk" || row.screen === "select")) d.state.type = row.screen;
+    sendReplay(d, true, !(d.state && d.state.type === "select")); // 確認なしで全部（メイン画面・管理画面の設定・利用状況）。タイプ1は利用状況なし
   } catch (e) { toast("このセッションを読み込めませんでした（" + e.message + "）", true); }
   return false;
 }
