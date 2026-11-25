@@ -153,9 +153,9 @@ $("addHand").onclick = () => { HANDS.push(["", ""]); rowList($("hands"), HANDS, 
 $("tone").innerHTML = TONES.map(([k, l, s]) => `<label class="${k === tone ? "on" : ""}"><input type="radio" name="tone" value="${k}" ${k === tone ? "checked" : ""}>${l}<small>${s}</small></label>`).join("");
 $("tone").onchange = e => { tone = e.target.value; [...$("tone").children].forEach(l => l.classList.toggle("on", l.querySelector("input").checked)); draw(); };
 // ---- 目線と、HPから読んだもの（hp）／店が直したもの（own） ----
-// 外野目線（初期）：HPから読んだ欄に鍵をかける。店が変えたくても変えられない、外からの話の材料になる。変えたければHPを直して読み直す。
-// 社員目線：同じ欄を店が書き換えられる。HPの読みは「外からはこう見えています」として横に残す。HPにないことも足せる。
-const MODES = [["out", "外野目線（初期）", "店が置いたAIですが、外から見た目線で話します。HPから読んだ欄は変えられません"], ["staff", "社員目線", "店の社員として「弊社」と話します。HPから読んだ欄を書き換え、HPにないことも足せます"]];
+// 外野目線：HPから読んだ欄に鍵をかける。店が変えたくても変えられない、外からの話の材料になる。変えたければHPを直して読み直す。
+// 社員目線（PR版の初期・11-25）：同じ欄を店が書き換えられる。HPの読みは「外からはこう見えています」として横に残す。HPにないことも足せる。
+const MODES = [["out", "外野目線", "店が置いたAIですが、外から見た目線で話します。HPから読んだ欄は変えられません"], ["staff", "社員目線（初期）", "店の社員として「弊社」と話します。HPから読んだ欄を書き換え、HPにないことも足せます"]];
 const KNOW = SHOP_KNOW, EXTRA = SHOP_EXTRA; // 欄はタイプ3と共通（js/shophp.js）
 const SAMPLE_HP = {
   url:"https://taskboard.asuscomm.com/RealEstate/", sample:true,
@@ -171,7 +171,7 @@ const SAMPLE_HP = {
     team:"会社案内の「連携先」", fit:"事例3件が、どれも「決める前」の相談から始まっている", strong:"「考え方」の約束と、隣地との調整の実績（累計41件）。HPでは「約束」ですが、外から読むと、この店の芯に見えます" },
   unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
 const clone = o => JSON.parse(JSON.stringify(o));
-let mode = "out", hp = clone(SAMPLE_HP), { own, extra } = shopKnow(); // 店が直した欄・書いた欄は、タイプ3と共有
+let mode = "staff", hp = clone(SAMPLE_HP), { own, extra } = shopKnow(); // 店が直した欄・書いた欄は、タイプ3と共有
 const eff = k => mode === "out" ? (hp[k] || "") : (own[k] ?? hp[k] ?? "");
 const escH = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
 function licNote(lic) { // 括弧の数字は、免許の更新回数＋1（(1)は最初の免許の期間）
@@ -291,7 +291,7 @@ function save() {
 function load(t) {
   if (t.lv >= 3) { mode = t.mode === "staff" ? "staff" : "out"; hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }
   else { // 目線を入れる前の保存：見本の読みと違う所を、店が直したもの（社員目線）として引き継ぐ
-    mode = "out"; hp = clone(SAMPLE_HP); own = {}; extra = {}; $("memo").value = "";
+    mode = "staff"; hp = clone(SAMPLE_HP); own = {}; extra = {}; $("memo").value = "";
     for (const [k] of KNOW) if (t[k] != null && t[k] !== (SAMPLE_HP[k] || "")) own[k] = t[k];
   }
   const K = shopKnow(); if (Object.keys(K.own).length || Object.keys(K.extra).length) { own = K.own; extra = K.extra; } // タイプ3で書いた分も読む
