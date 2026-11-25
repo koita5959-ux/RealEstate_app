@@ -1,6 +1,8 @@
 // 4画面共通のヘッダー（ページタイトル＋他の画面へのボタン）と、画面の行き来。
 // 使い方：各画面に <header id="appbar" data-current="user|admin|report|dev" data-title="タイトル"> を置き、直後でこのファイルを読み込む。
 // 色の約束：青＝利用者の視点の画面／赤＝開発者の視点の画面。「利用状況」は、メイン画面にセッション（体験の記録）がなければグレー。
+// 再表示の窓が by=replay を覚えさせていた（11-25 の不具合）：残っていたら消す
+try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "replay") localStorage.removeItem("reBy"); } catch (e) {}
 (function () {
   // 丸数字（何往復目か）は、どの画面でも赤。文の中に書いた丸数字も、出たそばから赤くする
   const CN = /[①-⑳]/;

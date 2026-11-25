@@ -120,7 +120,7 @@
   Shell.refresh();
   if (window.RE_TRIAL && current === "admin") {
     const n = TYPE[0];
-    h1.textContent = ({ "1":"TYPE1", "2":"TalkSession", "3":"MultiSession" }[n] || "TYPE" + n) + " お試し設定 ― 御社のHPで試す";
+    h1.textContent = "TYPE" + n + " お試し設定 ― 御社のHPで試す";
     document.body.classList.add("trial", "trial" + n);
     const steps = { "1":["御社のHPのURLを入れて「読み込み」", "③の選択肢（HPの業務内容から拾ったもの）を見て、直す・消す・足す（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットを動かす"],
       "2":["御社のHPのURLを入れて「読み取る」（AIが店の姿をまとめます。30秒ほど）", "読み取った内容を見て、違う所を直す・足りない所を書く（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットと話す"],
@@ -144,5 +144,7 @@
 // 管理画面：開発利用状況の再表示で設定が戻ったら読み直す（メイン画面が reRestoreStamp を書く）
 if (/_admin\.html$/.test(location.pathname)) window.addEventListener("storage", e => { if (e.key === "reRestoreStamp") location.reload(); });
 
-// 査定スキルを入れる前の開発版（比べる用・11-25）：タブ名の頭に【旧】
+// 査定スキル・名称化より前の開発版（比べる用・11-25）：タブ名の頭に【旧】
 document.title = "【旧】" + document.title;
+// 再表示の窓が by=replay を覚えさせていた（11-25 の不具合）：残っていたら消す
+try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "replay") localStorage.removeItem("reBy"); } catch (e) {}

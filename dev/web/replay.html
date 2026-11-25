@@ -40,7 +40,7 @@ const name = type === "talk" ? "TalkSession" : type === "select" ? "TYPE1" : "Mu
 const fu = document.getElementById("f-user"), fa = document.getElementById("f-admin"), msg = document.getElementById("msg");
 document.getElementById("ttl").textContent = name + "（" + sid.slice(0, 8) + "）";
 document.title = "再表示 " + name + " " + sid.slice(0, 8);
-fu.src = pre + "main.html?replay=" + encodeURIComponent(sid) + "&ai=off&by=replay";
+fu.src = pre + "main.html?replay=" + encodeURIComponent(sid) + "&ai=off";
 let adminLoaded = false;
 const loadAdmin = () => { if (adminLoaded) return; adminLoaded = true; fa.src = pre + "admin.html?replay=" + encodeURIComponent(sid); };
 addEventListener("message", e => {
