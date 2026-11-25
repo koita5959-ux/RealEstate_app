@@ -10,7 +10,6 @@ services:
     volumes:
       - ./pr-fudosan/web:/usr/share/nginx/html/pr-fudosan:ro # 不動産PR版のボット・管理画面 /RealEstate_app/pr-fudosan/
       - ./pr-kantei/web:/usr/share/nginx/html/pr-kantei:ro   # 鑑定PR版のボット・管理画面 /RealEstate_app/pr-kantei/
-      - ./archive:/usr/share/nginx/html/archive:ro   # 古い試作
       - ./pr-fudosan/site:/usr/share/nginx/html/sample:ro # サンプルHPの画像・CSS（index.html は api が返す）
       - ./pr-kantei/site:/usr/share/nginx/html/sample-kantei:ro # 鑑定士版のサンプルHP（同上）
       - ./deploy/web.conf:/etc/nginx/conf.d/default.conf:ro
