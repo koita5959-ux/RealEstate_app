@@ -9,17 +9,7 @@ const SHOP_HP_SAMPLE = {
   strong:"敷地の外（隣の土地・通り・町の向き）まで見て、道を3つ以上並べること", lic:"",
   why:{}, unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] };
 // サンプルHP「AIボット不動産」（RealEstate_Site）の読み。サンプルHPの枠（?site=bot）では、このブラウザの設定より先にこれを使う＝開いてすぐ動く
-// 鑑定士版のサンプルHP「AIボット鑑定」（sales/site-kantei）の読み。?site=kantei の枠と、そのURLを読んだときに使う
-const SHOP_HP_KANTEI = {
-  url:"https://taskboard.asuscomm.com/RealEstate_app/sample-kantei/", sample:true, name:"AIボット鑑定",
-  what:"売り買いの事情をいったん外した物件そのものの値打ちを、根拠とあわせて示す不動産鑑定事務所。仲介はしない",
-  stance:"ご依頼者の側にも、お相手の側にも寄らない。だから、お相手にもそのまま示せる資料になる",
-  good:"売る前に値打ちを知りたい（不動産会社の査定額がまちまち）、買う前に売り出し価格が妥当か知りたい（セカンドオピニオン）、相続・財産分与、地代・家賃の見直し、裁判・調停、会社の資産",
-  team:"", fit:"値段の根拠を、相手に示せる形で持ちたいご相談", unfit:"物件の仲介・売り買いそのもの（不動産会社の仕事）",
-  strong:"", area:"", hours:"平日9:00〜18:00", lic:"",
-  why:{ what:"トップとごあいさつ", stance:"ごあいさつ・3つの約束", good:"鑑定が役立つ場面", hours:"事務所概要" },
-  unread:["鑑定の費用（料金はHPに載せていない）", "事務所の所在地（サンプルのため架空）", "鑑定業者の登録番号（サンプルのため架空）"] };
-const SHOP_HP_BOT = window.RE_SITE_KANTEI ? SHOP_HP_KANTEI : {
+const SHOP_HP_BOT = {
   url:"https://taskboard.asuscomm.com/RealEstate_app/sample/", sample:true, name:"AIボット不動産",
   what:"地域の不動産の売る・買う・相続・賃貸・買取を、何でも受ける町の不動産会社",
   good:"住み替えや空き家の売却、戸建て・マンション・土地の物件探し、相続した不動産の整理、お部屋探しと賃貸管理、古家付きなど売りにくい土地の買取",
@@ -102,12 +92,10 @@ async function readShopHP(url) {
 }
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
-  const kan = /RealEstate_app\/sample-kantei\/?(\?[^#]*)?(#.*)?$/.test(url);
-  if (kan || /RealEstate_app\/sample\/?(\?[^#]*)?(#.*)?$/.test(url)) { // サンプルHPは、読み取り済みの中身を使う（AIなし・費用なし）。地区名だけはそのURL（?r=）のページから取る
+  if (/RealEstate_app\/sample\/?(\?[^#]*)?(#.*)?$/.test(url)) { // サンプルHPは、読み取り済みの中身を使う（AIなし・費用なし）。地区名だけはそのURL（?r=）のページから取る
     let area = new URLSearchParams(location.search).get("area") || "";
     try { const t = await (await fetch(url, { signal:AbortSignal.timeout(8000) })).text(); const m = t.match(/data-region-line>([^<]*)</); if (m) area = m[1].replace(/ほか$/, "").replace(/^地域$/, "").trim(); } catch (e) { /* 取れなければ前の地区名 */ }
-    const pre = kan ? SHOP_HP_KANTEI : SHOP_HP_BOT;
-    return { hp:{ ...pre, url, area, sample:false }, msg:`サンプルHP「${pre.name}」を読み取りました（費用0）。` }; }
+    return { hp:{ ...SHOP_HP_BOT, url, area, sample:false }, msg:"サンプルHP「AIボット不動産」を読み取りました（費用0）。" }; }
   const by = new URLSearchParams(location.search).get("by") || "visitor", force = READ_LAST_CACHED === url;
   const r = await fetch("../api/shopread", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by, force }), signal:AbortSignal.timeout(150000) });
   const j = await r.json().catch(() => ({}));
@@ -135,7 +123,7 @@ if (window.RE_TRIAL && /2_talk_try.html$/.test(location.pathname)) try {
       asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], tone:"mid", free:2, fv:2 })); }
 } catch (e) {}
 // TYPE3：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット不動産」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
-if (window.RE_EMBED && !window.RE_SITE_KANTEI && /3_ai_main\.html$/.test(location.pathname)) try { // 鑑定士版の枠は ?site=kantei の読みだけで動かし、このブラウザの設定に書かない
+if (window.RE_EMBED && /3_ai_main\.html$/.test(location.pathname)) try {
   let h = null; try { h = JSON.parse(localStorage.getItem("reShopHP")); } catch (e) {}
   if (!h) localStorage.setItem("reShopHP", JSON.stringify({ ...SHOP_HP_BOT, area:window.RE_AREA || "", sample:false }));
   else if (/RealEstate_app\/sample\//.test(h.url || "") && window.RE_AREA && h.area !== window.RE_AREA) localStorage.setItem("reShopHP", JSON.stringify({ ...h, area:window.RE_AREA })); // サンプルHPの設定のままなら、開いた地区（?r=）に合わせ直す

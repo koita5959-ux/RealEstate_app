@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>メイン画面（MultiSession・試作）</title>
+<title>メイン画面（試作）</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; }
@@ -104,7 +104,7 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="user" data-title="MultiSession ― 土地の見立て（試作）">
+<header id="appbar" data-current="user" data-title="3. 土地の見立て ― 試作">
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="js/shell.js?v=1119b"></script>
@@ -459,15 +459,7 @@ const ADMIN_DEFAULT = {
             { name:"手放す", kind:"答える", btns:["値段の目安","売り出し方","お隣との話","手元に残る額"], close:"この土地の見立てを、担当が現地で確かめます。" } ] } ],
   close:"この土地の見立てを、担当が現地で確かめます。", limit:null,
   name:"土地の活かし方から一緒に考える店", stance:"お客さんの答えを、選べる活かし方の幅として受け止め、一つを勧める前に並べて比べる。", hint:"ほかに気になることがあれば一言どうぞ（例：売ることも少し考えている）" };
-// 鑑定士版のサンプルHP（?site=kantei）の初期設定：③は「何のために値段を知りたいか」。枝は 売り買いの判断／話し合い・資料
-const ADMIN_KANTEI = {
-  steps:[ { topic:"値段を知りたい目的", btns:["売る前に値打ちを知りたい","買う前に価格が妥当か知りたい","相続・財産分与","地代・家賃","裁判・会社の資料"], br:[0,0,1,1,1] },
-          { topic:"", branches:[
-            { name:"売り買いの判断", kind:"答える", btns:["今の目安","査定額や売り出し価格との比べ方","鑑定が要るとき・要らないとき","費用と期間"], close:"この物件の値打ちの見立てを、鑑定士が確かめます。" },
-            { name:"話し合い・資料", kind:"答える", btns:["今の目安","相手に示せる資料の形","鑑定評価書と調査報告書の違い","費用と期間"], close:"この物件の値打ちの見立てを、鑑定士が確かめます。" } ] } ],
-  close:"この物件の値打ちの見立てを、鑑定士が確かめます。", limit:null,
-  name:"売り買いの事情を外した値打ちを示す鑑定事務所", stance:"どちらの側にも寄らない。不動産会社の査定を下に見ず、事情を含む値段と事情を外した値打ちは性格が違うだけ、と話す。鑑定が要らない相談には、そう言う。", hint:"お手元の査定額や売り出し価格があれば、一言どうぞ（例：3社の査定が1,500万〜2,100万でばらばら）" };
-const ADMIN = (() => { if (window.RE_SITE_KANTEI) return ADMIN_KANTEI; if (window.RE_SITE_BOT) return ADMIN_DEFAULT; try { const a = JSON.parse((localStorage.getItem("reAdmin") || "null").replaceAll("\"接道の条件で、選べる活かし方を現地で一緒に絞ります。\"", "\"この土地の見立てを、担当が現地で確かめます。\"")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
+const ADMIN = (() => { if (window.RE_SITE_BOT) return ADMIN_DEFAULT; try { const a = JSON.parse((localStorage.getItem("reAdmin") || "null").replaceAll("\"接道の条件で、選べる活かし方を現地で一緒に絞ります。\"", "\"この土地の見立てを、担当が現地で確かめます。\"")); return a && a.steps[1] && a.steps[1].branches ? a : ADMIN_DEFAULT; } catch (e) { return ADMIN_DEFAULT; } })();
 if (ADMIN.stance === undefined && (!ADMIN.mode || ADMIN.mode === "m3")) ["name", "stance", "hint"].forEach(k => { ADMIN[k] = ADMIN_DEFAULT[k]; }); // 受け方を持たない古い保存（総合系）は初期値で補う
 window.addEventListener("storage", e => { if (e.key === "reAdmin") location.reload(); }); // 管理画面で確定したら読み直す
 const END = "そのほか詳しいお話は、下記よりメールでお問い合わせください。"; // 最後の返事に必ず付ける締め（AIがうまく締められなくても、ここで終わることが分かる）
@@ -1166,7 +1158,6 @@ if ("BroadcastChannel" in window) {
   };
 }
 </script>
-<script src="js/survey.js?v=1124k"></script>
-<script src="js/satei.js?v=1124k"></script>
+<script src="js/survey.js?v=1118e"></script>
 </body>
 </html>

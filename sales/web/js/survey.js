@@ -44,11 +44,9 @@ function firstJudgment() {
 }
 function surveyPicked(d) {
   const g = k => [...d.querySelectorAll(`.sgroup[data-g="${k}"] button.sel, .sgroup[data-g="${k}"] button.chosen`)].map(b => b.dataset.c);
-  const o = { A:g("A")[0] || "", N:g("N")[0] || "", W:g("W")[0] || "", B:g("B"), C:g("C")[0] || "" };
-  for (const gr of SURVEY.groups) if (gr.extra) o[gr.g] = gr.one ? g(gr.g)[0] || "" : g(gr.g); // オプションで足した段（査定スキルの建物など）
-  return o;
+  return { A:g("A")[0] || "", N:g("N")[0] || "", W:g("W")[0] || "", B:g("B"), C:g("C")[0] || "" };
 }
-const surveyItems = s => [s.N ? "" : s.A, s.N, s.W, ...s.B, s.C, ...SURVEY.groups.filter(x => x.extra).flatMap(x => [].concat(s[x.g] || []))].filter(Boolean); // 細さを選んだら「細い道に面している」は重ねない
+const surveyItems = s => [s.N ? "" : s.A, s.N, s.W, ...s.B, s.C].filter(Boolean); // 細さを選んだら「細い道に面している」は重ねない
 function surveyRow() {
   const d = newRow(3); d.classList.add("survey");
   d.querySelector(".qnum").textContent = "②"; // ②＝2往復目（①は土地評価データー）
@@ -78,10 +76,6 @@ function surveyRow() {
     const sub = (k, on) => { const el = d.querySelector(`.sgroup[data-g="${k}"]`); el.hidden = !on; if (!on) el.querySelectorAll("button.sel").forEach(x => x.classList.remove("sel")); };
     sub("N", surveyPicked(d).A === "細い道に面している"); // 細い道 → どんな細さ → 通路の奥なら幅
     sub("W", surveyPicked(d).N === "細い通路の奥にある");
-    for (let i = 0; i < 2; i++) for (const gr of SURVEY.groups) if (gr.extra && gr.when) { // when が並び（どれか）の段：親の答えで出す。親が消えたら子も消える
-      const on = [...d.querySelectorAll(".sgroup:not([hidden]) button.sel, .sgroup:not([hidden]) button.chosen")].some(b => [].concat(gr.when).includes(b.dataset.c));
-      sub(gr.g, on);
-    }
     const s = surveyPicked(d);
     lamp(send, !d.dataset.step && ((s.A && s.C) || !!inp.value.trim())); // 道との関係と使われ方がそろうか、書いた言葉があれば送れる
   }

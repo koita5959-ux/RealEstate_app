@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>土地の相談（TalkSession・試作）</title>
+<title>土地の相談（対話型・試作）</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root { --ink:#1f2933; --sub:#52606d; --line:#d9e2ec; --bg:#f7f9fb; --ai:#fffaf0; --ai-line:#f0c36d; --accent:#1d6fb8; }
@@ -108,7 +108,7 @@
 </style>
 </head>
 <body>
-<header id="appbar" data-current="user" data-title="TalkSession ― 土地の相談（試作）">
+<header id="appbar" data-current="user" data-title="2. 土地の相談 ― 対話型（試作）">
   <span class="appextra"><label><input type="checkbox" onchange="document.body.classList.toggle('design', this.checked)"> 設計メモ（渡したもの／開けた穴）</label></span>
 </header>
 <script src="js/shell.js?v=1119b"></script>
@@ -465,7 +465,7 @@ const TALK_DEFAULT = {
   fit:"売るか残すか決めていない空き家、隣の土地と合わせると変わる土地",
   hp:{ unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] },
   mode:"out", tone:"mid", limit:null }; // limit 空＝上限なし。mode：out＝外野目線（初期）、staff＝社員目線
-const TALK_BOT = () => ({ name:SHOP_HP_BOT.name, what:SHOP_HP_BOT.what, good:SHOP_HP_BOT.good, team:"", strong:"", fit:SHOP_HP_BOT.fit, unfit:SHOP_HP_BOT.unfit || "", asks:window.RE_SITE_KANTEI ? ["何のために値段を知りたいか（売る・買う・相続・賃料など。決めていなくてよい）", "お手元の査定額や売り出し価格があれば、その額"] : ["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], hp:{ unread:SHOP_HP_BOT.unread } }); // サンプルHPの枠（?site=bot・鑑定士版は ?site=kantei）
+const TALK_BOT = () => ({ name:SHOP_HP_BOT.name, what:SHOP_HP_BOT.what, good:SHOP_HP_BOT.good, team:"", strong:"", fit:SHOP_HP_BOT.fit, asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], hp:{ unread:SHOP_HP_BOT.unread } }); // サンプルHPの枠（?site=bot）
 const TALK = (() => { if (window.RE_SITE_BOT) return { ...TALK_DEFAULT, ...TALK_BOT() }; try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.lv ? {} : { limit:null }) } : TALK_DEFAULT; } catch (e) { return TALK_DEFAULT; } })();
 { const w = document.getElementById("talkWho"); if (w) w.textContent = `このAIは${TALK.name}が設置しています（${TALK.mode === "staff" ? "社員目線" : "外から見た目線"}で話します）`; }
 window.addEventListener("storage", e => { if (e.key === "reTalk") location.reload(); }); // 管理画面で書き換えたら読み直す
@@ -1236,7 +1236,6 @@ if ("BroadcastChannel" in window) {
   };
 }
 </script>
-<script src="js/survey.js?v=1124k"></script>
-<script src="js/satei.js?v=1124k"></script>
+<script src="js/survey.js?v=1118e"></script>
 </body>
 </html>

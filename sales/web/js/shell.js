@@ -35,8 +35,7 @@
   // サンプルHPの枠の中（?embed=1）：ヘッダーと試験用の欄を隠す。?site=bot＝このブラウザの設定を使わず、サンプルHP「AIボット不動産」の初期状態で動かす
   const QS = new URLSearchParams(location.search);
   window.RE_EMBED = QS.get("embed") === "1";
-  window.RE_SITE_BOT = QS.get("site") === "bot" || QS.get("site") === "kantei";
-  window.RE_SITE_KANTEI = QS.get("site") === "kantei"; // 鑑定士版のサンプルHP「AIボット鑑定」の枠（11-24）
+  window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
   // 対象地域（店の対応している地域）：店が直した欄 → HPの読み → ?area= の順
   window.reTargetArea = () => { try { const k = typeof shopKnow === "function" ? shopKnow().own.area : null, h = typeof shopHP === "function" ? shopHP().area : ""; return String((k ?? h) || window.RE_AREA || "").trim(); } catch (e) { return window.RE_AREA || ""; } };
@@ -161,7 +160,7 @@
   Shell.refresh();
   if (window.RE_TRIAL && current === "admin") {
     const n = TYPE[0];
-    h1.textContent = ({ "1":"TYPE1", "2":"TalkSession", "3":"MultiSession" }[n] || "TYPE" + n) + " お試し設定 ― 御社のHPで試す";
+    h1.textContent = "TYPE" + n + " お試し設定 ― 御社のHPで試す";
     document.body.classList.add("trial", "trial" + n);
     const steps = { "1":["御社のHPのURLを入れて「読み込み」", "③の選択肢（HPの業務内容から拾ったもの）を見て、直す・消す・足す（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットを動かす"],
       "2":["御社のHPのURLを入れて「読み取る」（AIが店の姿をまとめます。30秒ほど）", "読み取った内容を見て、違う所を直す・足りない所を書く（直したそばに保存されます）", "右上の「サンプルHPで試す」で、この設定のボットと話す"],
