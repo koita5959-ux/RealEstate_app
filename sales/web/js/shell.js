@@ -67,8 +67,12 @@
   // 体験の記録（このブラウザ）はタイプごとに分ける。AI型は前からの名前のまま
   const SKEY = TYPE === "3_ai_" ? "reSession" : "reSession_" + TYPE.replace(/_$/, "");
 
+  // 窓の名前：版（dev・dev-old・sales）とタイプ（1_select_ など）を頭に付ける。開発利用状況は全版共通なのでそのまま
+  const VER = (BASE.match(/\/([^/]+)\/$/) || [, "dev"])[1];
+  const winName = (name, url) => name === "reDevWin" ? name : VER + ":" + ((String(url).match(/(\d_[a-z]+_)[a-z]+\.html/) || [, TYPE])[1]) + name;
   // 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く
   window.goScreen = function (url, name, ev) {
+    name = winName(name, url); // 版とタイプごとに窓を分ける（別の版・別のタイプの同じ画面を前に出さない。11-25）
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
     const abs = new URL(url, location.href).href;
     try {
@@ -82,7 +86,7 @@
 
   const SCREENS = {
     user:   { label: "メイン画面へ", url: TYPE + "main.html",   name: "reUser",     cls: "btn-user" },
-    admin:  { label: "管理画面へ",   url: TYPE + "admin.html",  name: "reAdminWin", cls: "btn-dev" },
+    admin:  { label: "管理画面へ",   url: TYPE + "try.html",    name: "reTryWin",   cls: "btn-dev" }, // セールス版の管理画面はお試し設定（*_try.html。*_admin.html はない。11-25）
     report: { label: "利用状況",     url: TYPE + "report.html", name: "reReport",   cls: "btn-user", needsSession: true, not: "1_select_" }, // タイプ1の利用状況はまだない
     dev:    { label: "開発利用状況", url: "../api/admin/",     name: "reDevWin",   cls: "btn-dev" },
     cat:    { label: "分類の表",     url: "1_select_category.html", name: "reCatWin", cls: "btn-dev", only: "1_select_" }, // タイプ1だけ（③の見出しの当て方、閲覧のみ）
@@ -107,7 +111,7 @@
   const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  if (!window.RE_EMBED) window.name = window.RE_TRIAL ? "reTryWin" : SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  if (!window.RE_EMBED) window.name = winName(window.RE_TRIAL ? "reTryWin" : SCREENS[current].name, location.pathname); // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
   // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 

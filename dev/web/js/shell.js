@@ -47,8 +47,12 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
   // 体験の記録（このブラウザ）はタイプごとに分ける。AI型は前からの名前のまま
   const SKEY = TYPE === "3_ai_" ? "reSession" : "reSession_" + TYPE.replace(/_$/, "");
 
+  // 窓の名前：版（dev・dev-old・sales）とタイプ（1_select_ など）を頭に付ける。開発利用状況は全版共通なのでそのまま
+  const VER = (BASE.match(/\/([^/]+)\/$/) || [, "dev"])[1];
+  const winName = (name, url) => name === "reDevWin" ? name : VER + ":" + ((String(url).match(/(\d_[a-z]+_)[a-z]+\.html/) || [, TYPE])[1]) + name;
   // 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く
   window.goScreen = function (url, name, ev) {
+    name = winName(name, url); // 版とタイプごとに窓を分ける（別の版・別のタイプの同じ画面を前に出さない。11-25）
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
     const abs = new URL(url, location.href).href;
     try {
@@ -87,7 +91,7 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
   const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  if (!window.RE_EMBED) window.name = window.RE_TRIAL ? "reTryWin" : SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  if (!window.RE_EMBED) window.name = winName(window.RE_TRIAL ? "reTryWin" : SCREENS[current].name, location.pathname); // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
   // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 

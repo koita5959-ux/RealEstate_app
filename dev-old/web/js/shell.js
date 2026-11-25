@@ -17,6 +17,20 @@
   };
   const start = () => { paint(document.body); new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 ? paint(n) : n.nodeType === 3 && n.parentElement && paint(n.parentElement)))).observe(document.body, { childList:true, subtree:true }); };
   if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+  // 旧開発版の保存場所と合図は、開発版と分ける（セールス版の sales: と同じ方式で old: を付ける。11-25）
+  (function () {
+    const P = "old:", S = Storage.prototype, ls = window.localStorage, g = S.getItem, st = S.setItem, rm = S.removeItem;
+    const k = (s, key) => s === ls && /^re/.test(String(key)) ? P + key : key;
+    S.getItem = function (key) { return g.call(this, k(this, key)); };
+    S.setItem = function (key, v) { return st.call(this, k(this, key), v); };
+    S.removeItem = function (key) { return rm.call(this, k(this, key)); };
+    const add = window.addEventListener;
+    window.addEventListener = function (type, fn, opt) {
+      if (type !== "storage") return add.call(this, type, fn, opt);
+      return add.call(this, type, e => { if (e.key !== null && !String(e.key).startsWith(P)) return; fn({ key:e.key === null ? null : e.key.slice(P.length), newValue:e.newValue, oldValue:e.oldValue, storageArea:e.storageArea }); }, opt);
+    };
+    if ("BroadcastChannel" in window) { const BC = window.BroadcastChannel; window.BroadcastChannel = function (n) { return new BC(n === "reDev" ? n : P + n); }; } // 開発利用状況への合図（reDev）だけは共通
+  })();
   const BASE = new URL("../", document.currentScript.src).href; // …/<版>/
   // サンプルHPの枠の中（?embed=1）：ヘッダーと試験用の欄を隠す。?site=bot＝このブラウザの設定を使わず、サンプルHP「AIボット不動産」の初期状態で動かす
   const QS = new URLSearchParams(location.search);
@@ -30,8 +44,12 @@
   // 体験の記録（このブラウザ）はタイプごとに分ける。AI型は前からの名前のまま
   const SKEY = TYPE === "3_ai_" ? "reSession" : "reSession_" + TYPE.replace(/_$/, "");
 
+  // 窓の名前：版（dev・dev-old・sales）とタイプ（1_select_ など）を頭に付ける。開発利用状況は全版共通なのでそのまま
+  const VER = (BASE.match(/\/([^/]+)\/$/) || [, "dev"])[1];
+  const winName = (name, url) => name === "reDevWin" ? name : VER + ":" + ((String(url).match(/(\d_[a-z]+_)[a-z]+\.html/) || [, TYPE])[1]) + name;
   // 画面の行き来：すでに開いている画面は、開き直さずに前へ出す（内容・書きかけの下書きを消さない）。なければ新しく開く
   window.goScreen = function (url, name, ev) {
+    name = winName(name, url); // 版とタイプごとに窓を分ける（別の版・別のタイプの同じ画面を前に出さない。11-25）
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button)) return true; // Ctrl/Shift＋クリック・中ボタンは、ブラウザ標準（別タブ・別ウインドウ）に任せる
     const abs = new URL(url, location.href).href;
     try {
@@ -70,7 +88,7 @@
   const hasSession = () => { try { return !!localStorage.getItem(SKEY); } catch (e) { return false; } };
   const bar = document.getElementById("appbar");
   const current = bar.dataset.current;
-  if (!window.RE_EMBED) window.name = window.RE_TRIAL ? "reTryWin" : SCREENS[current].name; // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
+  if (!window.RE_EMBED) window.name = winName(window.RE_TRIAL ? "reTryWin" : SCREENS[current].name, location.pathname); // 枠の中は名前を付けない（管理画面の「メイン画面へ」が枠を乗っ取らないように）。 他の画面から「ここへ」と呼ばれたとき、同じ画面を見つけられるように名前を付ける
   // 開いている「利用状況」の窓へ合図を送る通路（再表示・体験中の表示への切り替え）。同じブラウザの、同じアドレスの画面どうしで届く
   const channel = "BroadcastChannel" in window ? new BroadcastChannel("reReport") : null;
 
