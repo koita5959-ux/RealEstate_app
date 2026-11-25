@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理画面 ― 選択式</title>
+<style>
+  :root { --line:#d5dbe2; --sub:#5b6673; --red:#b3261e; --blue:#1f5fa8; }
+  body { margin:0; font-family:"Noto Sans JP", system-ui, sans-serif; background:#f6f7f9; color:#1d2430; }
+  main { padding:16px; }
+  .top { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:12px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .row input[type=url] { flex:1; min-width:240px; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  .hint { color:var(--sub); font-size:13px; }
+  button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; }
+  button.main { background:var(--red); color:#fff; border-color:var(--red); }
+  .side { display:inline-block; margin:.2em 0 0; padding:.05em .5em; border-radius:4px; font-size:.82em; background:#eef3fb; color:#2a5aa8; }
+  .side button { margin-right:.3em; font-size:.95em; padding:0 .5em; }
+  .side button.on { background:#2a5aa8; color:#fff; border-color:#2a5aa8; }
+  button.main:disabled { opacity:.55; cursor:wait; }
+  .loading { color:var(--red); font-weight:600; }
+  .done { color:var(--red); }
+  .loading::before { content:""; display:inline-block; width:.9em; height:.9em; margin-right:.4em; vertical-align:-.1em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .lands { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
+  .lands button { font-size:13px; padding:3px 8px; }
+  .lands button.sel { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .cols { display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; align-items:flex-start; }
+  .col { flex:0 0 340px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px; min-height:160px; }
+  .col h2 { font-size:15px; margin:0 0 4px; color:var(--red); }
+  .col .ctx { font-size:12px; color:var(--sub); margin-bottom:6px; min-height:1.2em; }
+  .item { display:flex; gap:6px; align-items:flex-start; border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin:5px 0; cursor:pointer; background:#fff; }
+  .item.sel { border-color:var(--red); background:#fff6f5; }
+  .item .no { color:var(--red); font-weight:bold; min-width:1.2em; }
+  .item .body { flex:1; min-width:0; }
+  .item .l { font-weight:bold; font-size:14px; }
+  .item .s { display:block; color:var(--sub); font-size:11px; margin-top:2px; }
+  .item .k { display:block; font-size:11px; color:#2e7d32; margin-top:2px; }
+  .item .k.leaf { color:var(--sub); }
+  .item .ops { display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end; max-width:66px; }
+  .item .ops button { padding:0 5px; font-size:12px; }
+  .item input { font:inherit; width:100%; padding:3px 6px; }
+  .fixed { border:1px dashed var(--line); border-radius:6px; padding:6px 8px; margin:5px 0; color:var(--sub); font-size:13px; }
+  .add { margin-top:4px; font-size:13px; }
+  .note { font-size:12px; color:var(--sub); margin-top:6px; }
+  .edit { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-top:4px; max-width:900px; }
+  .edit h2 { font-size:15px; margin:0 0 6px; color:var(--red); }
+  .edit label { display:block; font-size:13px; color:var(--sub); margin:6px 0 2px; }
+  .edit textarea, .edit input { width:100%; box-sizing:border-box; font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  .edit .pv { background:#f4f8fd; border-radius:6px; padding:8px; font-size:14px; margin-top:6px; }
+  .q { color:var(--red); font-weight:bold; }
+</style>
+</head>
+<body>
+<header id="appbar" data-current="admin" data-title="1. 管理画面 ― 試作（コンテンツ：1 選択式）"></header>
+<script src="js/shell.js"></script>
+<main>
+  <div class="top">
+    <div class="row">
+      <b>あなたのHP</b>
+      <input type="url" id="url" placeholder="https://…（HPのトップのURL）">
+      <button class="main" id="read">読み込み（初期設定）</button>
+    </div>
+    <div class="hint" id="readMsg">HPのメニューから業務内容を全部拾い、<span class="q">③</span>の選択肢にします（AIは使いません）。読み込むたびに、それまでの組み立ては消えて初期状態に戻ります。URLが空なら、初期の4つに戻ります。</div>
+    <div class="hint trial-dev">④⑤の初期値は、<a href="1_select_category.html" target="_blank">分類の表</a>の候補から、③の小分類と押した言葉で選んでいます。</div>
+    <div class="lands" id="lands"></div>
+  </div>
+  <div class="cols" id="cols"></div>
+  <div class="edit" id="edit"></div>
+</main>
+<script src="js/type1.js?v=1120a"></script>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+const QN = "③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"; // 深さ0＝③
+// 試しの土地：返事の文の {目安額} などの穴の埋まり方を見るため（④⑤の並びは土地では変わらない）
+const LANDS = [
+  { name:"通路の狭い空き家", cat:"K2", tags:["norebuild", "border"], data:{ 地域:"鷺山", 面積:"40坪（132㎡）", 単価:"6万2,000円", 変動:"−0.8％", 目安額:"約570万円", 足し引き:"通路2m未満 −30％", 用途地域:"第一種住居地域", 容積率:"200％", 延べ床上限:"264㎡", 駅:"岐阜駅", 駅距離:"約3.4km", 台数:5 } },
+  { name:"角地の更地", cat:"K3", tags:["corner"], data:{ 地域:"長良", 面積:"60坪（198㎡）", 単価:"8万5,000円", 変動:"＋0.6％", 目安額:"約1,750万円", 足し引き:"角地 +4％", 用途地域:"第二種中高層住居専用地域", 容積率:"200％", 延べ床上限:"396㎡", 駅:"岐阜駅", 駅距離:"約4.1km", 台数:7 } },
+  { name:"商業地域の家（目安が二つ）", cat:"K1", tags:[], data:{ 地域:"司町", 面積:"61坪（200㎡）", 単価:"12万7,000円", 変動:"＋1.6％", 目安額:"約2,540万〜3,120万円", 足し引き:"足し引きなし", 用途地域:"商業地域", 容積率:"400％", 延べ床上限:"800㎡", 駅:"岐阜駅", 駅距離:"約1.2km", 台数:8 } },
+  { name:"駐車場（公開データなし）", cat:"K4", tags:["unsure"], data:{ 地域:"山あいの町", 面積:"120坪（397㎡）" } },
+];
+let SHOP = null, LAND = 0, PATH = [], EDIT = null; // PATH＝選んでいる節の並び（列ごとの番号）。EDIT＝名前を直している「列:番号」
+const land = () => LANDS[LAND];
+function save() { try { localStorage.setItem("reType1", JSON.stringify(SHOP)); } catch (e) { /* 保存できなくても画面は動く */ } }
+// 列 d の一覧（読むだけ）と、そこまでの文脈
+function trailTo(d) { const t = []; let l = SHOP.top; for (let k = 0; k < d; k++) { const n = l[PATH[k]]; t.push(n); l = t1Kids(n, land(), t.slice()); } return { list:l, trail:t }; }
+const listAt = d => trailTo(d).list;
+const nodeAt = d => listAt(d)[PATH[d]];
+// 列 d の一覧を、直せる形で返す（上から順に、初期値のままの一覧を固める）
+function editable(d) { const t = []; let l = SHOP.top; for (let k = 0; k < d; k++) { const n = l[PATH[k]]; t.push(n); l = t1Fix(n, land(), t.slice()); } return l; }
+const isAuto = d => d > 0 && !trailTo(d).trail[d - 1].kids;
+
+function itemHtml(n, d, i, sel) {
+  const t = trailTo(d).trail.concat(n), kids = t1Kids(n, land(), t);
+  const sub = n.fill ? "補い（「不動産のことなら何でも」型の店なので、基本の取引を足しました）／小分類：" + n.cats.join("＋") : n.cats ? (n.prose ? "HPの文章から拾いました（店の業務か確かめてください）／" : "") + "小分類：" + n.cats.join("＋") : n.why ? "候補の表から（" + n.why + "）" : n.gen ? "" : "店が書いた選択肢";
+  const p = d === 0 && t1Dir(n), sideHtml = !p ? "" : `<span class="side">` + ["x", "y", "both"].map(k => `<button data-op="dir" data-v="${k}" data-at="${d}:${i}" class="${p.dir === k ? "on" : ""}">${k === "both" ? "両方" : T1_DIRS[p.kind][k]}</button>`).join("") + `</span>`; // 向きの3択（ユーザー 11-20）
+  const k = kids.length ? `<span class="k">→ ${QN[d + 1]} ${kids.length}つ</span>` : `<span class="k leaf">→ 子なし（問い合わせだけ）</span>`;
+  const label = EDIT === `${d}:${i}` ? `<input data-in="${d}:${i}" value="${esc(n.label)}">` : `<span class="l">${esc(n.label)}</span>`;
+  return `<div class="item${sel ? " sel" : ""}" data-go="${d}:${i}"><span class="no">${i + 1}</span><span class="body">${label}${sub ? `<span class="s">${esc(sub)}</span>` : ""}${sideHtml}${k}</span>`
+    + `<span class="ops"><button data-op="up" data-at="${d}:${i}" title="上へ">↑</button><button data-op="dn" data-at="${d}:${i}" title="下へ">↓</button>`
+    + `<button data-op="ed" data-at="${d}:${i}" title="直す">✎</button><button data-op="del" data-at="${d}:${i}" title="消す">✕</button></span></div>`;
+}
+function colHtml(d) {
+  const ready = d <= PATH.length; // 親を選んでいれば中身が出る
+  const head = `<h2>${QN[d]} の選択肢</h2>`;
+  if (!ready) return `<div class="col">${head}<div class="ctx">${QN[d - 1]}を押すと出ます</div></div>`;
+  const { list, trail } = trailTo(d);
+  const ctx = d === 0 ? "HPから拾った業務内容（上にあるものほど先）" : "「" + trail.map(n => n.label).join("」→「") + "」を選んだら";
+  return `<div class="col">${head}<div class="ctx">${esc(ctx)}</div>`
+    + list.map((n, i) => itemHtml(n, d, i, PATH[d] === i)).join("")
+    + `<button class="add" data-op="add" data-at="${d}:0">＋ 選択肢を足す</button>`
+    + `<div class="fixed">${esc(T1_INQ)}（必ず付きます）</div>`
+    + (isAuto(d) ? `<div class="note">※初期設定のまま（候補の表から文脈で出しています）。直すと、今の並びで固まります。</div>` : "") + `</div>`;
+}
+function editHtml() {
+  if (!PATH.length) return `<h2>選んだときの返事</h2><div class="hint">選択肢を押すと、それを選んだ客に返す文と、次の問いをここで書けます。</div>`;
+  const d = PATH.length - 1, t = trailTo(d).trail, n = nodeAt(d), kids = t1Kids(n, land(), t.concat(n));
+  return `<h2>${QN[d]}「${esc(n.label)}」を選んだ客に</h2>`
+    + `<label>返す文（初期の文が入っています。直せば店の文になります。{目安額} {駅距離} などの穴は土地の値で埋まり、値のない穴を含む一文は出ません）</label><textarea rows="3" data-f="text">${esc(t1Tpl(n))}</textarea>`
+    + (kids.length ? `<label>次の問い（${QN[d + 1]}の選択肢の前に出ます）</label><input data-f="ask" value="${esc(t1AskOf(n, d, (t[0] || n).cats))}">` : "")
+    + `<div class="pv"><b>試しの土地での見え方：</b><br>${esc(t1Text(n, land())) || `<span class="hint">（返す文なし）</span>`}<br>${esc(kids.length ? t1AskOf(n, d, (t[0] || n).cats) : t1Close((t[0] || n).cats))}</div>`;
+}
+function render() {
+  document.getElementById("lands").innerHTML = `<span class="hint">試しの土地（返す文の穴の見え方）：</span>` + LANDS.map((x, i) => `<button data-l="${i}" class="${i === LAND ? "sel" : ""}">${esc(x.name)}</button>`).join("");
+  const n = Math.max(3, PATH.length + 1), box = document.getElementById("cols"), sx = box.scrollLeft;
+  box.innerHTML = Array.from({ length:n }, (_, d) => colHtml(d)).join("");
+  box.scrollLeft = sx;
+  document.getElementById("edit").innerHTML = editHtml();
+  const inp = document.querySelector("[data-in]"); if (inp) { inp.focus(); inp.select(); }
+}
+function op(kind, d, i, v) {
+  const l = editable(d);
+  if (kind === "up" || kind === "dn") { const j = i + (kind === "up" ? -1 : 1); if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; if (PATH[d] === i) PATH[d] = j; else if (PATH[d] === j) PATH[d] = i; }
+  else if (kind === "del") { if (!confirm(`「${l[i].label}」とその先を消しますか？`)) return; l.splice(i, 1); if (PATH.length > d) PATH = PATH[d] === i ? PATH.slice(0, d) : PATH[d] > i ? PATH.slice(0, d).concat(PATH[d] - 1, PATH.slice(d + 1)) : PATH; }
+  else if (kind === "add") { l.push({ label:"新しい選択肢", kids:[] }); EDIT = `${d}:${l.length - 1}`; }
+  else if (kind === "ed") { EDIT = `${d}:${i}`; }
+  else if (kind === "dir") { t1SetDir(l[i], v); PATH = PATH.slice(0, d).concat(i); } // 向きを変えると、その行を選んで④を開く（新しい向きの初期値）
+  save(); render();
+  if (kind === "dir") { const box = document.getElementById("cols"); box.scrollLeft = box.scrollWidth; } // 開いた④を見せる
+}
+function rename(d, i, v) { // 直したら、その先は空白に戻る
+  EDIT = null; v = v.trim();
+  const n = editable(d)[i];
+  if (v && v !== n.label) {
+    n.label = v; n.kids = []; delete n.gen;
+    if (PATH.length > d + 1 && PATH[d] === i) PATH = PATH.slice(0, d + 1);
+  }
+  save(); render();
+  const box = document.getElementById("cols"); box.scrollLeft = box.scrollWidth;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("button, .item"); if (!t) return;
+  if (t.dataset.op) { e.stopPropagation(); const [d, i] = t.dataset.at.split(":").map(Number); return op(t.dataset.op, d, i, t.dataset.v); }
+  if (t.dataset.l != null) { LAND = +t.dataset.l; return render(); }
+  if (t.dataset.go && !e.target.matches("input")) {
+    const [d, i] = t.dataset.go.split(":").map(Number); PATH = PATH.slice(0, d).concat(i); if (d === 0 && editable(0)[i].sideAsk) { delete editable(0)[i].sideAsk; save(); } render(); // 開いて見たら向きは確かめ済み
+    const box = document.getElementById("cols"); if (PATH.length + 1 > 3) box.scrollLeft = box.scrollWidth; // 右に広がったら、新しい列を見せる
+  }
+});
+document.addEventListener("keydown", e => { if (e.target.dataset.in && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); e.target.blur(); } });
+document.addEventListener("focusout", e => { if (e.target.dataset.in) { const [d, i] = e.target.dataset.in.split(":").map(Number); rename(d, i, e.target.value); } });
+document.addEventListener("change", e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const d = PATH.length - 1, n = editable(d)[PATH[d]];
+  n[f] = e.target.value; save(); render();
+});
+document.getElementById("read").onclick = async () => {
+  const url = document.getElementById("url").value.trim(), msg = document.getElementById("readMsg");
+  if (!confirm("いまの組み立てを消して、初期状態に戻します。よろしいですか？")) return;
+  let items = [], areas = [], note = "", omakase = false;
+  if (url) {
+    const btn = document.getElementById("read"), t0 = Date.now();
+    btn.disabled = true; msg.className = "hint loading";
+    const tick = () => { msg.textContent = `HPを読んでいます…（${Math.round((Date.now() - t0) / 1000)}秒。トップ・物件情報・会社概要と物件の地区を読むので、30秒ほどかかることがあります）`; };
+    tick(); const timer = setInterval(tick, 1000);
+    try {
+      const by = new URLSearchParams(location.search).get("by") || "visitor";
+      const r = await t1ReadMenu(url, by);
+      items = r.items || []; omakase = !!r.omakase; areas = (r.areas || []).map(a => a.area).filter(Boolean).slice(0, 6); // HPの物件の地区（多い順）＝借りる側の「地域重視」の⑤
+      note = r.error ? `HPを開けませんでした（${r.error}）。` : items.length ? `HPから ${items.length} 個の見出しを拾いました（トップ・物件情報・会社概要を読みました）。直す・消す・足す・並べ替えで整えてください。` : "HPのメニューから業務内容を拾えませんでした（メニューが画像や仕掛けで作られているHPです）。";
+    } catch (e) { note = "HPを読めませんでした（時間切れか通信の失敗）。"; }
+    clearInterval(timer); btn.disabled = false; msg.className = "hint done"; // 読み込みの結果の一行は赤で残す
+  }
+  SHOP = t1Default(url ? items : undefined, omakase); SHOP.url = url; SHOP.areas = areas; PATH = []; EDIT = null; save(); render();
+  msg.textContent = note || "";
+};
+document.getElementById("url").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing && !document.getElementById("read").disabled) { e.preventDefault(); document.getElementById("read").click(); } }); // URLの欄でエンター＝読み込み
+t1Load().then(() => { SHOP = t1Shop(); document.getElementById("url").value = SHOP.url || ""; render(); });
+</script>
+</body>
+</html>
