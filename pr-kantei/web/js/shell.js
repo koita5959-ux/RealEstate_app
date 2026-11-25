@@ -202,11 +202,11 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
     // URLの欄がサンプルHP（もとのHP）のままなら、色を付けて御社のURLへの変更を促す
     window.addEventListener("load", () => setTimeout(() => {
       const u = document.getElementById("url") || document.getElementById("hpUrl"); if (!u) return;
-      const tip = document.createElement("div"); tip.className = "try-urltip"; tip.textContent = "いまはサンプルHP「AIボット不動産」のURLです。御社のHPのURLに書き換えて、読み込んでください。";
+      const tip = document.createElement("div"); tip.className = "try-urltip"; tip.textContent = "いまはサンプルHP「AIボット鑑定」のURLです。御社のHPのURLに書き換えて、読み込んでください。";
       const ta = window.reTargetArea(); if (ta) tip.insertAdjacentHTML("beforeend", `<span style="margin-left:12px;color:#b3261e">対象地域：${ta.replace(/[<>&]/g, "")}</span>`); // ユーザー 11-19
       (u.closest("div.url") || u.parentElement).after(tip);
       // テキスト比較（ユーザー 11-18）：読み込んだURLと一字でも違えば黄色を消し、読み込みボタンを点灯。読み込んだURLがサンプルHPのままなら黄色
-      const mark = () => { const v = u.value.trim(), on = !v || (v === done && /RealEstate_app\/sample\/?(\?.*)?$/.test(v)); u.classList.toggle("try-sample", on); tip.hidden = !on;
+      const mark = () => { const v = u.value.trim(), on = !v || (v === done && /RealEstate_app\/sample-kantei\/?(\?.*)?$/.test(v)); u.classList.toggle("try-sample", on); tip.hidden = !on;
         const b = document.getElementById("read") || document.getElementById("readBtn") || document.getElementById("hpRead");
         if (b) b.classList.toggle("try-go", /^https?:\/\/\S+\.\S+/.test(v) && v !== done); }; // 読み込んだら消える
       let done = u.value.trim(); // 開いたときに入っているURL（読み込み済み）は点灯しない

@@ -128,15 +128,15 @@ async function readShopHP0(url) {
   return { hp, msg:`読み取りました：${pages.join("・")}（${pages.length}ページ）。` + (j.reread ? `中身の欄が少なかったので読み直し、${j.reread.before}→${j.reread.after}欄。` : "") + (hp.form && hp.form !== "店自身" ? `HPの形：${hp.form}。` : "") + (j.costUsdEstimate ? `費用の目安 約${Math.max(1, Math.round(j.costUsdEstimate * 155))}円。` : "") };
 }
 
-// お試し設定（タイプ2）：まだ何も設定していなければ、サンプルHP「AIボット不動産」を読んだ状態から始める（サンプルHPで見たボットと同じ中身）
+// お試し設定（TalkSession）：まだ何も設定していなければ、サンプルHP「AIボット鑑定」を読んだ状態から始める（サンプルHPで見たボットと同じ中身）
 if (window.RE_TRIAL && /2_talk_try.html$/.test(location.pathname)) try {
   if (!localStorage.getItem("reTalk")) { const h = SHOP_HP_BOT;
     localStorage.setItem("reTalk", JSON.stringify({ lv:3, mode:"staff", ms:1, url:h.url, hp:{ ...h, sample:false }, own:{}, extra:{}, memo:"", name:h.name, what:h.what, good:h.good, team:"", strong:"", fit:h.fit, unfit:"", lic:"",
-      asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], tone:"mid", free:2, fv:2 })); }
+      asks:["何のために値段を知りたいか（売る・買う・相続・賃料など。決めていなくてよい）", "お手元の査定額や売り出し価格があれば、その額"], hands:[], tone:"mid", free:2, fv:2 })); }
 } catch (e) {}
-// TYPE3：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット不動産」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
+// MultiSession：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット鑑定」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
 if (window.RE_EMBED && !window.RE_SITE_KANTEI && /3_ai_main\.html$/.test(location.pathname)) try { // 鑑定士版の枠は ?site=kantei の読みだけで動かし、このブラウザの設定に書かない
   let h = null; try { h = JSON.parse(localStorage.getItem("reShopHP")); } catch (e) {}
   if (!h) localStorage.setItem("reShopHP", JSON.stringify({ ...SHOP_HP_BOT, area:window.RE_AREA || "", sample:false }));
-  else if (/RealEstate_app\/sample\//.test(h.url || "") && window.RE_AREA && h.area !== window.RE_AREA) localStorage.setItem("reShopHP", JSON.stringify({ ...h, area:window.RE_AREA })); // サンプルHPの設定のままなら、開いた地区（?r=）に合わせ直す
+  else if (/RealEstate_app\/sample-kantei\//.test(h.url || "") && window.RE_AREA && h.area !== window.RE_AREA) localStorage.setItem("reShopHP", JSON.stringify({ ...h, area:window.RE_AREA })); // サンプルHPの設定のままなら、開いた地区（?r=）に合わせ直す
 } catch (e) {}
