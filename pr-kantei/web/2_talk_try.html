@@ -283,13 +283,13 @@ function save() {
   showFree();
   const flat = Object.fromEntries(KNOW.map(([k]) => [k, eff(k).trim()])); // 今の目線で効いている値（メイン画面が読む）
   const t = { lv:3, mode, url:$("url").value.trim(), hp, own, extra, memo:$("memo").value.trim(), ...flat, lic:hp.lic || "",
-    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:freeOf(), fv:2 };
+    asks:ASKS.slice(), hands:HANDS.map(h => h.slice()), tone, free:freeOf(), fv:2, ms:1 }; // ms：社員目線が初期になった後（11-25）に決めた目線
   try { localStorage.setItem("reTalk", JSON.stringify(t)); } catch (e) { /* 保存できなくても見本は動く */ }
   if (!hp.sample) setShopHP(hp); // 読んだHPはタイプ3とも共有
   setShopKnow({ own, extra }); // 店が直した欄・書いた欄もタイプ3と共有
 }
 function load(t) {
-  if (t.lv >= 3) { mode = t.mode === "staff" ? "staff" : "out"; hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }
+  if (t.lv >= 3) { mode = !t.ms || t.mode === "staff" ? "staff" : "out"; /* 印のない古い保存（外野が初期だったころ）は社員目線で読む */ hp = t.hp || clone(SAMPLE_HP); own = t.own || {}; extra = t.extra || {}; $("memo").value = t.memo || ""; if (t.url) $("url").value = t.url; }
   else { // 目線を入れる前の保存：見本の読みと違う所を、店が直したもの（社員目線）として引き継ぐ
     mode = "staff"; hp = clone(SAMPLE_HP); own = {}; extra = {}; $("memo").value = "";
     for (const [k] of KNOW) if (t[k] != null && t[k] !== (SAMPLE_HP[k] || "")) own[k] = t[k];

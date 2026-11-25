@@ -466,7 +466,7 @@ const TALK_DEFAULT = {
   hp:{ unread:["担当している地域の地名（「事務所から2.5km」とだけある）", "買取をどんなときにするか", "宅建の免許番号"] },
   mode:"staff", tone:"mid", limit:null }; // limit 空＝上限なし。mode：staff＝社員目線（PR版の初期・11-25）、out＝外野目線
 const TALK_BOT = () => ({ name:SHOP_HP_BOT.name, what:SHOP_HP_BOT.what, good:SHOP_HP_BOT.good, team:"", strong:"", fit:SHOP_HP_BOT.fit, unfit:SHOP_HP_BOT.unfit || "", asks:window.RE_SITE_KANTEI ? ["何のために値段を知りたいか（売る・買う・相続・賃料など。決めていなくてよい）", "お手元の査定額や売り出し価格があれば、その額"] : ["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], hp:{ unread:SHOP_HP_BOT.unread } }); // サンプルHPの枠（?site=bot・鑑定士版は ?site=kantei）
-const TALK = (() => { if (window.RE_SITE_BOT) return { ...TALK_DEFAULT, ...TALK_BOT() }; try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.lv ? {} : { limit:null }) } : { ...TALK_DEFAULT, ...TALK_BOT() }; } catch (e) { return { ...TALK_DEFAULT, ...TALK_BOT() }; } })();
+const TALK = (() => { if (window.RE_SITE_BOT) return { ...TALK_DEFAULT, ...TALK_BOT() }; try { const t = JSON.parse(localStorage.getItem("reTalk")); return t && t.name ? { ...TALK_DEFAULT, ...t, ...(t.ms ? {} : { mode:"staff" }), ...(t.lv ? {} : { limit:null }) } : { ...TALK_DEFAULT, ...TALK_BOT() }; } catch (e) { return { ...TALK_DEFAULT, ...TALK_BOT() }; } })();
 { const w = document.getElementById("talkWho"); if (w) w.textContent = `このAIは${TALK.name}が設置しています（${TALK.mode === "staff" ? "社員目線" : "外から見た目線"}で話します）`; }
 window.addEventListener("storage", e => { if (e.key === "reTalk") location.reload(); }); // 管理画面で書き換えたら読み直す
 // ---- ④から先：管理画面（3_ai_admin.html）で店が書いた選択肢で進む ----

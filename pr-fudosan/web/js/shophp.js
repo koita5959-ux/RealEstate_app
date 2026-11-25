@@ -119,7 +119,7 @@ async function readShopHP0(url) {
 // お試し設定（タイプ2）：まだ何も設定していなければ、サンプルHP「AIボット不動産」を読んだ状態から始める（サンプルHPで見たボットと同じ中身）
 if (window.RE_TRIAL && /2_talk_try.html$/.test(location.pathname)) try {
   if (!localStorage.getItem("reTalk")) { const h = SHOP_HP_BOT;
-    localStorage.setItem("reTalk", JSON.stringify({ lv:3, mode:"staff", url:h.url, hp:{ ...h, sample:false }, own:{}, extra:{}, memo:"", name:h.name, what:h.what, good:h.good, team:"", strong:"", fit:h.fit, unfit:"", lic:"",
+    localStorage.setItem("reTalk", JSON.stringify({ lv:3, mode:"staff", ms:1, url:h.url, hp:{ ...h, sample:false }, own:{}, extra:{}, memo:"", name:h.name, what:h.what, good:h.good, team:"", strong:"", fit:h.fit, unfit:"", lic:"",
       asks:["売る・買う・貸す・相続のどれに近いか（決めていなくてよい）", "土地や建物の今の様子"], hands:[], tone:"mid", free:2, fv:2 })); }
 } catch (e) {}
 // TYPE3：サンプルHPを開いたとき（枠の中のボット）に、まだ設定がなければサンプルHP「AIボット不動産」の読みで初期設定を作る。お試し設定（3_ai_try）はこれを読む
