@@ -148,15 +148,12 @@ function askRestore(d) { // 確認：メイン画面の今の表示は置き換�
   box.querySelector("#rcCancel").onclick = close;
   box.onclick = e => { if (e.target === box) close(); };
 }
-async function replay(sid) {
-  try {
-    const r = await fetch(BASE + "session?sid=" + encodeURIComponent(sid), { cache: "no-store" });
-    if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    const row = (D.sessions || []).find(x => x.sid === sid); // 種類が記録にない古いセッション（11-25 より前）は、表の種類で補う
-    if (d.state && !d.state.type && row && (row.screen === "talk" || row.screen === "select")) d.state.type = row.screen;
-    sendReplay(d, true, !(d.state && d.state.type === "select")); // 確認なしで全部（メイン画面・管理画面の設定・利用状況）。タイプ1は利用状況なし
-  } catch (e) { toast("このセッションを読み込めませんでした（" + e.message + "）", true); }
+// 再表示：そのセッションのメイン画面と管理画面を、新しい1つの窓（タブで切り替え）で開く。押すたびに別の窓なので、並べて比べられる（11-25 ユーザー）
+function replay(sid) {
+  const row = (D.sessions || []).find(x => x.sid === sid);
+  const type = row && (row.screen === "talk" || row.screen === "select") ? row.screen : "ai";
+  const w = window.open(BASE + "../../dev/replay.html?sid=" + encodeURIComponent(sid) + "&type=" + type, "_blank", "popup,width=1280,height=900");
+  if (!w) toast("新しい窓を開けませんでした（ポップアップを許可してください）", true);
   return false;
 }
 const replayCell = s => s.canReplay ? `<a class="btn-user-link replay" href="#" onclick="return replay('${esc(s.sid)}')" title="${s.screen === "select" ? "1 選択式" : s.screen === "talk" ? "2 TalkSession" : "3 MultiSession"}の体験">${s.screen === "select" ? "TYPE1" : s.screen === "talk" ? "Talk" : "Multi"}表示</a>` : '<span class="note">—</span>';

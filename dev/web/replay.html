@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>再表示</title>
+<style>
+  html, body { margin:0; height:100%; font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif; background:#eef1f5; }
+  body { display:flex; flex-direction:column; }
+  .bar { display:flex; align-items:center; gap:6px; padding:6px 10px; background:#2b2f36; color:#fff; font-size:13px; flex-wrap:wrap; }
+  .bar b { font-size:14px; margin-right:6px; }
+  .tab { border:0; border-radius:6px 6px 0 0; padding:6px 16px; font-size:13px; cursor:pointer; background:#5b6270; color:#fff; }
+  .tab.on.user { background:#1f6feb; } .tab.on.admin { background:#c0392b; }
+  .note { margin-left:auto; color:#c9d1d9; font-size:12px; }
+  .wrap { flex:1; position:relative; }
+  iframe { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+  iframe[hidden] { display:none; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b id="ttl">再表示</b>
+  <button class="tab user on" data-k="user">メイン画面</button>
+  <button class="tab admin" data-k="admin">管理画面</button>
+  <span class="note" id="msg">記録を読み込んでいます…</span>
+</div>
+<div class="wrap">
+  <iframe id="f-user"></iframe>
+  <iframe id="f-admin" hidden></iframe>
+</div>
+<script>
+// 開発利用状況の「Talk表示／Multi表示／TYPE1表示」から開く：そのセッションのメイン画面と管理画面を、この1つの窓のタブで見る（11-25 ユーザー）
+// メイン画面が記録を戻し（管理画面の設定も書き戻す）、終わってから管理画面を読み込む
+const QS = new URLSearchParams(location.search), sid = QS.get("sid") || "", type = QS.get("type") || "ai";
+const pre = type === "talk" ? "2_talk_" : type === "select" ? "1_select_" : "3_ai_";
+const name = type === "talk" ? "TalkSession" : type === "select" ? "TYPE1" : "MultiSession";
+const fu = document.getElementById("f-user"), fa = document.getElementById("f-admin"), msg = document.getElementById("msg");
+document.getElementById("ttl").textContent = name + "（" + sid.slice(0, 8) + "）";
+document.title = "再表示 " + name + " " + sid.slice(0, 8);
+fu.src = pre + "main.html?replay=" + encodeURIComponent(sid) + "&ai=off&by=replay";
+let adminLoaded = false;
+const loadAdmin = () => { if (adminLoaded) return; adminLoaded = true; fa.src = pre + "admin.html?replay=" + encodeURIComponent(sid); };
+addEventListener("message", e => {
+  if (!e.data || e.data.sid !== sid) return;
+  if (e.data.type === "re-replayed") { msg.textContent = "記録の時点に戻しました（見るための画面です）"; loadAdmin(); }
+  if (e.data.type === "re-replay-failed") { msg.textContent = "記録を読み込めませんでした（" + e.data.message + "）"; }
+});
+setTimeout(loadAdmin, 15000); // 合図が来なくても、管理画面は開けるようにする
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+  if (b.dataset.k === "admin") loadAdmin();
+  fu.hidden = b.dataset.k !== "user"; fa.hidden = b.dataset.k !== "admin";
+});
+</script>
+</body>
+</html>

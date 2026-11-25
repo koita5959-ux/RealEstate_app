@@ -21,6 +21,21 @@
   // サンプルHPの枠の中（?embed=1）：ヘッダーと試験用の欄を隠す。?site=bot＝このブラウザの設定を使わず、サンプルHP「AIボット不動産」の初期状態で動かす
   const QS = new URLSearchParams(location.search);
   window.RE_EMBED = QS.get("embed") === "1";
+  // 再表示の窓（replay.html）の中（?replay=sid）：記録を読んで戻す。ほかの窓の書き換えで読み直さない（storage の合図を受けない）。11-25 ユーザー：再表示はメイン画面と管理画面を1つの窓で
+  window.RE_REPLAY = QS.get("replay") || "";
+  if (window.RE_REPLAY) {
+    const add = window.addEventListener.bind(window);
+    window.addEventListener = (t, f, o) => t === "storage" ? undefined : add(t, f, o);
+    const tell = () => { try { parent.postMessage({ type:"re-replayed", sid:window.RE_REPLAY }, "*"); } catch (e) {} };
+    if (/_main\.html$/.test(location.pathname)) add("load", () => {
+      const key = "reReplayDone_" + window.RE_REPLAY;
+      if (sessionStorage.getItem(key)) { setTimeout(tell, 1500); return; } // 設定を書き戻して読み直した後（戻すのは survey.js が続ける）
+      sessionStorage.setItem(key, "1");
+      fetch(new URL("../api/admin/session?sid=" + encodeURIComponent(window.RE_REPLAY), BASE), { cache:"no-store" }).then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(d => { restoreSession(d); setTimeout(tell, 800); })
+        .catch(e => { try { parent.postMessage({ type:"re-replay-failed", sid:window.RE_REPLAY, message:String(e) }, "*"); } catch (x) {} });
+    });
+  }
   window.RE_SITE_BOT = QS.get("site") === "bot";
   window.RE_AREA = QS.get("area") || "";
   window.RE_TRIAL = /_try.html$/.test(location.pathname); // お試し設定は別ファイル（*_try.html）。受注先向けに開発用の管理画面（*_admin.html）を直しても、こちらに漏れない
