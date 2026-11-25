@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { get, parse } from "./read.js";
 
-const MUNI = (() => { for (const u of ["../muni.json", "../../../dev/web/data/muni.json"]) try { return JSON.parse(fs.readFileSync(new URL(u, import.meta.url))); } catch {} return null; })();
+const MUNI = (() => { for (const u of ["../muni.json", "../../../pr-fudosan/web/data/muni.json"]) try { return JSON.parse(fs.readFileSync(new URL(u, import.meta.url))); } catch {} return null; })();
 const BUY = /物件|売買|売物件|売り物件|土地|売地|戸建|一戸建|中古|新築|分譲|マンション|bukken|property|estate|sale|baibai|tochi|kodate|search|list/i;
 const RENT = /賃貸|貸家|貸地|貸店舗|rent|chintai|月極|駐車場/i;
 const GUESS = ["bukken/", "property/", "estate/", "sale/", "baibai/", "tochi/", "search/", "list/", "buy/"];

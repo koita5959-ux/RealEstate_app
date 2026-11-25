@@ -5,7 +5,7 @@ import path from "path";
 import vm from "vm";
 import { menu } from "../core/server/shop/read.js";
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const docs = path.join(root, "dev", "web");
+const docs = path.join(root, "pr-fudosan", "web"); // TYPE1 は不動産PR版のライブラリー
 // 画面と同じ type1.js を、ファイルを読む fetch で動かす
 const ctx = vm.createContext({ console, fetch: async (u) => { const t = fs.readFileSync(path.join(docs, u), "utf8"); return { text: async () => t, json: async () => JSON.parse(t) }; }, localStorage: { getItem: () => null }, window: {} }); // type1.js が window.RE_SITE_BOT などを見る（11-18〜）
 vm.runInContext(fs.readFileSync(path.join(docs, "js/type1.js"), "utf8") + "\n;globalThis.t1Load=t1Load;globalThis.t1Default=t1Default;globalThis.t1Kids=t1Kids;", ctx);
