@@ -26,8 +26,8 @@ services:
       DAILY_USD_CAP: "2"         # 1日の推定費用の上限（USD）。超えると止まる
       SMTP_HOST: mailhog         # 問い合わせのメール。試験は MailHog が受け止める（外に出ない）。本番で本物の SMTP に替える
       SMTP_PORT: "1025"
-      MAIL_FROM: bot@example.test   # 差出人（本番前に決める）
-      MAIL_TO: shop@example.test    # 店の宛先（本番前に決める）
+      MAIL_FROM: realestate@media-house.jp # 差出人（11-27 決定）
+      MAIL_TO: realestate@media-house.jp   # 問い合わせの宛先（11-27 決定）。開発中は MailHog が受け止め、外へは出ない
       # DISABLED: "1"            # 停止スイッチ（data/DISABLED というファイルでも止まる）
     secrets:
       - anthropic_api_key
