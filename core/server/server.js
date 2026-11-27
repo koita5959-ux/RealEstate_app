@@ -652,12 +652,13 @@ async function handleInquiry(req, res) {
     ...(f.way ? [`連絡の希望：${f.way}`] : []), ...(f.when ? [`連絡してよい時間帯：${f.when}`] : []), ...(f.area ? [`地域：${f.area}`] : []), "",
     "■ 伝えたいこと", f.msg || "（なし）", ...(f.sheet ? ["", "■ データシート", f.sheet] : []), ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "",
     "――", `送信元：${f.page || "-"}`, ...(f.sid ? [`セッション：${f.sid}`] : []), `日時：${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`];
+  const bot = /kantei/.test(f.page + " " + (req.headers.referer || "")) ? "AIボット鑑定" : "AIボット不動産"; // 差出人の表示名は版で分ける（ユーザー 11-27）
   const row = { at: new Date().toISOString(), kind: f.kind, type: f.type, sid: f.sid, by: f.by, mail: !!f.email, tel: !!f.tel };
   try {
-    await sendMail({ subject: `【問い合わせ】${f.name} 様（${what}）`, text: lines.join("\n"), replyTo: f.email });
-    if (f.email) await sendMail({ to: [f.email], subject: "お問い合わせを受け付けました（AIボット不動産）",
+    await sendMail({ subject: `【問い合わせ】${f.name} 様（${what}）`, text: lines.join("\n"), replyTo: f.email, fromName: bot });
+    if (f.email) await sendMail({ to: [f.email], subject: `お問い合わせを受け付けました（${bot}）`, fromName: bot,
       text: [`${f.name} 様`, "", "お問い合わせありがとうございます。次の内容でお預かりしました。", "担当者から改めてご連絡します。", "", "■ 伝えたいこと", f.msg || "（なし）",
-        ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "", "――", "AIボット不動産（このメールは送信専用です）"].join("\n") }).catch((e) => { row.copyErr = e.message; });
+        ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "", "――", `${bot}（このメールは送信専用です）`].join("\n") }).catch((e) => { row.copyErr = e.message; });
     row.ok = true;
   } catch (e) { row.ok = false; row.err = e.message; }
   try { fs.appendFileSync(path.join(DATA_DIR_INQ, `inquiry-${row.at.slice(0, 10)}.jsonl`), JSON.stringify(row) + "\n", { mode: 0o600 }); } catch { /* 記録できなくても返事は返す */ }

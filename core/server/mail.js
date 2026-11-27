@@ -11,12 +11,12 @@ const head = (s) => `=?UTF-8?B?${b64(s)}?=`;
 const addrOk = (a) => /^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(a || "");
 
 // 1通送る。to は配列。本文はプレーンテキスト
-export function sendMail({ to = [TO], subject, text, replyTo }) {
+export function sendMail({ to = [TO], subject, text, replyTo, fromName = "AIボット不動産" }) {
   to = to.filter(addrOk);
   if (!HOST) return Promise.reject(new Error("no_smtp"));
   if (!to.length) return Promise.reject(new Error("no_to"));
   const body = b64(text).replace(/.{76}/g, "$&\r\n");
-  const msg = [`From: ${head("AIボット不動産")} <${FROM}>`, `To: ${to.join(", ")}`, `Subject: ${head(subject)}`,
+  const msg = [`From: ${head(fromName)} <${FROM}>`, `To: ${to.join(", ")}`, `Subject: ${head(subject)}`,
     ...(addrOk(replyTo) ? [`Reply-To: ${replyTo}`] : []), `Date: ${new Date().toUTCString()}`, "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", body].join("\r\n");
   const steps = ["EHLO realestate-app", `MAIL FROM:<${FROM}>`, ...to.map((a) => `RCPT TO:<${a}>`), "DATA", msg + "\r\n.", "QUIT"];
