@@ -98,7 +98,8 @@ function readingCover(url) {
 // サーバーに読ませる。返り値：{ hp, msg, err }
 async function readShopHP(url) {
   const close = readingCover(url);
-  try { const r = await readShopHP0(url); if (r.hp && window.reAutoMail) window.reAutoMail(r.hp.mail || ""); return r; } finally { close(); }
+  try { const r = await readShopHP0(url); if (window.reAutoMail) window.reAutoMail(r.hp && r.hp.mail || ""); return r; } // 読めなかったときも空白に（前のHPのアドレスを残さない）
+  catch (e) { if (window.reAutoMail) window.reAutoMail(""); throw e; } finally { close(); }
 }
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {

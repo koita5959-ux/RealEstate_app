@@ -100,7 +100,9 @@ function pick(text) {
 
 // HPのメールアドレス（mailto: と本文に書かれたもの）。お試し設定の「問い合わせの届け先」の初期値にする（ユーザー 11-27）
 function mailsIn(html) {
-  const h = String(html || '').replace(/&#64;|&#x40;|＠/gi, '@').replace(/%40/g, '@');
+  // 画面に見えるものだけ（プログラム・スタイル・メモ書き・head の中は見ない。ユーザー 11-27）
+  const h = String(html || '').replace(/<head[\s\S]*?<\/head>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>|<!--[\s\S]*?-->/gi, ' ')
+    .replace(/&#64;|&#x40;|＠/gi, '@').replace(/%40/g, '@');
   const got = [...h.matchAll(/mailto:([^"'?\s>]+)/gi)].map(m => m[1]).concat(h.replace(/<[^>]+>/g, ' ').match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []);
   return [...new Set(got.map(a => { try { return decodeURIComponent(a).trim().toLowerCase(); } catch { return a.toLowerCase(); } })
     .filter(a => /^[^\s@<>,"]+@[^\s@<>,"]+\.[a-z]{2,}$/.test(a) && !/\.(png|jpe?g|gif|webp|svg)$|example\.|sentry|wixpress|@2x|@3x|domain\.|xxx/.test(a)))];

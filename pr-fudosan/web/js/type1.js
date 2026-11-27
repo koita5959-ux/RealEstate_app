@@ -128,7 +128,8 @@ function t1SetDir(n, dir) {
 }
 // HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
 async function t1ReadMenu(url, by) {
-  const j = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json();
+  let j; try { j = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json(); }
+  catch (e) { if (window.RE_TRIAL && window.reAutoMail) window.reAutoMail(""); throw e; } // 読めなかったときも空白に
   if (window.RE_TRIAL && window.reAutoMail) window.reAutoMail(j.mail || ""); // 問い合わせの届け先に、HPで見つけたアドレス（なければ空白）
   return j;
 }
