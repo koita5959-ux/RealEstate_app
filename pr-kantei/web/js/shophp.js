@@ -98,7 +98,7 @@ function readingCover(url) {
 // サーバーに読ませる。返り値：{ hp, msg, err }
 async function readShopHP(url) {
   const close = readingCover(url);
-  try { return await readShopHP0(url); } finally { close(); }
+  try { const r = await readShopHP0(url); if (r.hp && window.reAutoMail) window.reAutoMail(r.hp.mail || ""); return r; } finally { close(); }
 }
 let READ_LAST_CACHED = ""; // 同じ日の結果を使ったURL。もう一度押すと読み直す
 async function readShopHP0(url) {
@@ -120,7 +120,7 @@ async function readShopHP0(url) {
   }
   const sh = j.shop, join = a => Array.isArray(a) ? a.filter(Boolean).join("、") : String(a || "");
   const hp = { url:s.final || url, name:sh.name || s.title || "", shogo:sh.shogo || "", form:sh.form || "", what:sh.what || "", good:join(sh.good), team:join(sh.team),
-    fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", stance:sh.stance || "", voice:sh.voice || "", worries:join(sh.worries), areas:(s.listings || {}).text || (join(sh.kinds) ? "HPの記載：" + join(sh.kinds) : ""), kinds:join(sh.kinds), hours:sh.hours || "", lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "",
+    fit:join(sh.fit), unfit:join(sh.unfit), strong:sh.strong || "", area:sh.area || "", stance:sh.stance || "", voice:sh.voice || "", worries:join(sh.worries), areas:(s.listings || {}).text || (join(sh.kinds) ? "HPの記載：" + join(sh.kinds) : ""), kinds:join(sh.kinds), hours:sh.hours || "", lic:(p.lic || []).join("、"), tel:(p.tel || [])[0] || "", mail:(p.mail || [])[0] || "",
     why:{ name:"ページ名と著作権表記" + (sh.shogo && sh.shogo !== sh.name ? `（商号：${sh.shogo}）` : ""), ...(sh.why || {}), ...((s.listings || {}).text ? { areas:`売買の物件ページ ${s.listings.pages}つから、プログラムが数えたもの` } : join(sh.kinds) ? { areas:(sh.why || {}).kinds || "HPに書かれた物件の種類" } : {}) }, unread:sh.unread || [], ads:sh.ads || [], readAt:new Date().toISOString() };
   const pages = (s.pages || []).filter(x => !x.error).map(x => x.label || { top:"トップ", profile:"会社概要", case:"事例", service:"業務の案内" }[x.kind] || x.kind);
   READ_LAST_CACHED = j.cached ? url : "";

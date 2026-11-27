@@ -185,6 +185,20 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
     const g = document.createElement("div"); g.className = "trial-guide";
     g.innerHTML = "<b>お試しの手順</b><ol>" + steps.map(t => "<li>" + t.replace(/[<>&]/g, "") + "</li>").join("") + "</ol><small>この画面の設定は、このブラウザの中だけに保存されます。ほかの人には見えません。</small>";
     bar.after(g);
+    window.addEventListener("load", () => { // 「あなたのHP」の下に、問い合わせの届け先の欄
+      const u = document.getElementById("url") || document.getElementById("hpUrl"); const at = u && (u.closest(".box") || u.closest(".top")); if (!at) return;
+      const d = document.createElement("div"); d.className = "shop-mail";
+      d.innerHTML = '<label><b>問い合わせの届け先</b> <input type="email" id="shopMail" placeholder="空欄なら realestate@media-house.jp に届きます"></label>'
+        + '<div class="hint" id="shopMailHint"></div>';
+      at.after(d);
+      const i = d.querySelector("#shopMail"), h = d.querySelector("#shopMailHint");
+      const show = () => { const v = i.value.trim(), ok = /^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(v);
+        h.textContent = !v ? "ボットからの問い合わせは、運営（株式会社メディアハウス）に届きます。HPの読み込みでメールアドレスが見つかれば、ここに入ります。"
+          : ok ? "ボットからの問い合わせは、このアドレスに届きます（件名に【お試し】。運営にも同じものが届きます）。" : "メールアドレスの形になっていません（このままでは運営に届きます）。";
+        h.style.color = v && !ok ? "#c0392b" : ""; };
+      i.value = window.reShopMail(); show();
+      i.addEventListener("input", () => { try { localStorage.setItem("reShopMail", i.value.trim()); } catch (e) {} show(); });
+    });
     if (n !== "1") window.addEventListener("load", () => setTimeout(() => { // 見本サイト（遠見不動産）のURLのままなら空にして、御社のURLを入れてもらう
       for (const id of ["url", "hpUrl"]) { const u = document.getElementById(id); if (u && /\/RealEstate\/?$/.test(u.value)) { u.value = ""; u.placeholder = "https://…（御社のHPのトップのURL）"; } }
     }, 300));
@@ -214,7 +228,7 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
     }, 400));
     const tcss = document.createElement("style");
     tcss.textContent = `.trial .appbar{background:#eaf3fb;border-bottom-color:#b9d3ea}.trial .appbar h1{color:#174a7a}.trial .gonav{gap:10px}.trial .gonav a{font-size:14px;padding:8px 16px;border-radius:999px;font-weight:700}.trial .gonav a.btn-user{background:#fff;color:#1d6fb8;border:1px solid #1d6fb8}.trial .gonav a.off{background:#fff;color:#a9b3bd;border-color:#c3c9d0}.gonav a.btn-try,.trial .gonav a.btn-try{background:#d98c1f;color:#fff;border:0;box-shadow:0 2px 6px rgba(217,140,31,.35)}.trial .gonav a.btn-try:hover{background:#c27a12}
-    .trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
+    .shop-mail{margin:10px 0 14px}.shop-mail label{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.shop-mail input{flex:1;min-width:240px;padding:6px 8px;font:inherit}.shop-mail .hint{font-size:12px;color:#5b6b7b;margin-top:4px}.trial-guide{margin:10px 16px 0;padding:10px 14px;background:#f4f9fd;border:1px solid #cfe0ef;border-radius:8px;font-size:13px;line-height:1.7;color:#1f2933;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
     input.try-sample{background:#fff4c2!important;border-color:#e0a800!important;box-shadow:0 0 0 3px rgba(224,168,0,.25)}.trial1 #read:not(.try-go){background:#fff!important;color:#b03a2e!important;border:1px solid #d9b3ae!important;box-shadow:none}button.try-go{background:#d98c1f!important;border-color:#d98c1f!important;color:#fff!important;font-weight:700;box-shadow:0 0 0 3px rgba(217,140,31,.3);animation:tryGo 1.4s ease-in-out infinite}@keyframes tryGo{50%{box-shadow:0 0 0 6px rgba(217,140,31,.12)}}.try-urltip{margin:6px 0 2px;color:#8a5a00;font-size:12.5px;font-weight:700}.trial-guide ol{margin:4px 0 2px;padding-left:1.4em}.trial-guide small{color:#52606d}
     .trial .noticebar,.trial .trial-dev,.trial3 aside.side,.trial3 .trial-hide{display:none!important}.trial3 .wrap,.trial3 .layout{grid-template-columns:1fr!important}`;
     document.head.appendChild(tcss);
@@ -224,3 +238,10 @@ try { if (!/[?&]by=/.test(location.search) && localStorage.getItem("reBy") === "
 
 // 管理画面：開発利用状況の再表示で設定が戻ったら読み直す（メイン画面が reRestoreStamp を書く）
 if (/_admin\.html$/.test(location.pathname)) window.addEventListener("storage", e => { if (e.key === "reRestoreStamp") location.reload(); });
+
+// 問い合わせの届け先（お試し設定で店が入れる。ユーザー 11-27）。空ならメディアハウスへ。入れればそこへ＋メディアハウスにも届く（サーバーが決める）
+window.reShopMail = () => { if (window.RE_SITE_BOT) return ""; try { return localStorage.getItem("reShopMail") || ""; } catch (e) { return ""; } };
+window.reAutoMail = (list) => { // 読み込みで拾ったアドレスを入れる。拾えなければ空白
+  const v = (Array.isArray(list) ? list[0] : list) || ""; try { localStorage.setItem("reShopMail", v); } catch (e) {}
+  const i = document.getElementById("shopMail"); if (i) { i.value = v; i.dispatchEvent(new Event("input")); }
+};

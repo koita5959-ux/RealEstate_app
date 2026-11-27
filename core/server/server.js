@@ -631,7 +631,7 @@ async function handleLand(req, res, url) {
 }
 
 import { renderSample, logSample, regionKnown } from "./sample.js";
-import { sendMail } from "./mail.js";
+import { sendMail, MAIL_TO } from "./mail.js";
 // 問い合わせをメールで送る（ボットの3タイプ・サンプルHPのフォーム）。店へ1通＋メールがあれば控えを客へ1通。
 // 記録には送ったこと・種類・成否だけ残す（お名前・連絡先・本文は残さない。中身は届いたメールで見る）
 const inqHits = new Map();
@@ -643,19 +643,21 @@ async function handleInquiry(req, res) {
   h.push(now); inqHits.set(ip, h);
   const b = await readBody(req, 65_536), t = (v, n) => String(v || "").trim().slice(0, n);
   const f = { kind: b.kind === "site" ? "site" : "bot", type: t(b.type, 4), sid: t(b.sid, 64), by: t(b.by, 40), name: t(b.name, 100), company: t(b.company, 100),
-    email: t(b.email, 200), tel: t(b.tel, 40), way: t(b.way, 40), when: t(b.when, 200), msg: t(b.msg, 4000), talk: t(b.talk, 20000), sheet: t(b.sheet, 6000), area: t(b.area, 200), page: t(b.page, 300) };
+    email: t(b.email, 200), tel: t(b.tel, 40), way: t(b.way, 40), when: t(b.when, 200), msg: t(b.msg, 4000), talk: t(b.talk, 20000), sheet: t(b.sheet, 6000), area: t(b.area, 200), page: t(b.page, 300), shopTo: t(b.shopTo, 200).toLowerCase() };
   if (!f.name || !f.email || (f.kind === "site" && !f.msg)) return send(res, 400, { error: "missing" });
   if (!/^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(f.email)) return send(res, 400, { error: "bad_email" });
   if (f.way === "電話がよい" && f.tel.replace(/[^\d０-９]/g, "").length < 10) return send(res, 400, { error: "need_tel" }); // 電話を希望なら番号が要る（ユーザー 11-19） // メールは必須・形を確かめる（ユーザー 11-19）
+  // お試し設定で店が入れた届け先（ユーザー 11-27）。そこへ送り、メディアハウス（MAIL_TO）にも必ず同じものを送る。件名に【お試し】
+  const shopTo = f.kind === "bot" && /^[^\s@<>,"]+@[^\s@<>,"]+\.[^\s@<>,"]+$/.test(f.shopTo) && f.shopTo !== MAIL_TO.toLowerCase() ? f.shopTo : "";
   const what = f.kind === "site" ? "サンプルHPのお問い合わせフォーム" : `AIボット（TYPE${f.type}）の問い合わせ`;
   const lines = [`${what}から届きました。`, "", `お名前：${f.name}`, ...(f.company ? [`会社名・屋号：${f.company}`] : []), `メール：${f.email || "（なし）"}`, `電話：${f.tel || "（なし）"}`,
     ...(f.way ? [`連絡の希望：${f.way}`] : []), ...(f.when ? [`連絡してよい時間帯：${f.when}`] : []), ...(f.area ? [`地域：${f.area}`] : []), "",
     "■ 伝えたいこと", f.msg || "（なし）", ...(f.sheet ? ["", "■ データシート", f.sheet] : []), ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "",
-    "――", `送信元：${f.page || "-"}`, ...(f.sid ? [`セッション：${f.sid}`] : []), `日時：${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`];
+    "――", `送信元：${f.page || "-"}`, ...(shopTo ? [`お試しの届け先：${shopTo}（メディアハウスにも同じものが届きます）`] : []), ...(f.sid ? [`セッション：${f.sid}`] : []), `日時：${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`];
   const bot = /kantei/.test(f.page + " " + (req.headers.referer || "")) ? "AIボット鑑定" : "AIボット不動産"; // 差出人の表示名は版で分ける（ユーザー 11-27）
-  const row = { at: new Date().toISOString(), kind: f.kind, type: f.type, sid: f.sid, by: f.by, mail: !!f.email, tel: !!f.tel };
+  const row = { at: new Date().toISOString(), kind: f.kind, type: f.type, sid: f.sid, by: f.by, mail: !!f.email, tel: !!f.tel, trial: !!shopTo };
   try {
-    await sendMail({ subject: `【問い合わせ】${f.name} 様（${what}）`, text: lines.join("\n"), replyTo: f.email, fromName: bot });
+    await sendMail({ ...(shopTo ? { to: [shopTo, MAIL_TO] } : {}), subject: `${shopTo ? "【お試し】" : ""}【問い合わせ】${f.name} 様（${what}）`, text: lines.join("\n"), replyTo: f.email, fromName: bot });
     if (f.email) await sendMail({ to: [f.email], subject: `お問い合わせを受け付けました（${bot}）`, fromName: bot,
       text: [`${f.name} 様`, "", "お問い合わせありがとうございます。次の内容でお預かりしました。", "担当者から改めてご連絡します。", "", "■ 伝えたいこと", f.msg || "（なし）",
         ...(f.talk ? ["", "■ ここまでの相談", f.talk] : []), "", "――", `${bot}（このメールは送信専用です）`].join("\n") }).catch((e) => { row.copyErr = e.message; });

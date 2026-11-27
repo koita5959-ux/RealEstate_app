@@ -128,7 +128,9 @@ function t1SetDir(n, dir) {
 }
 // HPを読む：トップ＞物件情報＞会社概要・事業内容を、サーバーがいつも読む
 async function t1ReadMenu(url, by) {
-  return (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json();
+  const j = await (await fetch("../api/shopmenu", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ url, by }), signal:AbortSignal.timeout(60000) })).json();
+  if (window.RE_TRIAL && window.reAutoMail) window.reAutoMail(j.mail || ""); // 問い合わせの届け先に、HPで見つけたアドレス（なければ空白）
+  return j;
 }
 function t1Shop() {
   const BOT = () => ({ v:3, url:new URL("../sample/", location.href).href, top:[{ label:"売る", cats:["売却（仲介）"] }, { label:"買う", cats:["購入・物件探し"] }, { label:"相続", cats:["相続"] }, { label:"賃貸（貸したい方）", cats:["賃貸・管理"] }, { label:"賃貸（借りたい方）", cats:["借りたい・部屋探し"] }, { label:"買取", cats:["早く売る・買取"] }] }); // サンプルHPの業務案内

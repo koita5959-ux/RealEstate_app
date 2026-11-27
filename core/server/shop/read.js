@@ -98,11 +98,19 @@ function pick(text) {
   return { lic, reg, tel, addr, copy };
 }
 
+// HPのメールアドレス（mailto: と本文に書かれたもの）。お試し設定の「問い合わせの届け先」の初期値にする（ユーザー 11-27）
+function mailsIn(html) {
+  const h = String(html || '').replace(/&#64;|&#x40;|＠/gi, '@').replace(/%40/g, '@');
+  const got = [...h.matchAll(/mailto:([^"'?\s>]+)/gi)].map(m => m[1]).concat(h.replace(/<[^>]+>/g, ' ').match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []);
+  return [...new Set(got.map(a => { try { return decodeURIComponent(a).trim().toLowerCase(); } catch { return a.toLowerCase(); } })
+    .filter(a => /^[^\s@<>,"]+@[^\s@<>,"]+\.[a-z]{2,}$/.test(a) && !/\.(png|jpe?g|gif|webp|svg)$|example\.|sentry|wixpress|@2x|@3x|domain\.|xxx/.test(a)))];
+}
+
 async function readPage(l) {
   const g = await get(l.url);
   if (!g.ok) return { url: l.url, kind: l.kind, error: g.error || `HTTP ${g.status}` };
   const q = parse(g.html, g.url);
-  return { url: g.url, kind: l.kind, label: l.label, text: q.text.slice(0, TEXT_MAX), imgs: q.imgs, imgHeavy: q.imgHeavy };
+  return { url: g.url, kind: l.kind, label: l.label, text: q.text.slice(0, TEXT_MAX), imgs: q.imgs, imgHeavy: q.imgHeavy, mail: mailsIn(g.html) };
 }
 
 // 読み直し用：1回目で読まなかった「店が何をするか」のページを、最大 n つ読む
@@ -125,7 +133,7 @@ async function read(url) {
   if (!top.ok) { out.error = top.error || `HTTP ${top.status}`; return out; }
   const p = parse(top.html, top.url);
   out.final = top.url; out.title = p.title; out.desc = p.desc;
-  out.pages.push({ url: top.url, kind: 'top', text: p.text.slice(0, TEXT_MAX), imgs: p.imgs, imgHeavy: p.imgHeavy });
+  out.pages.push({ url: top.url, kind: 'top', text: p.text.slice(0, TEXT_MAX), imgs: p.imgs, imgHeavy: p.imgHeavy, mail: mailsIn(top.html) });
   const host = new URL(top.url).host;
   const seen = new Set([top.url]);
   const cands = p.links.filter(l => PROFILE_WORDS.test(l.label + ' ' + l.url) && !seen.has(l.url)
@@ -155,6 +163,7 @@ async function read(url) {
   out.texts = texts;
   const all = out.pages.map(x => x.text || '').join(' ');
   out.picked = pick(all);
+  out.picked.mail = [...new Set(out.pages.flatMap(x => x.mail || []))].slice(0, 3);
   out.js_only = p.text.length < 200;   // 本文がほぼない＝画面をJSで作るサイト
   return out;
 }
@@ -176,6 +185,7 @@ async function menu(url, opt = {}) {
   if (!top.ok) return { url, error: top.error || `HTTP ${top.status}`, items: [] };
   const p = parse(top.html, top.url), host = new URL(top.url).host, seen = new Set(), items = [];
   collect(p, top.url, host, seen, items, null);
+  const mail = mailsIn(top.html);
   const meta = [];
   // タイトル・説明文（メタデータ）も業務の一覧になっていることが多い（「函館市の不動産売買・賃貸・管理・査定」「新築｜リノベーション｜リフォーム」）
   const names = [...(p.title + ' ' + p.desc).matchAll(/([^\s|｜・、。]{2,12}?)(?:株式会社|有限会社)|(?:株式会社|有限会社|\(株\)|（株）)\s*([^\s|｜・、。]{2,12})/g)].map(m => m[1] || m[2]);
@@ -195,12 +205,12 @@ async function menu(url, opt = {}) {
   for (const [l, from] of [...(prop ? [[prop, 'prop']] : []), ...prof.map(l => [l, 'profile'])]) {
     await new Promise(r => setTimeout(r, 400));
     const g = await get(l.url);
-    if (g.ok) { collect(parse(g.html, g.url), g.url, host, seen, items, from); pages.push({ url: g.url, from }); }
+    if (g.ok) { collect(parse(g.html, g.url), g.url, host, seen, items, from); pages.push({ url: g.url, from }); mail.push(...mailsIn(g.html)); }
   }
   const firm = items.filter(i => !/:prose$/.test(i.from || '')), named = new Set(firm.map(i => i.label));
   const prose = items.filter(i => /:prose$/.test(i.from || '') && !named.has(i.label));
   const omakase = /(不動産|土地|住まい)[^。]{0,12}(なんでも|何でも|おまかせ|お任せ|幅広く|総合)|(なんでも|何でも)[^。]{0,6}ご相談/.test(p.title + ' ' + p.desc + ' ' + p.text); // 「不動産のことなら何でも」型の店
-  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, omakase, items: firm.concat(meta, prose), pages };
+  return { url, final: top.url, title: p.title, js_only: p.text.length < 200, omakase, items: firm.concat(meta, prose), pages, mail: [...new Set(mail)].slice(0, 3) };
 }
 function metaList(t, max = 12) {
   return String(t || '').split(/[|｜\/／・、,，。]|\s[-–—]\s/).map(x => x.replace(/^.*?[市区町村県]で?の/, '').replace(/^(不動産の?)(?=..)/, '').replace(/(なら|のことなら|の事なら).*$/, '').trim())
