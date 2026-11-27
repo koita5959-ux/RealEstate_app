@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
-  <!-- 売るとき：家の外観の一部と、値打ちを記した書類（文字なし） -->
+  <!-- 売るとき：家の外観の一部と、評価を記した書類（文字なし） -->
   <rect width="400" height="300" fill="#e7ece6"/>
   <rect x="40" y="110" width="170" height="150" fill="#f6f4ee" stroke="#5d7a6b" stroke-width="3"/>
   <path d="M25 115 L125 45 L225 115Z" fill="#4f6d5e"/>

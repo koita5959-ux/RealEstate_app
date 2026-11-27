@@ -91,7 +91,7 @@
   <span class="appextra"><button id="commitTop" class="topcommit" title="書き換えをメイン画面に反映します（下の「設定を変更する」と同じ）"></button></span>
 </header>
 <script src="js/shell.js?v=1119b"></script>
-<script src="js/shophp.js?v=1125a"></script>
+<script src="js/shophp.js?v=1127a"></script>
 <div class="noticebar">左の番号は、メイン画面の番号と同じです。「設定を変更する」でメイン画面に反映し、右上の「メイン画面」で確かめられます（設定はこのブラウザに保存され、メイン画面が読みます）。AIの返事はダミーです。</div>
 <div class="wrap">
   <main class="admin">
@@ -230,12 +230,12 @@ const FIRST = 3; // 店が書く選択肢は③から（③＝3往復目。①�
 let modeKey = "m3", steps = [], closeText = "", stance = "", hint = "", limit = 2; // limit: フリートークの回数（店が入れる。初期値2）
 // 鑑定PR版：初期値（m3）を鑑定事務所に差し替える（メイン画面の ADMIN_KANTEI と同じ中身。11-25）
 const ADMIN_KANTEI = {
-  steps:[ { topic:"値段を知りたい目的", btns:["売る前に値打ちを知りたい","買う前に価格が妥当か知りたい","相続・財産分与","地代・家賃","裁判・会社の資料"], br:[0,0,1,1,1] },
+  steps:[ { topic:"値段を知りたい目的", btns:["売る前に評価額を知りたい","買う前に価格が妥当か知りたい","相続・財産分与","地代・家賃","裁判・会社の資料"], br:[0,0,1,1,1] },
           { topic:"", branches:[
-            { name:"売り買いの判断", kind:"答える", btns:["今の目安","査定額や売り出し価格との比べ方","鑑定が要るとき・要らないとき","費用と期間"], close:"この物件の値打ちの見立てを、鑑定士が確かめます。" },
-            { name:"話し合い・資料", kind:"答える", btns:["今の目安","相手に示せる資料の形","鑑定評価書と調査報告書の違い","費用と期間"], close:"この物件の値打ちの見立てを、鑑定士が確かめます。" } ] } ],
-  close:"この物件の値打ちの見立てを、鑑定士が確かめます。", limit:null,
-  name:"売り買いの事情を外した値打ちを示す鑑定事務所", stance:"どちらの側にも寄らない。不動産会社の査定を下に見ず、事情を含む値段と事情を外した値打ちは性格が違うだけ、と話す。鑑定が要らない相談には、そう言う。", hint:"お手元の査定額や売り出し価格があれば、一言どうぞ（例：3社の査定が1,500万〜2,100万でばらばら）" };
+            { name:"売り買いの判断", kind:"答える", btns:["今の目安","査定額や売り出し価格との比べ方","鑑定が要るとき・要らないとき","費用と期間"], close:"この物件の評価の見立てを、鑑定士が確かめます。" },
+            { name:"話し合い・資料", kind:"答える", btns:["今の目安","相手に示せる資料の形","鑑定評価書と調査報告書の違い","費用と期間"], close:"この物件の評価の見立てを、鑑定士が確かめます。" } ] } ],
+  close:"この物件の評価の見立てを、鑑定士が確かめます。", limit:null,
+  name:"売り買いの事情を外した評価を示す鑑定事務所", stance:"どちらの側にも寄らない。不動産会社の査定を下に見ず、事情を含む値段と事情を外した評価は性格が違うだけ、と話す。鑑定が要らない相談には、そう言う。", hint:"お手元の査定額や売り出し価格があれば、一言どうぞ（例：3社の査定が1,500万〜2,100万でばらばら）" };
 Object.assign(MODES.m3, { name:ADMIN_KANTEI.name, sub:"鑑定", stance:ADMIN_KANTEI.stance, hint:ADMIN_KANTEI.hint, close:ADMIN_KANTEI.close,
   s4:{ topic:ADMIN_KANTEI.steps[0].topic, btns:ADMIN_KANTEI.steps[0].btns.map((b, i) => [b, ADMIN_KANTEI.steps[0].br[i]]) },
   s5:ADMIN_KANTEI.steps[1].branches.map(b => ({ ...b, btns:[...b.btns] })) });
