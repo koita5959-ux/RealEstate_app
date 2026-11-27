@@ -28,12 +28,13 @@ function conf() { try { return JSON.parse(fs.readFileSync(CONF, "utf8")); } catc
 // page：空＝サンプルHP、"pr"＝広告ページ、"kantei"＝鑑定士版のサンプルHP、"kantei-pr"＝その広告ページ。どちらも ?r= を引き継いで行き来する
 export function renderSample(r, page) {
   const c = conf(), dev = esc(c.developer || "開発元（準備中）");
+  const info = esc([c.tel && "Tel." + c.tel, c.address, c.mail && "Mail: " + c.mail].filter(Boolean).join("　")); // 発行元の連絡先
   const rq = loadRegions().has(r) ? `?r=${encodeURIComponent(r)}` : "";
   if (page === "pr" || page === "kantei-pr") {
     const top = "../" + rq;
-    return fs.readFileSync(page === "pr" ? PR : PR_KANTEI, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{SAMPLE_URL}}", top + "#bot").replaceAll("{{CONTACT_URL}}", top + "#contact");
+    return fs.readFileSync(page === "pr" ? PR : PR_KANTEI, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{DEVELOPER_INFO}}", info).replaceAll("{{SAMPLE_URL}}", top + "#bot").replaceAll("{{CONTACT_URL}}", top + "#contact");
   }
-  let html = fs.readFileSync(page === "kantei" ? SITE_KANTEI : SITE, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{PR_URL}}", "pr/" + rq);
+  let html = fs.readFileSync(page === "kantei" ? SITE_KANTEI : SITE, "utf8").replaceAll("{{DEVELOPER}}", dev).replaceAll("{{DEVELOPER_INFO}}", info).replaceAll("{{PR_URL}}", "pr/" + rq);
   const name = loadRegions().get(r);
   if (name) return html.replaceAll("{{REGION}}", esc(name));
   // 地区の指定がない・一覧にないとき（監修書 2-1）
